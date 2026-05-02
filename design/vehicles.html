@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MARSH — Автомобілі</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* base palette */
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --border: #e2e8f0;
+    --border-light: #f1f5f9;
+    --text: #0f172a;
+    --text-mid: #475569;
+    --text-light: #94a3b8;
+
+    /* accent: slate */
+    --accent: #475569;
+    --accent-light: #e2e8f0;
+    --accent-dark: #334155;
+    --accent-soft: rgba(71,85,105,0.08);
+    --accent-ring: rgba(71,85,105,0.18);
+    --row-hover: #f1f5f9;
+
+    --amber: #f59e0b;
+    --amber-bg: #fffbeb;
+    --amber-border: #fde68a;
+    --amber-text: #92400e;
+    --red: #ef4444;
+    --red-bg: #fef2f2;
+
+    --shadow: 0 1px 3px rgba(15,23,42,0.06), 0 0 0 1px rgba(15,23,42,0.04);
+    --shadow-lg: 0 4px 16px rgba(15,23,42,0.08), 0 0 0 1px rgba(15,23,42,0.04);
+    --shadow-xl: 0 20px 40px rgba(15,23,42,0.14), 0 0 0 1px rgba(15,23,42,0.05);
+
+    /* sharp corners */
+    --radius: 4px;
+    --radius-sm: 3px;
+    --radius-pill: 6px;
+
+    /* normal density */
+    --row-pad-y: 11px;
+    --cell-pad-x: 12px;
+
+    /* large font */
+    --font-body: 14.5px;
+    --font-mono: 12.5px;
+    --font-header: 11px;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+
+  /* ── TOPBAR ── */
+  .topbar { height:54px; background:var(--surface); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 24px; gap:0; flex-shrink:0; }
+  .logo-area { display:flex; align-items:center; gap:9px; margin-right:32px; }
+  .logo-sq { width:28px; height:28px; background:var(--accent); border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center; }
+  .logo-text { font-size:15px; font-weight:700; color:var(--text); letter-spacing:-0.02em; }
+  .nav-links { display:flex; align-items:stretch; height:100%; }
+  .nav-link { display:flex; align-items:center; gap:6px; padding:0 14px; font-size:14px; font-weight:500; color:var(--text-mid); cursor:pointer; border-bottom:2px solid transparent; transition:all 0.15s; text-decoration:none; }
+  .nav-link:hover { color:var(--text); }
+  .nav-link.active { color:var(--accent); border-bottom-color:var(--accent); font-weight:600; }
+  .nav-link .cnt { font-family:'DM Mono',monospace; font-size:10.5px; font-weight:500; background:var(--accent-light); color:var(--accent); padding:1px 6px; border-radius:var(--radius-sm); }
+  .tb-right { margin-left:auto; display:flex; align-items:center; gap:10px; }
+  .tb-search { display:flex; align-items:center; gap:6px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:7px 12px; width:240px; transition:all 0.2s; }
+  .tb-search:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-ring); background:var(--surface); width:320px; }
+  .tb-search input { border:none; background:transparent; font-family:inherit; font-size:13.5px; color:var(--text); outline:none; width:100%; }
+  .tb-search input::placeholder { color:var(--text-light); }
+  .tb-search .clear-x { width:16px; height:16px; border-radius:50%; background:var(--text-light); color:white; border:none; cursor:pointer; display:none; align-items:center; justify-content:center; padding:0; flex-shrink:0; }
+  .tb-search .clear-x:hover { background:var(--text-mid); }
+  .tb-search.has-value .clear-x { display:flex; }
+  .btn-primary { display:flex; align-items:center; gap:5px; padding:8px 14px; background:var(--accent); border:none; border-radius:var(--radius-sm); font-family:inherit; font-size:13.5px; font-weight:600; color:white; cursor:pointer; transition:all 0.15s; }
+  .btn-primary:hover { background:var(--accent-dark); transform:translateY(-1px); box-shadow:0 4px 12px var(--accent-ring); }
+  .user-pill { display:flex; align-items:center; gap:6px; padding:4px 10px 4px 5px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-pill); cursor:pointer; }
+  .user-dot { width:24px; height:24px; background:var(--accent); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:9.5px; font-weight:700; color:white; }
+  .user-pill span { font-size:13px; font-weight:500; color:var(--text-mid); }
+
+  /* ── CONTENT ── */
+  .content-scroll { flex:1; overflow-y:auto; padding:20px 24px; }
+  .content-scroll::-webkit-scrollbar { width:6px; }
+  .content-scroll::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+  /* ── TILE ── */
+  .tile { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; animation: tileIn 0.3s ease-out both; }
+  @keyframes tileIn { from { opacity:0; transform:translateY(6px); } }
+  .tile-header { padding:12px 20px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--border-light); flex-wrap:wrap; }
+  .tile-title { font-size:15px; font-weight:700; color:var(--text); }
+  .tile-count { font-family:'DM Mono',monospace; font-size:11.5px; font-weight:500; background:var(--accent-light); color:var(--accent); padding:2px 8px; border-radius:var(--radius-sm); }
+  .tile-tabs { display:flex; gap:2px; background:var(--bg); padding:3px; border-radius:var(--radius-sm); border:1px solid var(--border-light); margin-left:auto; }
+  .tt-btn { padding:5px 13px; border:none; background:transparent; border-radius:var(--radius-sm); font-family:inherit; font-size:13px; font-weight:500; color:var(--text-light); cursor:pointer; transition:all 0.12s; white-space:nowrap; display:flex; align-items:center; gap:6px; }
+  .tt-btn:hover { color:var(--text-mid); }
+  .tt-btn.on { background:var(--surface); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,0.06); font-weight:600; }
+  .tt-btn .c { font-family:'DM Mono',monospace; font-size:10.5px; color:var(--text-light); background:var(--border-light); padding:0 6px; border-radius:var(--radius-sm); line-height:17px; min-width:20px; text-align:center; font-weight:500; }
+  .tt-btn.on .c { background:var(--accent-light); color:var(--accent); }
+
+  /* sub-filter chips */
+  .sub-row { padding:9px 20px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--border-light); background:var(--bg); flex-wrap:wrap; }
+  .sub-row-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-light); }
+  .sub-chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .sub-chip { padding:4px 11px; border:1px solid var(--border); background:var(--surface); border-radius:var(--radius-pill); font-size:12.5px; font-weight:500; color:var(--text-mid); cursor:pointer; transition:all 0.12s; display:flex; align-items:center; gap:6px; }
+  .sub-chip:hover { border-color:var(--text-light); color:var(--text); }
+  .sub-chip.on { background:var(--accent); border-color:var(--accent); color:white; font-weight:600; }
+  .sub-chip.on .c { background:rgba(255,255,255,0.25); color:white; }
+  .sub-chip .c { font-family:'DM Mono',monospace; font-size:10.5px; background:var(--border-light); color:var(--text-light); padding:0 6px; border-radius:var(--radius-sm); line-height:16px; min-width:18px; text-align:center; }
+  .sub-clear { margin-left:auto; font-size:12px; color:var(--text-light); cursor:pointer; padding:3px 8px; border-radius:var(--radius-sm); transition:all 0.12s; }
+  .sub-clear:hover { color:var(--text); background:var(--border-light); }
+
+  /* ── TABLE ── */
+  .table-wrap { overflow-x:auto; overflow-y:visible; }
+  .table-wrap::-webkit-scrollbar { height:8px; }
+  .table-wrap::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+  table { width:100%; border-collapse:collapse; min-width:1200px; }
+  thead tr { background:var(--bg); position:sticky; top:0; z-index:2; }
+  th { padding:10px var(--cell-pad-x); text-align:left; font-size:var(--font-header); font-weight:600; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-light); border-bottom:1px solid var(--border); white-space:nowrap; user-select:none; }
+  th:first-child { padding-left:20px; }
+  th:last-child { padding-right:20px; width:40px; }
+  th.sortable { cursor:pointer; transition:color 0.12s; }
+  th.sortable:hover { color:var(--text); }
+  th.sortable .sort-icon { display:inline-flex; vertical-align:middle; margin-left:3px; opacity:0.5; transition:opacity 0.12s; }
+  th.sortable:hover .sort-icon { opacity:0.8; }
+  th.sortable.sorted { color:var(--accent); }
+  th.sortable.sorted .sort-icon { opacity:1; color:var(--accent); }
+
+  tbody tr { border-bottom:1px solid var(--border-light); transition:background 0.1s; }
+  tbody tr:last-child { border-bottom:none; }
+  /* zebra stripes */
+  tbody tr:nth-child(even):not(.inactive) { background:#f8fafc; }
+  tbody tr:hover { background:var(--row-hover); }
+  tbody tr:nth-child(even):hover { background:var(--row-hover); }
+  tbody tr.inactive { opacity:0.55; }
+  td { padding:var(--row-pad-y) var(--cell-pad-x); font-size:var(--font-body); color:var(--text-mid); vertical-align:middle; white-space:nowrap; }
+  td:first-child { padding-left:20px; }
+  td:last-child { padding-right:20px; }
+
+  .td-idx { font-family:'DM Mono',monospace; font-size:var(--font-mono); font-weight:600; color:var(--accent); background:var(--accent-light); padding:3px 9px; border-radius:var(--radius-sm); display:inline-block; }
+  tbody tr.inactive .td-idx { background:#f1f5f9; color:#94a3b8; }
+  .td-veh { display:flex; align-items:center; gap:10px; }
+  .v-thumb { width:32px; height:32px; border-radius:var(--radius-sm); background:var(--accent-light); display:flex; align-items:center; justify-content:center; color:var(--accent); flex-shrink:0; border:1px solid var(--accent-soft); transition:all 0.15s; }
+  tr:hover .v-thumb { background:var(--accent); color:white; }
+  tr.inactive .v-thumb { background:#f1f5f9; color:#94a3b8; border-color:#e2e8f0; }
+  .v-nm { font-weight:600; color:var(--text); font-size:var(--font-body); line-height:1.2; }
+  .td-mono { font-family:'DM Mono',monospace; font-size:var(--font-mono); color:var(--text-mid); }
+  .td-vin-full { font-family:'DM Mono',monospace; font-size:calc(var(--font-mono) - 1px); color:var(--text-light); letter-spacing:-0.01em; }
+  .td-num-val { font-family:'DM Mono',monospace; font-size:var(--font-mono); color:var(--text-mid); text-align:right; padding-right:4px; font-variant-numeric:tabular-nums; }
+
+  /* Status badge */
+  .status-badge { display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:var(--radius-pill); font-size:12px; font-weight:600; }
+  .status-badge.working { background:#d1fae5; color:#065f46; }
+  .status-badge.working::before { content:''; width:5px; height:5px; border-radius:50%; background:#10b981; flex-shrink:0; }
+  .status-badge.not-working { background:#fee2e2; color:#991b1b; }
+  .status-badge.not-working::before { content:''; width:5px; height:5px; border-radius:50%; background:#ef4444; flex-shrink:0; }
+
+  /* Driver cell */
+  .driver-cell { display:inline-flex; align-items:center; gap:5px; padding:3px 9px 3px 6px; border-radius:var(--radius-pill); font-size:12px; font-weight:600; cursor:pointer; transition:all 0.15s; max-width:150px; }
+  .driver-cell.assigned { background:var(--amber-bg); color:var(--amber-text); border:1px solid var(--amber-border); }
+  .driver-cell.assigned::before { content:''; width:5px; height:5px; border-radius:50%; background:var(--amber); flex-shrink:0; }
+  .driver-cell .dc-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .driver-cell.empty { color:var(--text-light); font-weight:400; border:1px dashed var(--border); padding:3px 9px; background:transparent; }
+  .driver-cell:hover { opacity:0.78; }
+  .driver-cell.empty:hover { border-color:var(--accent); color:var(--accent); opacity:1; border-style:solid; background:var(--accent-light); }
+
+  /* Sub badges */
+  .sub-pill { font-size:11.5px; font-weight:600; padding:2px 9px; border-radius:var(--radius-sm); }
+  .sp1 { background:#eff6ff; color:#2563eb; }
+  .sp2 { background:#ecfdf5; color:#059669; }
+  .sp3 { background:#faf5ff; color:#7c3aed; }
+  .sp4 { background:#fff7ed; color:#c2410c; }
+  .sp5 { background:#fdf2f8; color:#be185d; }
+
+  /* Row actions */
+  .acts { display:flex; gap:2px; opacity:0; transition:opacity 0.12s; justify-content:flex-end; }
+  tbody tr:hover .acts { opacity:1; }
+  .act { width:28px; height:28px; border-radius:var(--radius-sm); border:none; background:transparent; cursor:pointer; color:var(--text-light); display:flex; align-items:center; justify-content:center; transition:all 0.12s; }
+  .act:hover.e { background:var(--accent-light); color:var(--accent); }
+  .act:hover.d { background:#fee2e2; color:#dc2626; }
+  .act svg { width:14px; height:14px; }
+
+  /* Footer */
+  .t-foot { padding:10px 20px; border-top:1px solid var(--border-light); font-size:13px; color:var(--text-light); display:flex; align-items:center; gap:16px; background:var(--bg); }
+  .t-foot .count-text b { color:var(--text); font-weight:600; }
+
+  /* Empty state */
+  .empty-state { padding:64px 24px; text-align:center; color:var(--text-light); }
+  .empty-state svg { width:44px; height:44px; color:var(--border); margin-bottom:14px; }
+  .empty-state p { font-size:14.5px; margin-bottom:14px; }
+  .empty-state .reset { color:var(--accent); cursor:pointer; font-weight:600; font-size:13.5px; text-decoration:underline; }
+
+  /* ── MODAL ── */
+  .overlay { position:fixed; inset:0; background:rgba(15,23,42,0.4); backdrop-filter:blur(2px); z-index:100; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.2s; }
+  .overlay.open { opacity:1; pointer-events:all; }
+  .modal { background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow-xl); width:580px; max-width:calc(100vw - 48px); max-height:calc(100vh - 80px); overflow-y:auto; transform:translateY(12px) scale(0.98); transition:transform 0.2s; }
+  .overlay.open .modal { transform:translateY(0) scale(1); }
+  .modal-head { padding:20px 24px 16px; border-bottom:1px solid var(--border-light); display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; background:var(--surface); z-index:1; }
+  .modal-title { font-size:17px; font-weight:700; }
+  .modal-close { width:30px; height:30px; border-radius:var(--radius-sm); border:none; background:transparent; cursor:pointer; color:var(--text-light); display:flex; align-items:center; justify-content:center; transition:all 0.12s; }
+  .modal-close:hover { background:var(--bg); color:var(--text); }
+  .modal-body { padding:20px 24px; }
+  .modal-foot { padding:16px 24px; border-top:1px solid var(--border-light); display:flex; justify-content:flex-end; gap:8px; position:sticky; bottom:0; background:var(--surface); }
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px 16px; }
+  .form-group { display:flex; flex-direction:column; gap:6px; }
+  .form-group.full { grid-column:span 2; }
+  .form-label { font-size:12.5px; font-weight:600; color:var(--text-mid); }
+  .form-input { padding:9px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:inherit; font-size:13.5px; color:var(--text); background:var(--bg); outline:none; transition:all 0.15s; }
+  .form-input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); background:var(--surface); }
+  .form-input::placeholder { color:var(--text-light); }
+  .form-select { padding:9px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:inherit; font-size:13.5px; color:var(--text); background:var(--bg); outline:none; cursor:pointer; transition:all 0.15s; appearance:none; background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2394a3b8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; padding-right:28px; }
+  .form-select:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+
+  .radio-group { display:flex; gap:8px; }
+  .radio-option { display:flex; align-items:center; gap:6px; padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); cursor:pointer; transition:all 0.12s; font-size:13.5px; font-weight:500; color:var(--text-mid); flex:1; justify-content:center; }
+  .radio-option input { display:none; }
+  .radio-option.selected-working { border-color:#10b981; background:#d1fae5; color:#065f46; }
+  .radio-option.selected-not { border-color:#ef4444; background:#fee2e2; color:#991b1b; }
+  .radio-dot { width:7px; height:7px; border-radius:50%; background:currentColor; flex-shrink:0; }
+
+  .btn-cancel { padding:9px 16px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); font-family:inherit; font-size:13.5px; font-weight:500; color:var(--text-mid); cursor:pointer; transition:all 0.12s; }
+  .btn-cancel:hover { border-color:var(--text-light); color:var(--text); }
+  .btn-submit { padding:9px 20px; background:var(--accent); border:none; border-radius:var(--radius-sm); font-family:inherit; font-size:13.5px; font-weight:600; color:white; cursor:pointer; transition:all 0.15s; }
+  .btn-submit:hover { background:var(--accent-dark); }
+
+  /* Driver modal */
+  .driver-modal { background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow-xl); width:440px; max-width:calc(100vw - 48px); max-height:calc(100vh - 80px); overflow-y:auto; transform:translateY(12px) scale(0.98); transition:transform 0.2s; }
+  .overlay.open .driver-modal { transform:translateY(0) scale(1); }
+  .driver-modal-sub { font-size:12.5px; color:var(--text-light); font-weight:400; margin-top:2px; }
+  .dm-section { padding:14px 20px; border-bottom:1px solid var(--border-light); }
+  .dm-section:last-child { border-bottom:none; }
+  .dm-section-title { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-light); margin-bottom:10px; }
+  .current-driver-row { display:flex; align-items:center; gap:10px; padding:9px 12px; background:var(--amber-bg); border:1px solid var(--amber-border); border-radius:var(--radius-sm); }
+  .current-driver-name { font-size:13.5px; font-weight:600; color:var(--amber-text); flex:1; }
+  .current-driver-ipn { font-family:'DM Mono',monospace; font-size:10.5px; color:var(--amber); }
+  .btn-remove-driver { padding:5px 11px; background:transparent; border:1px solid var(--amber-border); border-radius:var(--radius-sm); font-family:inherit; font-size:11.5px; font-weight:600; color:var(--amber-text); cursor:pointer; transition:all 0.12s; flex-shrink:0; }
+  .btn-remove-driver:hover { background:var(--amber-border); }
+
+  .dm-search-wrap { margin-bottom:10px; display:flex; align-items:center; gap:6px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:7px 10px; transition:all 0.15s; }
+  .dm-search-wrap:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); background:var(--surface); }
+  .dm-search-wrap input { border:none; background:transparent; outline:none; font-family:inherit; font-size:13px; color:var(--text); width:100%; }
+
+  .driver-list { display:flex; flex-direction:column; gap:4px; max-height:260px; overflow-y:auto; padding-right:2px; }
+  .driver-list::-webkit-scrollbar { width:4px; }
+  .driver-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+  .driver-list-item { display:flex; align-items:center; gap:10px; padding:9px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); cursor:pointer; transition:all 0.12s; }
+  .driver-list-item:hover { border-color:var(--accent); background:var(--accent-soft); }
+  .driver-list-avatar { width:28px; height:28px; border-radius:50%; background:var(--accent-light); color:var(--accent); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; flex-shrink:0; }
+  .driver-list-info { flex:1; min-width:0; }
+  .driver-list-name { font-size:13px; font-weight:600; color:var(--text); }
+  .driver-list-ipn { font-family:'DM Mono',monospace; font-size:10.5px; color:var(--text-light); }
+  .btn-assign { padding:5px 11px; background:var(--accent-light); border:none; border-radius:var(--radius-sm); font-family:inherit; font-size:11.5px; font-weight:600; color:var(--accent); cursor:pointer; transition:all 0.12s; flex-shrink:0; }
+  .btn-assign:hover { background:var(--accent); color:white; }
+  .empty-drivers { font-size:13px; color:var(--text-light); text-align:center; padding:14px 0; }
+
+  .create-driver-form { display:flex; flex-direction:column; gap:10px; }
+  .create-driver-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+
+  /* toast */
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--text); color:white; padding:11px 20px; border-radius:var(--radius-sm); font-size:13.5px; font-weight:500; box-shadow:var(--shadow-xl); z-index:200; opacity:0; transition:all 0.25s; display:flex; align-items:center; gap:10px; }
+  .toast.show { transform:translateX(-50%) translateY(0); opacity:1; }
+  .toast .undo { color:#a3e635; cursor:pointer; font-weight:600; text-decoration:underline; padding:0 4px; }
+  .toast .undo:hover { color:#d9f99d; }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo-area">
+    <div class="logo-sq">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+    </div>
+    <span class="logo-text">MARSH</span>
+  </div>
+  <div class="nav-links">
+    <a class="nav-link active" href="vehicles.html">Автомобілі <span class="cnt" id="nav-count">13</span></a>
+    <a class="nav-link" href="routes.html">Маршрути</a>
+    <a class="nav-link" href="drivers.html">Водії</a>
+    <a class="nav-link" href="departures.html">Виїзди</a>
+    <a class="nav-link" href="schedule.html">Графік</a>
+    <a class="nav-link" href="users.html">Користувачі</a>
+  </div>
+  <div class="tb-right">
+    <div class="tb-search" id="search-wrap">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-light);flex-shrink:0"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input id="search-input" placeholder="Пошук за назвою, індексом, VIN..." oninput="onSearchInput()">
+      <button class="clear-x" onclick="clearSearch()" title="Очистити">
+        <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <button class="btn-primary" onclick="openAddModal()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+      Додати
+    </button>
+    <div class="user-pill"><div class="user-dot">ОП</div><span>Оператор</span></div>
+  </div>
+</div>
+
+<!-- CONTENT -->
+<div class="content-scroll">
+  <div class="tile">
+    <div class="tile-header">
+      <span class="tile-title">Транспортний парк</span>
+      <span class="tile-count" id="tile-count">13</span>
+      <div class="tile-tabs">
+        <button class="tt-btn on" onclick="setFilter('all', this)">Всі <span class="c" id="c-all">13</span></button>
+        <button class="tt-btn" onclick="setFilter('working', this)">Працюючі <span class="c" id="c-w">12</span></button>
+        <button class="tt-btn" onclick="setFilter('not_working', this)">Не працюючі <span class="c" id="c-nw">1</span></button>
+        <button class="tt-btn" onclick="setFilter('no_driver', this)">Без водія <span class="c" id="c-nd">1</span></button>
+      </div>
+    </div>
+    <div class="sub-row" id="sub-row">
+      <span class="sub-row-label">Підрозділ</span>
+      <div class="sub-chips" id="sub-chips"></div>
+      <span class="sub-clear" id="sub-clear" onclick="clearSubFilter()" style="display:none;">× Скинути</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="index">Індекс <span class="sort-icon"></span></th>
+            <th class="sortable" data-sort="name">Автомобіль <span class="sort-icon"></span></th>
+            <th class="sortable" data-sort="year">Рік <span class="sort-icon"></span></th>
+            <th class="sortable" data-sort="plate">Бортовий № <span class="sort-icon"></span></th>
+            <th>VIN код</th>
+            <th class="sortable" style="text-align:right" data-sort="tnDP">ТН ДП <span class="sort-icon"></span></th>
+            <th class="sortable" style="text-align:right" data-sort="tnM">ТН М <span class="sort-icon"></span></th>
+            <th class="sortable" style="text-align:right" data-sort="tank">Бак, л <span class="sort-icon"></span></th>
+            <th class="sortable" data-sort="status">Статус <span class="sort-icon"></span></th>
+            <th>Водій 1</th>
+            <th>Водій 2</th>
+            <th class="sortable" data-sort="subdivision">Підрозділ <span class="sort-icon"></span></th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="vehicles-tbody"></tbody>
+      </table>
+    </div>
+    <div class="t-foot">
+      <span class="count-text" id="count-text"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADD VEHICLE MODAL ══ -->
+<div class="overlay" id="add-overlay" onclick="handleOverlayClick(event, 'add-overlay')">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="vehicle-modal-title">Додати автомобіль</div>
+      </div>
+      <button class="modal-close" onclick="closeAddModal()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Індекс авто *</label>
+          <input class="form-input" id="f-index" placeholder="1001W" maxlength="10">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Назва моделі *</label>
+          <input class="form-input" id="f-name" placeholder="Toyota Hilux">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Рік випуску *</label>
+          <input class="form-input" id="f-year" placeholder="2021" maxlength="4" type="number" min="1990" max="2030">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Бортовий №</label>
+          <input class="form-input" id="f-plate" placeholder="АА 1234 ВВ">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">VIN код (17 символів)</label>
+          <input class="form-input" id="f-vin" placeholder="VSKEXVNJ5LJ004781" maxlength="17" style="font-family:'DM Mono',monospace;letter-spacing:0.02em;">
+        </div>
+        <div class="form-group">
+          <label class="form-label">ТН ДП, л/100км</label>
+          <input class="form-input" id="f-tn-dp" placeholder="9.8" type="number" step="0.1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">ТН М, л/100км</label>
+          <input class="form-input" id="f-tn-m" placeholder="12.1" type="number" step="0.1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Об'єм бака, л</label>
+          <input class="form-input" id="f-tank" placeholder="75" type="number">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Підрозділ</label>
+          <select class="form-select" id="f-subdivision" onchange="onSubdivisionChange()"></select>
+          <input class="form-input" id="f-subdivision-new" placeholder="Назва нового підрозділу" style="display:none;margin-top:6px;">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Статус</label>
+          <div class="radio-group">
+            <label class="radio-option selected-working" id="radio-working" onclick="selectStatus('working')">
+              <span class="radio-dot"></span>Працює
+            </label>
+            <label class="radio-option" id="radio-not" onclick="selectStatus('not_working')">
+              <span class="radio-dot"></span>Не працює
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeAddModal()">Скасувати</button>
+      <button class="btn-submit" id="vehicle-modal-submit" onclick="submitAddVehicle()">Додати</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DRIVER MODAL ══ -->
+<div class="overlay" id="driver-overlay" onclick="handleOverlayClick(event, 'driver-overlay')">
+  <div class="driver-modal">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="driver-modal-title">Водій 1</div>
+        <div class="driver-modal-sub" id="driver-modal-sub"></div>
+      </div>
+      <button class="modal-close" onclick="closeDriverModal()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div class="dm-section" id="dm-current-section">
+      <div class="dm-section-title">Поточний водій</div>
+      <div id="dm-current-content"></div>
+    </div>
+
+    <div class="dm-section">
+      <div class="dm-section-title">Доступні водії</div>
+      <div class="dm-search-wrap">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-light);flex-shrink:0"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+        <input id="dm-search" placeholder="Пошук водія..." oninput="renderDriverModal()">
+      </div>
+      <div class="driver-list" id="dm-driver-list"></div>
+    </div>
+
+    <div class="dm-section">
+      <div class="dm-section-title">Додати нового водія</div>
+      <div class="create-driver-form">
+        <div class="create-driver-row">
+          <input class="form-input" id="new-driver-name" placeholder="ПІБ *">
+          <input class="form-input" id="new-driver-ipn" placeholder="ІПН *" style="font-family:'DM Mono',monospace;">
+        </div>
+        <button class="btn-submit" onclick="createAndAssign()" style="align-self:flex-start;">Створити і призначити</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TOAST ══ -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════════
+let nextDriverId = 100;
+let nextVehicleId = 100;
+let subdivisions = ['Відділ 1', 'Відділ 2', 'Відділ 3'];
+
+let drivers = [
+  { id:1,  name:'Іваненко І.І.',    ipn:'1234567890', vehicleId:1,  slot:1 },
+  { id:2,  name:'Петренко П.П.',    ipn:'2345678901', vehicleId:1,  slot:2 },
+  { id:3,  name:'Коваленко О.М.',   ipn:'3456789012', vehicleId:3,  slot:1 },
+  { id:4,  name:'Мельник А.В.',     ipn:'4567890123', vehicleId:4,  slot:1 },
+  { id:5,  name:'Бондаренко С.Ю.',  ipn:'5678901234', vehicleId:4,  slot:2 },
+  { id:6,  name:'Сидоренко Д.Р.',   ipn:'6789012345', vehicleId:5,  slot:1 },
+  { id:7,  name:'Ткаченко О.В.',    ipn:'7890123456', vehicleId:6,  slot:1 },
+  { id:8,  name:'Павленко І.С.',    ipn:'8901234567', vehicleId:6,  slot:2 },
+  { id:9,  name:'Шевченко В.М.',    ipn:'9012345678', vehicleId:2,  slot:1 },
+  { id:10, name:'Кравченко П.І.',   ipn:'0123456789', vehicleId:8,  slot:1 },
+  { id:11, name:'Романенко С.В.',   ipn:'1122334455', vehicleId:9,  slot:1 },
+  { id:12, name:'Луценко А.Д.',     ipn:'2233445566', vehicleId:11, slot:1 },
+  { id:13, name:'Лисенко М.С.',     ipn:'3344556677', vehicleId:12, slot:1 },
+  { id:14, name:'Гриценко В.О.',    ipn:'4455667788', vehicleId:13, slot:1 },
+];
+
+let vehicles = [
+  { id:1,  index:'1001W', name:'Nissan Navara',       year:2018, plate:'АА 1234 ВВ', vin:'VSKEXVNJ5LJ004781', tnDP:9.8,  tnM:12.1, tank:75, status:'working',     driver1:1,  driver2:2,  subdivision:'Відділ 1' },
+  { id:2,  index:'1002W', name:'Nissan Navara',       year:2020, plate:'АА 2345 ВВ', vin:'VSKEXVNJ5LJ004782', tnDP:9.8,  tnM:12.1, tank:75, status:'working',     driver1:9,  driver2:null, subdivision:'Відділ 1' },
+  { id:3,  index:'1003W', name:'Honda CR-V',          year:2021, plate:'АА 5678 СС', vin:'SHSRD78803U209201', tnDP:7.2,  tnM:9.0,  tank:57, status:'working',     driver1:3,  driver2:null, subdivision:'Відділ 2' },
+  { id:4,  index:'1004W', name:'Toyota Hilux',        year:2019, plate:'АА 9012 ДД', vin:'JTFHX05J504000419', tnDP:10.5, tnM:13.2, tank:80, status:'working',     driver1:4,  driver2:5,  subdivision:'Відділ 2' },
+  { id:5,  index:'1005W', name:'Toyota Hilux',        year:2020, plate:'АА 3456 ДД', vin:'JTFHX05J504000420', tnDP:10.5, tnM:13.2, tank:80, status:'working',     driver1:6,  driver2:null, subdivision:'Відділ 2' },
+  { id:6,  index:'1006W', name:'Toyota Hilux',        year:2021, plate:'АА 4567 ДД', vin:'JTFHX05J504000421', tnDP:10.5, tnM:13.2, tank:80, status:'working',     driver1:7,  driver2:8,  subdivision:'Відділ 3' },
+  { id:7,  index:'1007W', name:'Toyota Hilux',        year:2022, plate:'АА 5678 ДД', vin:'JTFHX05J504000422', tnDP:10.5, tnM:13.2, tank:80, status:'working',     driver1:null, driver2:null, subdivision:'Відділ 3' },
+  { id:8,  index:'1008W', name:'Nissan Pathfinder',   year:2019, plate:'АА 6789 ЕЕ', vin:'JN8AR2KRXJC612345', tnDP:12.0, tnM:15.0, tank:84, status:'working',     driver1:10, driver2:null, subdivision:'Відділ 1' },
+  { id:9,  index:'1009W', name:'Man TGE',             year:2021, plate:'АА 7890 МА', vin:'WV1ZZZ36ZK4000789', tnDP:9.5,  tnM:12.0, tank:75, status:'working',     driver1:11, driver2:null, subdivision:'Відділ 2' },
+  { id:10, index:'1010W', name:'VW Transporter T4',   year:2017, plate:'АА 3456 ЕЕ', vin:'WV2ZZZ70ZVH007017', tnDP:11.0, tnM:14.0, tank:80, status:'not_working', driver1:null, driver2:null, subdivision:'Відділ 3' },
+  { id:11, index:'1011W', name:'VW Transporter T5',   year:2019, plate:'АА 4567 ТТ', vin:'WV2ZZZ7HZ9H002345', tnDP:10.0, tnM:13.0, tank:80, status:'working',     driver1:12, driver2:null, subdivision:'Відділ 2' },
+  { id:12, index:'1012W', name:'Toyota Hiace',        year:2020, plate:'АА 7890 ЖЖ', vin:'JTFSK20P100002520', tnDP:8.9,  tnM:11.5, tank:70, status:'working',     driver1:13, driver2:null, subdivision:'Відділ 1' },
+  { id:13, index:'1013W', name:'VW Crafter',          year:2021, plate:'АА 8901 КК', vin:'WV1ZZZ2EZN1234567', tnDP:10.2, tnM:13.5, tank:75, status:'working',     driver1:14, driver2:null, subdivision:'Відділ 3' },
+];
+
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+let currentFilter = 'all';
+let currentSub = null;
+let driverCtx = { vehicleId: null, slot: null };
+let addModalStatus = 'working';
+let editingVehicleId = null;
+let sortState = { key: null, dir: 'asc' };
+let lastDeleted = null;
+
+// ══════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════
+const getDriver = id => id ? drivers.find(d => d.id === id) : null;
+const getAvailableDrivers = () => drivers.filter(d => d.vehicleId === null);
+const initials = name => name ? name.split(/\s+/).map(p => p[0]).join('').substring(0, 2).toUpperCase() : '??';
+
+function subClass(sub) {
+  const idx = subdivisions.indexOf(sub);
+  return ['sp1','sp2','sp3','sp4','sp5'][idx % 5] || 'sp3';
+}
+
+function showToast(msg, undoFn) {
+  const t = document.getElementById('toast');
+  t.innerHTML = msg + (undoFn ? ' <span class="undo" id="toast-undo">Скасувати</span>' : '');
+  t.classList.add('show');
+  if (undoFn) {
+    document.getElementById('toast-undo').onclick = () => {
+      undoFn();
+      t.classList.remove('show');
+    };
+  }
+  clearTimeout(window._toastT);
+  window._toastT = setTimeout(() => t.classList.remove('show'), 5000);
+}
+
+// ══════════════════════════════════════════════
+// FILTER & SORT
+// ══════════════════════════════════════════════
+function getFilteredVehicles() {
+  const q = document.getElementById('search-input').value.toLowerCase().trim();
+  let arr = vehicles.filter(v => {
+    const statusMatch =
+      currentFilter === 'all' ? true :
+      currentFilter === 'working' ? v.status === 'working' :
+      currentFilter === 'not_working' ? v.status === 'not_working' :
+      currentFilter === 'no_driver' ? (!v.driver1 && !v.driver2) : true;
+    const subMatch = !currentSub || v.subdivision === currentSub;
+    const searchMatch = !q ||
+      v.name.toLowerCase().includes(q) ||
+      v.index.toLowerCase().includes(q) ||
+      (v.plate || '').toLowerCase().includes(q) ||
+      (v.vin || '').toLowerCase().includes(q) ||
+      (v.subdivision || '').toLowerCase().includes(q) ||
+      [getDriver(v.driver1), getDriver(v.driver2)].some(d => d && d.name.toLowerCase().includes(q));
+    return statusMatch && subMatch && searchMatch;
+  });
+
+  if (sortState.key) {
+    const k = sortState.key, dir = sortState.dir === 'asc' ? 1 : -1;
+    arr.sort((a, b) => {
+      let av = a[k], bv = b[k];
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      if (typeof av === 'string') return av.localeCompare(bv, 'uk') * dir;
+      return (av - bv) * dir;
+    });
+  }
+  return arr;
+}
+
+function setSort(key) {
+  if (sortState.key === key) {
+    if (sortState.dir === 'asc') sortState.dir = 'desc';
+    else { sortState.key = null; sortState.dir = 'asc'; }
+  } else {
+    sortState.key = key;
+    sortState.dir = 'asc';
+  }
+  renderTable();
+  updateSortHeaders();
+}
+
+function updateSortHeaders() {
+  document.querySelectorAll('th.sortable').forEach(th => {
+    const k = th.dataset.sort;
+    th.classList.toggle('sorted', k === sortState.key);
+    const icon = th.querySelector('.sort-icon');
+    if (k === sortState.key) {
+      icon.innerHTML = sortState.dir === 'asc'
+        ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 15l-6-6-6 6"/></svg>'
+        : '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>';
+    } else {
+      icon.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 9l4-4 4 4M16 15l-4 4-4-4"/></svg>';
+    }
+  });
+}
+
+// ══════════════════════════════════════════════
+// RENDER
+// ══════════════════════════════════════════════
+function renderSubChips() {
+  const chips = document.getElementById('sub-chips');
+  const counts = {};
+  vehicles.forEach(v => { if (v.subdivision) counts[v.subdivision] = (counts[v.subdivision] || 0) + 1; });
+  chips.innerHTML = subdivisions.map(s => `
+    <div class="sub-chip ${currentSub === s ? 'on' : ''}" onclick="setSubFilter('${s.replace(/'/g, "\\'")}')">
+      ${s} <span class="c">${counts[s] || 0}</span>
+    </div>
+  `).join('');
+  document.getElementById('sub-clear').style.display = currentSub ? '' : 'none';
+}
+
+function renderTable() {
+  const filtered = getFilteredVehicles();
+  const tbody = document.getElementById('vehicles-tbody');
+  const foot = document.getElementById('count-text');
+
+  document.getElementById('nav-count').textContent = vehicles.length;
+  document.getElementById('tile-count').textContent = filtered.length;
+  document.getElementById('c-all').textContent = vehicles.length;
+  document.getElementById('c-w').textContent = vehicles.filter(v => v.status === 'working').length;
+  document.getElementById('c-nw').textContent = vehicles.filter(v => v.status === 'not_working').length;
+  document.getElementById('c-nd').textContent = vehicles.filter(v => !v.driver1 && !v.driver2).length;
+
+  if (filtered.length === 0) {
+    const hasFilters = currentFilter !== 'all' || currentSub || document.getElementById('search-input').value;
+    tbody.innerHTML = `<tr><td colspan="13"><div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+      <p>${hasFilters ? 'За вашими критеріями нічого не знайдено' : 'Поки немає автомобілів'}</p>
+      ${hasFilters ? '<span class="reset" onclick="resetAllFilters()">Скинути фільтри</span>' : ''}
+    </div></td></tr>`;
+    foot.innerHTML = '';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(v => renderRow(v)).join('');
+  foot.innerHTML = `Показано <b>${filtered.length}</b> з <b>${vehicles.length}</b>`;
+}
+
+function renderRow(v) {
+  const d1 = getDriver(v.driver1);
+  const d2 = getDriver(v.driver2);
+  const isInactive = v.status === 'not_working';
+
+  const driverCell = (driver, slot) => {
+    if (driver) {
+      return `<span class="driver-cell assigned" onclick="openDriverModal(${v.id}, ${slot})" title="${driver.name}"><span class="dc-name">${driver.name}</span></span>`;
+    }
+    return `<span class="driver-cell empty" onclick="openDriverModal(${v.id}, ${slot})">+ Призначити</span>`;
+  };
+
+  const statusBadge = v.status === 'working'
+    ? `<span class="status-badge working">Працює</span>`
+    : `<span class="status-badge not-working">Не працює</span>`;
+
+  const subBadge = v.subdivision
+    ? `<span class="sub-pill ${subClass(v.subdivision)}">${v.subdivision}</span>`
+    : `<span style="color:var(--text-light);font-size:13px">—</span>`;
+
+  return `<tr class="${isInactive ? 'inactive' : ''}">
+    <td><span class="td-idx">${v.index}</span></td>
+    <td><div class="td-veh">
+      <div class="v-thumb"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div>
+      <span class="v-nm">${v.name}</span>
+    </div></td>
+    <td class="td-mono">${v.year}</td>
+    <td class="td-mono">${v.plate || '—'}</td>
+    <td class="td-vin-full">${v.vin || '—'}</td>
+    <td class="td-num-val">${v.tnDP ?? '—'}</td>
+    <td class="td-num-val">${v.tnM ?? '—'}</td>
+    <td class="td-num-val">${v.tank ?? '—'}</td>
+    <td>${statusBadge}</td>
+    <td>${driverCell(d1, 1)}</td>
+    <td>${driverCell(d2, 2)}</td>
+    <td>${subBadge}</td>
+    <td><div class="acts">
+      <button class="act e" onclick="openEditModal(${v.id})" title="Редагувати">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
+      <button class="act d" onclick="deleteVehicle(${v.id})" title="Видалити">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+      </button>
+    </div></td>
+  </tr>`;
+}
+
+// ══════════════════════════════════════════════
+// SEARCH
+// ══════════════════════════════════════════════
+function onSearchInput() {
+  const input = document.getElementById('search-input');
+  document.getElementById('search-wrap').classList.toggle('has-value', !!input.value);
+  renderTable();
+}
+
+function clearSearch() {
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-wrap').classList.remove('has-value');
+  renderTable();
+}
+
+// ══════════════════════════════════════════════
+// ACTIONS
+// ══════════════════════════════════════════════
+function deleteVehicle(id) {
+  const v = vehicles.find(x => x.id === id);
+  if (!v) return;
+  const freedDrivers = drivers.filter(d => d.vehicleId === id).map(d => ({...d}));
+  lastDeleted = { vehicle: {...v}, freedDrivers };
+
+  drivers.forEach(d => { if (d.vehicleId === id) { d.vehicleId = null; d.slot = null; } });
+  vehicles = vehicles.filter(v => v.id !== id);
+  renderTable();
+  renderSubChips();
+
+  showToast(`Видалено «${v.name} ${v.index}»`, () => {
+    vehicles.push(lastDeleted.vehicle);
+    lastDeleted.freedDrivers.forEach(fd => {
+      const d = drivers.find(dr => dr.id === fd.id);
+      if (d) { d.vehicleId = fd.vehicleId; d.slot = fd.slot; }
+    });
+    lastDeleted = null;
+    renderTable();
+    renderSubChips();
+  });
+}
+
+function setFilter(filter, btn) {
+  currentFilter = filter;
+  document.querySelectorAll('.tt-btn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  renderTable();
+}
+
+function setSubFilter(sub) {
+  currentSub = currentSub === sub ? null : sub;
+  renderSubChips();
+  renderTable();
+}
+
+function clearSubFilter() {
+  currentSub = null;
+  renderSubChips();
+  renderTable();
+}
+
+function resetAllFilters() {
+  currentFilter = 'all';
+  currentSub = null;
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-wrap').classList.remove('has-value');
+  document.querySelectorAll('.tt-btn').forEach((b, i) => b.classList.toggle('on', i === 0));
+  renderSubChips();
+  renderTable();
+}
+
+// ══════════════════════════════════════════════
+// ADD / EDIT VEHICLE MODAL
+// ══════════════════════════════════════════════
+function renderSubdivisionSelect(selectedValue) {
+  const sel = document.getElementById('f-subdivision');
+  sel.innerHTML = '<option value="">— не вказано —</option>' +
+    subdivisions.map(s => `<option value="${s}"${s === selectedValue ? ' selected' : ''}>${s}</option>`).join('') +
+    '<option value="__new__">+ Новий підрозділ...</option>';
+  const newInput = document.getElementById('f-subdivision-new');
+  newInput.style.display = 'none';
+  newInput.value = '';
+}
+
+function onSubdivisionChange() {
+  const sel = document.getElementById('f-subdivision');
+  const newInput = document.getElementById('f-subdivision-new');
+  const isNew = sel.value === '__new__';
+  newInput.style.display = isNew ? '' : 'none';
+  if (!isNew) newInput.value = '';
+  if (isNew) newInput.focus();
+}
+
+function openAddModal() {
+  editingVehicleId = null;
+  document.getElementById('vehicle-modal-title').textContent = 'Додати автомобіль';
+  document.getElementById('vehicle-modal-submit').textContent = 'Додати';
+  ['f-index','f-name','f-year','f-plate','f-vin','f-tn-dp','f-tn-m','f-tank'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  renderSubdivisionSelect('');
+  selectStatus('working');
+  document.getElementById('add-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('f-index').focus(), 100);
+}
+
+function openEditModal(id) {
+  const v = vehicles.find(v => v.id === id);
+  if (!v) return;
+  editingVehicleId = id;
+  document.getElementById('vehicle-modal-title').textContent = 'Редагувати автомобіль';
+  document.getElementById('vehicle-modal-submit').textContent = 'Зберегти';
+  document.getElementById('f-index').value  = v.index || '';
+  document.getElementById('f-name').value   = v.name  || '';
+  document.getElementById('f-year').value   = v.year  || '';
+  document.getElementById('f-plate').value  = v.plate || '';
+  document.getElementById('f-vin').value    = v.vin   || '';
+  document.getElementById('f-tn-dp').value  = v.tnDP  ?? '';
+  document.getElementById('f-tn-m').value   = v.tnM   ?? '';
+  document.getElementById('f-tank').value   = v.tank  ?? '';
+  renderSubdivisionSelect(v.subdivision || '');
+  selectStatus(v.status || 'working');
+  document.getElementById('add-overlay').classList.add('open');
+}
+
+function closeAddModal() { document.getElementById('add-overlay').classList.remove('open'); }
+
+function selectStatus(val) {
+  addModalStatus = val;
+  document.getElementById('radio-working').className = 'radio-option' + (val === 'working' ? ' selected-working' : '');
+  document.getElementById('radio-not').className = 'radio-option' + (val === 'not_working' ? ' selected-not' : '');
+}
+
+function submitAddVehicle() {
+  const index = document.getElementById('f-index').value.trim();
+  const name  = document.getElementById('f-name').value.trim();
+  const year  = parseInt(document.getElementById('f-year').value);
+  if (!index || !name || !year) {
+    ['f-index','f-name','f-year'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el.value.trim()) { el.style.borderColor = 'var(--red)'; setTimeout(() => el.style.borderColor = '', 2000); }
+    });
+    return;
+  }
+  const data = {
+    index, name, year,
+    plate: document.getElementById('f-plate').value.trim(),
+    vin:   document.getElementById('f-vin').value.trim().toUpperCase(),
+    tnDP:  parseFloat(document.getElementById('f-tn-dp').value) || null,
+    tnM:   parseFloat(document.getElementById('f-tn-m').value) || null,
+    tank:  parseInt(document.getElementById('f-tank').value) || null,
+    status: addModalStatus,
+    subdivision: (() => {
+      const sel = document.getElementById('f-subdivision').value;
+      if (sel === '__new__') {
+        const newSub = document.getElementById('f-subdivision-new').value.trim();
+        if (newSub && !subdivisions.includes(newSub)) subdivisions.push(newSub);
+        return newSub;
+      }
+      return sel;
+    })(),
+  };
+  if (editingVehicleId !== null) {
+    const v = vehicles.find(v => v.id === editingVehicleId);
+    if (v) Object.assign(v, data);
+    showToast('Збережено');
+  } else {
+    vehicles.push({ id: ++nextVehicleId, driver1: null, driver2: null, ...data });
+    showToast(`Додано «${name} ${index}»`);
+  }
+  closeAddModal();
+  renderTable();
+  renderSubChips();
+}
+
+// ══════════════════════════════════════════════
+// DRIVER MODAL
+// ══════════════════════════════════════════════
+function openDriverModal(vehicleId, slot) {
+  driverCtx = { vehicleId, slot };
+  const v = vehicles.find(v => v.id === vehicleId);
+  document.getElementById('driver-modal-title').textContent = `Водій ${slot}`;
+  document.getElementById('driver-modal-sub').textContent = v ? v.name + ' · ' + v.index : '';
+  document.getElementById('new-driver-name').value = '';
+  document.getElementById('new-driver-ipn').value = '';
+  document.getElementById('dm-search').value = '';
+  renderDriverModal();
+  document.getElementById('driver-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('dm-search').focus(), 100);
+}
+
+function closeDriverModal() { document.getElementById('driver-overlay').classList.remove('open'); }
+
+function renderDriverModal() {
+  const { vehicleId, slot } = driverCtx;
+  const v = vehicles.find(v => v.id === vehicleId);
+  const currentDriverId = slot === 1 ? v.driver1 : v.driver2;
+  const currentDriver = getDriver(currentDriverId);
+  const q = (document.getElementById('dm-search').value || '').toLowerCase().trim();
+
+  const currentSection = document.getElementById('dm-current-section');
+  const currentContent = document.getElementById('dm-current-content');
+  if (currentDriver) {
+    currentSection.style.display = '';
+    currentContent.innerHTML = `
+      <div class="current-driver-row">
+        <div>
+          <div class="current-driver-name">${currentDriver.name}</div>
+          ${currentDriver.ipn ? `<div class="current-driver-ipn">${currentDriver.ipn}</div>` : ''}
+        </div>
+        <button class="btn-remove-driver" onclick="removeDriver()">Зняти</button>
+      </div>`;
+  } else {
+    currentSection.style.display = 'none';
+  }
+
+  const available = getAvailableDrivers().filter(d =>
+    !q || d.name.toLowerCase().includes(q) || (d.ipn || '').includes(q)
+  );
+  const list = document.getElementById('dm-driver-list');
+  if (available.length === 0) {
+    list.innerHTML = `<div class="empty-drivers">${q ? 'Нічого не знайдено' : 'Всі водії вже призначені'}</div>`;
+  } else {
+    list.innerHTML = available.map(d => `
+      <div class="driver-list-item" onclick="assignDriver(${d.id})">
+        <div class="driver-list-avatar">${initials(d.name)}</div>
+        <div class="driver-list-info">
+          <div class="driver-list-name">${d.name}</div>
+          ${d.ipn ? `<div class="driver-list-ipn">${d.ipn}</div>` : ''}
+        </div>
+        <button class="btn-assign">Призначити</button>
+      </div>`).join('');
+  }
+}
+
+function assignDriver(driverId) {
+  const { vehicleId, slot } = driverCtx;
+  const v = vehicles.find(v => v.id === vehicleId);
+  const prevDriverId = slot === 1 ? v.driver1 : v.driver2;
+  if (prevDriverId) {
+    const prev = drivers.find(d => d.id === prevDriverId);
+    if (prev) { prev.vehicleId = null; prev.slot = null; }
+  }
+  const driver = drivers.find(d => d.id === driverId);
+  if (driver) {
+    if (driver.vehicleId && driver.vehicleId !== vehicleId) {
+      const prevV = vehicles.find(v2 => v2.id === driver.vehicleId);
+      if (prevV) {
+        if (prevV.driver1 === driverId) prevV.driver1 = null;
+        if (prevV.driver2 === driverId) prevV.driver2 = null;
+      }
+    }
+    driver.vehicleId = vehicleId;
+    driver.slot = slot;
+  }
+  if (slot === 1) v.driver1 = driverId; else v.driver2 = driverId;
+  renderDriverModal();
+  renderTable();
+}
+
+function removeDriver() {
+  const { vehicleId, slot } = driverCtx;
+  const v = vehicles.find(v => v.id === vehicleId);
+  const driverId = slot === 1 ? v.driver1 : v.driver2;
+  if (driverId) {
+    const d = drivers.find(d => d.id === driverId);
+    if (d) { d.vehicleId = null; d.slot = null; }
+  }
+  if (slot === 1) v.driver1 = null; else v.driver2 = null;
+  renderDriverModal();
+  renderTable();
+}
+
+function createAndAssign() {
+  const name = document.getElementById('new-driver-name').value.trim();
+  const ipn  = document.getElementById('new-driver-ipn').value.trim();
+  let valid = true;
+  ['new-driver-name','new-driver-ipn'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el.value.trim()) { el.style.borderColor = 'var(--red)'; setTimeout(() => el.style.borderColor = '', 2000); valid = false; }
+  });
+  if (!valid) return;
+  const newDriver = { id: ++nextDriverId, name, ipn, vehicleId: null, slot: null };
+  drivers.push(newDriver);
+  document.getElementById('new-driver-name').value = '';
+  document.getElementById('new-driver-ipn').value = '';
+  assignDriver(newDriver.id);
+}
+
+function handleOverlayClick(e, overlayId) {
+  if (e.target.id === overlayId) document.getElementById(overlayId).classList.remove('open');
+}
+
+// ESC to close modals
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.overlay.open').forEach(o => o.classList.remove('open'));
+  }
+});
+
+// sortable headers
+document.querySelectorAll('th.sortable').forEach(th => th.onclick = () => setSort(th.dataset.sort));
+
+// INIT
+renderSubChips();
+renderTable();
+updateSortHeaders();
+</script>
+</body>
+</html>

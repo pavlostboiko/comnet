@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ComNet — Налаштування</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#ffffff; --border:#e2e8f0; --border-light:#f1f5f9;
+    --text:#0f172a; --text-mid:#475569; --text-light:#94a3b8;
+    --accent:#475569; --accent-light:#e2e8f0; --accent-dark:#334155;
+    --accent-soft:rgba(71,85,105,0.08); --accent-ring:rgba(71,85,105,0.18);
+    --row-hover:#f1f5f9;
+    --red:#ef4444; --red-bg:#fee2e2;
+    --green-bg:#d1fae5; --green-text:#065f46;
+    --shadow:0 1px 3px rgba(15,23,42,0.06),0 0 0 1px rgba(15,23,42,0.04);
+    --shadow-xl:0 20px 40px rgba(15,23,42,0.14),0 0 0 1px rgba(15,23,42,0.05);
+    --radius:4px; --radius-sm:3px; --radius-pill:6px;
+    --row-pad-y:10px; --cell-pad-x:12px;
+    --font-body:14px; --font-header:11px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+
+  /* TOPBAR */
+  .topbar { height:54px; background:var(--surface); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 24px; flex-shrink:0; }
+  .logo-area { display:flex; align-items:center; gap:9px; margin-right:32px; }
+  .logo-sq { width:28px; height:28px; background:var(--accent); border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center; }
+  .logo-text { font-size:15px; font-weight:700; letter-spacing:-0.02em; }
+  .nav-links { display:flex; align-items:stretch; height:100%; }
+  .nav-link { display:flex; align-items:center; padding:0 13px; font-size:13.5px; font-weight:500; color:var(--text-mid); cursor:pointer; border-bottom:2px solid transparent; transition:all 0.15s; text-decoration:none; white-space:nowrap; }
+  .nav-link:hover { color:var(--text); }
+  .nav-link.active { color:var(--accent); border-bottom-color:var(--accent); font-weight:600; }
+  .tb-right { margin-left:auto; display:flex; align-items:center; gap:10px; }
+  .user-pill { display:flex; align-items:center; gap:6px; padding:4px 10px 4px 5px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-pill); }
+  .user-dot { width:24px; height:24px; background:var(--accent); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:9.5px; font-weight:700; color:white; }
+  .user-pill span { font-size:13px; font-weight:500; color:var(--text-mid); }
+
+  /* CONTENT SCROLL */
+  .content-scroll { flex:1; overflow-y:auto; padding:20px 24px; display:flex; flex-direction:column; gap:16px; }
+  .content-scroll::-webkit-scrollbar { width:6px; }
+  .content-scroll::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+  /* TILE */
+  .tile { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; animation:tileIn 0.25s ease-out both; }
+  @keyframes tileIn { from { opacity:0; transform:translateY(5px); } }
+  .tile-header { padding:12px 20px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--border-light); flex-wrap:wrap; }
+  .tile-title { font-size:15px; font-weight:700; }
+  .tile-count { font-family:'DM Mono',monospace; font-size:11.5px; font-weight:500; background:var(--accent-light); color:var(--accent); padding:2px 8px; border-radius:var(--radius-sm); }
+  .tile-tabs { display:flex; gap:2px; background:var(--bg); padding:3px; border-radius:var(--radius-sm); border:1px solid var(--border-light); }
+  .tt-btn { padding:5px 13px; border:none; background:transparent; border-radius:var(--radius-sm); font-family:inherit; font-size:13px; font-weight:500; color:var(--text-light); cursor:pointer; transition:all 0.12s; white-space:nowrap; }
+  .tt-btn:hover { color:var(--text-mid); }
+  .tt-btn.on { background:var(--surface); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,0.06); font-weight:600; }
+  .tile-actions { margin-left:auto; display:flex; gap:6px; align-items:center; }
+
+  /* SEARCH */
+  .tile-search { display:flex; align-items:center; gap:6px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 10px; width:220px; transition:all 0.2s; }
+  .tile-search:focus-within { border-color:var(--accent); width:270px; }
+  .tile-search input { border:none; background:transparent; font-family:inherit; font-size:13px; color:var(--text); outline:none; width:100%; }
+  .tile-search input::placeholder { color:var(--text-light); }
+
+  /* SECTION (hidden/shown via JS) */
+  .sec { display:none; }
+  .sec.active { display:block; }
+
+  /* FORM (for general section) */
+  .form-card { padding:20px 24px; }
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px 16px; }
+  .form-group { display:flex; flex-direction:column; gap:5px; }
+  .form-group.full { grid-column:1/-1; }
+  .form-label { font-size:12px; font-weight:600; color:var(--text-mid); }
+  .form-label small { font-weight:400; color:var(--text-light); margin-left:4px; }
+  .form-input { padding:9px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:inherit; font-size:13.5px; color:var(--text); background:var(--bg); outline:none; transition:all 0.15s; }
+  .form-input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); background:var(--surface); }
+  .form-input::placeholder { color:var(--text-light); }
+  .form-input:disabled { opacity:0.5; cursor:not-allowed; }
+  .form-select { padding:9px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:inherit; font-size:13.5px; color:var(--text); background:var(--bg); outline:none; cursor:pointer; transition:all 0.15s; appearance:none; background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2394a3b8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; padding-right:28px; }
+  .form-select:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .form-hint { font-size:11.5px; color:var(--text-light); }
+  .form-foot { padding:12px 24px; border-top:1px solid var(--border-light); display:flex; justify-content:flex-end; }
+
+  /* BUTTONS */
+  .btn-primary { display:inline-flex; align-items:center; gap:5px; padding:8px 14px; background:var(--accent); border:none; border-radius:var(--radius-sm); font-family:inherit; font-size:13.5px; font-weight:600; color:white; cursor:pointer; transition:all 0.15s; white-space:nowrap; }
+  .btn-primary:hover { background:var(--accent-dark); }
+  .btn-cancel { padding:8px 14px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); font-family:inherit; font-size:13.5px; font-weight:500; color:var(--text-mid); cursor:pointer; transition:all 0.12s; }
+  .btn-cancel:hover { border-color:var(--text-light); color:var(--text); }
+
+  /* TABLE */
+  table { width:100%; border-collapse:collapse; }
+  thead tr { background:var(--bg); }
+  th { padding:9px var(--cell-pad-x); text-align:left; font-size:var(--font-header); font-weight:600; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-light); border-bottom:1px solid var(--border); white-space:nowrap; }
+  th:first-child { padding-left:20px; }
+  th:last-child { padding-right:20px; width:52px; }
+  tbody tr { border-bottom:1px solid var(--border-light); transition:background 0.1s; }
+  tbody tr:last-child { border-bottom:none; }
+  tbody tr:nth-child(even) { background:#f8fafc; }
+  tbody tr:hover { background:var(--row-hover) !important; }
+  td { padding:var(--row-pad-y) var(--cell-pad-x); font-size:var(--font-body); color:var(--text-mid); vertical-align:middle; }
+  td:first-child { padding-left:20px; }
+  td:last-child { padding-right:20px; }
+  .td-name { font-weight:600; color:var(--text); }
+  .t-foot { padding:9px 20px; border-top:1px solid var(--border-light); font-size:13px; color:var(--text-light); background:var(--bg); }
+
+  /* STATUS BADGE */
+  .status-badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-sm); font-size:11.5px; font-weight:600; }
+  .s-active   { background:var(--green-bg); color:var(--green-text); }
+  .s-inactive { background:var(--accent-light); color:var(--text-light); }
+
+  /* ROW ACTIONS */
+  .acts { display:flex; gap:2px; opacity:0; transition:opacity 0.12s; justify-content:flex-end; }
+  tbody tr:hover .acts { opacity:1; }
+  .act { width:28px; height:28px; border-radius:var(--radius-sm); border:none; background:transparent; cursor:pointer; color:var(--text-light); display:flex; align-items:center; justify-content:center; transition:all 0.12s; }
+  .act:hover.e { background:var(--accent-light); color:var(--accent); }
+  .act:hover.d { background:var(--red-bg); color:var(--red); }
+  .act svg { width:14px; height:14px; }
+
+  /* OP TYPES TREE */
+  .optype-group { border-bottom:1px solid var(--border-light); }
+  .optype-group:last-child { border-bottom:none; }
+  .optype-parent { display:flex; align-items:center; padding:11px 20px; gap:10px; cursor:pointer; transition:background 0.1s; user-select:none; }
+  .optype-parent:hover { background:var(--row-hover); }
+  .optype-chevron { width:16px; height:16px; display:flex; align-items:center; justify-content:center; color:var(--text-light); transition:transform 0.15s; flex-shrink:0; }
+  .optype-chevron.open { transform:rotate(90deg); }
+  .optype-parent-name { font-size:14px; font-weight:600; color:var(--text); flex:1; }
+  .optype-sub-count { font-family:'DM Mono',monospace; font-size:11px; color:var(--text-light); background:var(--border-light); padding:1px 7px; border-radius:var(--radius-sm); }
+  .optype-parent-acts { display:flex; gap:4px; opacity:0; transition:opacity 0.12s; }
+  .optype-parent:hover .optype-parent-acts { opacity:1; }
+  .optype-children { background:var(--bg); border-top:1px solid var(--border-light); }
+  .optype-child { display:flex; align-items:center; padding:8px 20px 8px 52px; gap:10px; border-bottom:1px solid var(--border-light); transition:background 0.1s; }
+  .optype-child:hover { background:var(--row-hover); }
+  .optype-child-dot { width:5px; height:5px; border-radius:50%; background:var(--border); flex-shrink:0; }
+  .optype-child-name { font-size:13.5px; color:var(--text-mid); flex:1; }
+  .optype-child-acts { display:flex; gap:4px; opacity:0; transition:opacity 0.12s; }
+  .optype-child:hover .optype-child-acts { opacity:1; }
+  .btn-add-sub { display:flex; align-items:center; gap:5px; padding:7px 20px 7px 52px; font-size:12.5px; color:var(--text-light); cursor:pointer; background:none; border:none; font-family:inherit; width:100%; text-align:left; transition:color 0.12s; }
+  .btn-add-sub:hover { color:var(--accent); }
+
+  /* TOGGLE */
+  .toggle-wrap { display:flex; align-items:center; gap:10px; }
+  .toggle { width:36px; height:20px; border-radius:10px; background:var(--border); border:none; cursor:pointer; position:relative; transition:background 0.15s; flex-shrink:0; padding:0; }
+  .toggle.on { background:var(--accent); }
+  .toggle-knob { position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:white; transition:transform 0.15s; box-shadow:0 1px 3px rgba(0,0,0,0.2); pointer-events:none; }
+  .toggle.on .toggle-knob { transform:translateX(16px); }
+  .toggle-label { font-size:13.5px; color:var(--text-mid); }
+
+  /* FSEC */
+  .fsec { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-light); margin-bottom:10px; }
+
+  /* OVERLAY */
+  .overlay { position:fixed; inset:0; background:rgba(15,23,42,0.4); backdrop-filter:blur(2px); z-index:100; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.2s; }
+  .overlay.open { opacity:1; pointer-events:all; }
+  .modal-wide { background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow-xl); width:760px; max-width:calc(100vw - 48px); max-height:calc(100vh - 60px); overflow-y:auto; transform:translateY(12px) scale(0.98); transition:transform 0.2s; }
+  .modal-sm-box { background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow-xl); width:400px; max-width:calc(100vw - 48px); max-height:calc(100vh - 60px); overflow-y:auto; transform:translateY(12px) scale(0.98); transition:transform 0.2s; }
+  .overlay.open .modal-wide,
+  .overlay.open .modal-sm-box { transform:translateY(0) scale(1); }
+  .modal-head { padding:18px 24px 14px; border-bottom:1px solid var(--border-light); display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; background:var(--surface); z-index:1; }
+  .modal-title { font-size:17px; font-weight:700; }
+  .modal-body { padding:20px 24px; display:flex; flex-direction:column; gap:18px; }
+  .modal-foot { padding:14px 24px; border-top:1px solid var(--border-light); display:flex; justify-content:flex-end; gap:8px; position:sticky; bottom:0; background:var(--surface); }
+  .modal-close { width:30px; height:30px; border-radius:var(--radius-sm); border:none; background:transparent; cursor:pointer; color:var(--text-light); display:flex; align-items:center; justify-content:center; transition:all 0.12s; }
+  .modal-close:hover { background:var(--bg); color:var(--text); }
+
+  /* TOAST */
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--text); color:white; padding:11px 20px; border-radius:var(--radius-sm); font-size:13.5px; font-weight:500; box-shadow:var(--shadow-xl); z-index:200; opacity:0; transition:all 0.25s; white-space:nowrap; }
+  .toast.show { transform:translateX(-50%) translateY(0); opacity:1; }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo-area">
+    <div class="logo-sq">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+        <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+        <line x1="12" y1="22.08" x2="12" y2="12"/>
+      </svg>
+    </div>
+    <span class="logo-text">ComNet</span>
+  </div>
+  <div class="nav-links">
+    <a class="nav-link" href="items.html">Майно</a>
+    <a class="nav-link" href="database.html">Переміщення</a>
+    <a class="nav-link" href="residues.html">Залишки</a>
+    <a class="nav-link" href="#">Звіти</a>
+    <a class="nav-link" href="#">Документи</a>
+    <a class="nav-link active" href="settings.html">Налаштування</a>
+  </div>
+  <div class="tb-right">
+    <div class="user-pill">
+      <div class="user-dot">АД</div>
+      <span>Адмін</span>
+    </div>
+  </div>
+</div>
+
+<!-- CONTENT -->
+<div class="content-scroll">
+
+  <!-- TILE: Налаштування з табами -->
+  <div class="tile">
+    <div class="tile-header">
+      <span class="tile-title">Налаштування</span>
+      <div class="tile-tabs">
+        <button class="tt-btn on" onclick="setTab('general',this)">Підрозділ</button>
+        <button class="tt-btn" onclick="setTab('persons',this)">Особи <span id="cnt-persons" style="font-family:'DM Mono',monospace;font-size:10.5px;color:var(--text-light);background:var(--border-light);padding:0 6px;border-radius:3px;line-height:17px;margin-left:4px">0</span></button>
+        <button class="tt-btn" onclick="setTab('optypes',this)">Типи операцій</button>
+      </div>
+      <!-- Tab-specific actions injected here -->
+      <div class="tile-actions" id="tab-actions"></div>
+    </div>
+
+    <!-- TAB: ПІДРОЗДІЛ -->
+    <div id="sec-general" class="sec active">
+      <div class="form-card">
+        <div class="form-grid">
+          <div class="form-group full">
+            <label class="form-label">Найменування <small>повне офіційне</small></label>
+            <input class="form-input" id="unit-name" value="Окремий батальйон спеціального призначення «Альфа»">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Скорочене найменування</label>
+            <input class="form-input" id="unit-short" value="ОБСП «Альфа»">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Код ЄДРПОУ</label>
+            <input class="form-input" id="unit-edrpou" value="12345678" style="font-family:'DM Mono',monospace;letter-spacing:0.05em">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Місце дислокації</label>
+            <input class="form-input" id="unit-location" value="м. Київ">
+          </div>
+        </div>
+      </div>
+      <div class="form-foot">
+        <button class="btn-primary" onclick="showToast('Дані підрозділу збережено')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          Зберегти
+        </button>
+      </div>
+    </div>
+
+    <!-- TAB: ОСОБИ -->
+    <div id="sec-persons" class="sec">
+      <table>
+        <thead>
+          <tr>
+            <th>ПІБ</th>
+            <th>Звання</th>
+            <th>Посада</th>
+            <th>Підрозділ</th>
+            <th>Статус</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="persons-tbody"></tbody>
+      </table>
+      <div class="t-foot" id="persons-footer"></div>
+    </div>
+
+    <!-- TAB: ТИПИ ОПЕРАЦІЙ -->
+    <div id="sec-optypes" class="sec">
+      <div id="optypes-tree"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ====== PERSON MODAL ====== -->
+<div class="overlay" id="person-overlay">
+  <div class="modal-wide">
+    <div class="modal-head">
+      <span class="modal-title" id="person-modal-title">Додати особу</span>
+      <button class="modal-close" onclick="closePersonModal()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+
+      <div>
+        <div class="fsec">Прізвище, ім'я, по батькові</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Прізвище</label>
+            <input class="form-input" id="p-last-name" placeholder="Іваненко" oninput="updateSearchName()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Прізвище <small>(родовий)</small></label>
+            <input class="form-input" id="p-last-name-g" placeholder="Іваненка">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Ім'я</label>
+            <input class="form-input" id="p-first-name" placeholder="Іван" oninput="updateSearchName()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Ім'я <small>(родовий)</small></label>
+            <input class="form-input" id="p-first-name-g" placeholder="Івана">
+          </div>
+          <div class="form-group">
+            <label class="form-label">По батькові</label>
+            <input class="form-input" id="p-patronymic" placeholder="Іванович" oninput="updateSearchName()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">По батькові <small>(родовий)</small></label>
+            <input class="form-input" id="p-patronymic-g" placeholder="Івановича">
+          </div>
+        </div>
+      </div>
+
+      <hr style="border:none;border-top:1px solid var(--border-light)">
+
+      <div>
+        <div class="fsec">Звання та посада</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Звання</label>
+            <input class="form-input" id="p-rank" placeholder="Капітан">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Звання <small>(родовий)</small></label>
+            <input class="form-input" id="p-rank-g" placeholder="Капітана">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Посада</label>
+            <input class="form-input" id="p-position" placeholder="Командир роти">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Посада <small>(родовий)</small></label>
+            <input class="form-input" id="p-position-g" placeholder="Командира роти">
+          </div>
+        </div>
+      </div>
+
+      <hr style="border:none;border-top:1px solid var(--border-light)">
+
+      <div>
+        <div class="fsec">Підрозділ та статус</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Підрозділ</label>
+            <input class="form-input" id="p-unit" placeholder="1 рота">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Підрозділ <small>(місцевий відмінок)</small></label>
+            <input class="form-input" id="p-unit-loc" placeholder="у 1-й роті">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Скорочення <small>(авто)</small></label>
+            <input class="form-input" id="p-search-name" placeholder="Іваненко І.І." disabled>
+            <span class="form-hint" style="font-size:11.5px;color:var(--text-light)">Формується автоматично</span>
+          </div>
+          <div class="form-group" style="justify-content:flex-end; padding-bottom:6px;">
+            <label class="form-label">Статус</label>
+            <div class="toggle-wrap" style="margin-top:auto;">
+              <button class="toggle on" id="p-toggle" onclick="togglePersonActive()">
+                <div class="toggle-knob"></div>
+              </button>
+              <span class="toggle-label" id="p-toggle-label">Активний</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closePersonModal()">Скасувати</button>
+      <button class="btn-primary" onclick="savePerson()">Зберегти</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== OPTYPE MODAL ====== -->
+<div class="overlay" id="optype-overlay">
+  <div class="modal-sm-box">
+    <div class="modal-head">
+      <span class="modal-title" id="optype-modal-title">Додати тип операції</span>
+      <button class="modal-close" onclick="closeOptypeModal()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Назва</label>
+        <input class="form-input" id="optype-name" placeholder="Назва типу">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeOptypeModal()">Скасувати</button>
+      <button class="btn-primary" onclick="saveOptype()">Зберегти</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   DATA
+   ========================================================= */
+let persons = [
+  { id:1, last_name:'Шевченко',    last_name_g:'Шевченка',    first_name:'Тарас',   first_name_g:'Тараса',   patronymic:'Григорович',  patronymic_g:'Григоровича',  rank:'Підполковник',      rank_g:'Підполковника',       position:'Командир батальйону',  position_g:'Командира батальйону',  unit:'Штаб',   unit_loc:'у Штабі',    is_active:true  },
+  { id:2, last_name:'Іваненко',    last_name_g:'Іваненка',    first_name:'Іван',    first_name_g:'Івана',    patronymic:'Іванович',    patronymic_g:'Івановича',    rank:'Капітан',           rank_g:'Капітана',            position:'Командир 1-ї роти',    position_g:'Командира 1-ї роти',    unit:'1 рота', unit_loc:'у 1-й роті', is_active:true  },
+  { id:3, last_name:'Петренко',    last_name_g:'Петренка',    first_name:'Петро',   first_name_g:'Петра',    patronymic:'Петрович',    patronymic_g:'Петровича',    rank:'Старший лейтенант', rank_g:'Старшого лейтенанта', position:'Командир 2-ї роти',    position_g:'Командира 2-ї роти',    unit:'2 рота', unit_loc:'у 2-й роті', is_active:true  },
+  { id:4, last_name:'Коваленко',   last_name_g:'Коваленка',   first_name:'Олег',    first_name_g:'Олега',    patronymic:'Васильович',  patronymic_g:'Васильовича',  rank:'Лейтенант',         rank_g:'Лейтенанта',          position:'МВО',                  position_g:'МВО',                   unit:'Штаб',   unit_loc:'у Штабі',    is_active:true  },
+  { id:5, last_name:'Бондаренко',  last_name_g:'Бондаренка',  first_name:'Михайло', first_name_g:'Михайла',  patronymic:'Андрійович',  patronymic_g:'Андрійовича',  rank:'Прапорщик',         rank_g:'Прапорщика',          position:'МВО 1-ї роти',         position_g:'МВО 1-ї роти',          unit:'1 рота', unit_loc:'у 1-й роті', is_active:true  },
+  { id:6, last_name:'Сидоренко',   last_name_g:'Сидоренка',   first_name:'Сидір',   first_name_g:'Сидора',   patronymic:'Сидорович',   patronymic_g:'Сидоровича',   rank:'Старший прапорщик', rank_g:'Старшого прапорщика', position:'МВО 2-ї роти',         position_g:'МВО 2-ї роти',          unit:'2 рота', unit_loc:'у 2-й роті', is_active:true  },
+  { id:7, last_name:'Мельниченко', last_name_g:'Мельниченко', first_name:'Олена',   first_name_g:'Олени',    patronymic:'Степанівна',  patronymic_g:'Степанівни',   rank:'Капітан',           rank_g:'Капітана',            position:'Начальник штабу',      position_g:'Начальника штабу',      unit:'Штаб',   unit_loc:'у Штабі',    is_active:true  },
+  { id:8, last_name:'Гриценко',    last_name_g:'Гриценка',    first_name:'Василь',  first_name_g:'Василя',   patronymic:'Іванович',    patronymic_g:'Івановича',    rank:'Старший сержант',   rank_g:'Старшого сержанта',   position:'Виконавець',           position_g:'Виконавця',             unit:'3 рота', unit_loc:'у 3-й роті', is_active:false }
+];
+
+let optypes = [
+  { id:1, name:'Надходження',           children:[ {id:11,name:'Від постачальника (МТЗ)'}, {id:12,name:'Від іншого підрозділу'}, {id:13,name:'Гуманітарна допомога'}, {id:14,name:'Безповоротна допомога (USAID/NATO)'} ] },
+  { id:2, name:'Вибуття',               children:[ {id:21,name:'Списання (акт)'}, {id:22,name:'Передача підрозділу'}, {id:23,name:'Бойові втрати'}, {id:24,name:'Передача за межі в/ч'} ] },
+  { id:3, name:'Внутрішнє переміщення', children:[ {id:31,name:'Між МВО підрозділу'}, {id:32,name:'Видача особовому складу'}, {id:33,name:'Повернення від ОС'}, {id:34,name:'Зміна місця зберігання'} ] }
+];
+
+let nextPersonId = 9;
+let nextOptypeId = 100;
+let editingPersonId = null;
+let editingOptypeId = null;
+let editingOptypeParentId = null;
+let editingOptypeIsParent = false;
+let personActiveState = true;
+let collapsedGroups = new Set();
+let currentTab = 'general';
+
+function makeSearchName(p) {
+  const f = p.first_name ? p.first_name[0] + '.' : '';
+  const pa = p.patronymic ? p.patronymic[0] + '.' : '';
+  return p.last_name ? (p.last_name + ' ' + f + pa) : '';
+}
+
+/* =========================================================
+   TAB SWITCHING
+   ========================================================= */
+const TAB_ACTIONS = {
+  general: '',
+  persons: 'search+add',
+  optypes: 'addtype'
+};
+
+function setTab(tab, btn) {
+  currentTab = tab;
+  document.querySelectorAll('.tt-btn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  document.querySelectorAll('.sec').forEach(s => s.classList.remove('active'));
+  document.getElementById('sec-' + tab).classList.add('active');
+  renderTabActions(tab);
+}
+
+function renderTabActions(tab) {
+  const el = document.getElementById('tab-actions');
+  while (el.firstChild) el.removeChild(el.firstChild);
+
+  if (tab === 'persons') {
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'tile-search';
+    const icon = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    icon.setAttribute('width','12'); icon.setAttribute('height','12');
+    icon.setAttribute('viewBox','0 0 24 24'); icon.setAttribute('fill','none');
+    icon.setAttribute('stroke','currentColor'); icon.setAttribute('stroke-width','2');
+    icon.style.color = 'var(--text-light)'; icon.style.flexShrink = '0';
+    const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('cx','11'); c.setAttribute('cy','11'); c.setAttribute('r','8');
+    const l = document.createElementNS('http://www.w3.org/2000/svg','path');
+    l.setAttribute('d','M21 21l-4.35-4.35');
+    icon.appendChild(c); icon.appendChild(l);
+    const inp = document.createElement('input');
+    inp.id = 'persons-search';
+    inp.placeholder = 'Пошук...';
+    inp.addEventListener('input', renderPersons);
+    searchWrap.appendChild(icon);
+    searchWrap.appendChild(inp);
+    el.appendChild(searchWrap);
+
+    const btn = document.createElement('button');
+    btn.className = 'btn-primary';
+    btn.addEventListener('click', () => openPersonModal(null));
+    const plusSvg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    plusSvg.setAttribute('width','12'); plusSvg.setAttribute('height','12');
+    plusSvg.setAttribute('viewBox','0 0 24 24'); plusSvg.setAttribute('fill','none');
+    plusSvg.setAttribute('stroke','currentColor'); plusSvg.setAttribute('stroke-width','2.5');
+    const pp = document.createElementNS('http://www.w3.org/2000/svg','path');
+    pp.setAttribute('d','M12 5v14M5 12h14');
+    plusSvg.appendChild(pp);
+    btn.appendChild(plusSvg);
+    btn.appendChild(document.createTextNode(' Додати'));
+    el.appendChild(btn);
+  }
+
+  if (tab === 'optypes') {
+    const btn = document.createElement('button');
+    btn.className = 'btn-primary';
+    btn.addEventListener('click', () => openOptypeModal(null, null, false));
+    const plusSvg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    plusSvg.setAttribute('width','12'); plusSvg.setAttribute('height','12');
+    plusSvg.setAttribute('viewBox','0 0 24 24'); plusSvg.setAttribute('fill','none');
+    plusSvg.setAttribute('stroke','currentColor'); plusSvg.setAttribute('stroke-width','2.5');
+    const pp = document.createElementNS('http://www.w3.org/2000/svg','path');
+    pp.setAttribute('d','M12 5v14M5 12h14');
+    plusSvg.appendChild(pp);
+    btn.appendChild(plusSvg);
+    btn.appendChild(document.createTextNode(' Тип'));
+    el.appendChild(btn);
+  }
+}
+
+/* =========================================================
+   PERSONS
+   ========================================================= */
+function renderPersons() {
+  const searchEl = document.getElementById('persons-search');
+  const query = searchEl ? searchEl.value.toLowerCase() : '';
+  const tbody = document.getElementById('persons-tbody');
+  while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+
+  const filtered = persons.filter(p => {
+    const sn = makeSearchName(p).toLowerCase();
+    return sn.includes(query) || p.rank.toLowerCase().includes(query) ||
+           p.position.toLowerCase().includes(query) || p.unit.toLowerCase().includes(query);
+  });
+
+  filtered.forEach(p => {
+    const tr = document.createElement('tr');
+
+    const tdName = document.createElement('td');
+    const div = document.createElement('div');
+    div.className = 'td-name';
+    div.textContent = makeSearchName(p);
+    tdName.appendChild(div);
+    tr.appendChild(tdName);
+
+    const tdRank = document.createElement('td');
+    tdRank.textContent = p.rank;
+    tr.appendChild(tdRank);
+
+    const tdPos = document.createElement('td');
+    tdPos.textContent = p.position;
+    tr.appendChild(tdPos);
+
+    const tdUnit = document.createElement('td');
+    tdUnit.textContent = p.unit;
+    tr.appendChild(tdUnit);
+
+    const tdStatus = document.createElement('td');
+    const badge = document.createElement('span');
+    badge.className = 'status-badge ' + (p.is_active ? 's-active' : 's-inactive');
+    badge.textContent = p.is_active ? 'Активний' : 'Неактивний';
+    tdStatus.appendChild(badge);
+    tr.appendChild(tdStatus);
+
+    const tdActs = document.createElement('td');
+    const acts = document.createElement('div');
+    acts.className = 'acts';
+    acts.appendChild(makeActBtn('e', 'Редагувати', editSvg(), () => openPersonModal(p.id)));
+    acts.appendChild(makeActBtn('d', 'Видалити', deleteSvg(), () => deletePerson(p.id)));
+    tdActs.appendChild(acts);
+    tr.appendChild(tdActs);
+
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('cnt-persons').textContent = persons.length;
+  document.getElementById('persons-footer').textContent = 'Показано ' + filtered.length + ' з ' + persons.length;
+}
+
+function openPersonModal(id) {
+  editingPersonId = id;
+  const p = id ? persons.find(x => x.id === id) : null;
+  document.getElementById('person-modal-title').textContent = id ? 'Редагувати особу' : 'Додати особу';
+  const set = (elId, val) => { document.getElementById(elId).value = val || ''; };
+  set('p-last-name',    p && p.last_name);
+  set('p-last-name-g',  p && p.last_name_g);
+  set('p-first-name',   p && p.first_name);
+  set('p-first-name-g', p && p.first_name_g);
+  set('p-patronymic',   p && p.patronymic);
+  set('p-patronymic-g', p && p.patronymic_g);
+  set('p-rank',         p && p.rank);
+  set('p-rank-g',       p && p.rank_g);
+  set('p-position',     p && p.position);
+  set('p-position-g',   p && p.position_g);
+  set('p-unit',         p && p.unit);
+  set('p-unit-loc',     p && p.unit_loc);
+  set('p-search-name',  p ? makeSearchName(p) : '');
+  personActiveState = p ? p.is_active : true;
+  updateToggleUI();
+  document.getElementById('person-overlay').classList.add('open');
+}
+
+function updateSearchName() {
+  const ln  = document.getElementById('p-last-name').value;
+  const fn  = document.getElementById('p-first-name').value;
+  const pat = document.getElementById('p-patronymic').value;
+  document.getElementById('p-search-name').value =
+    ln ? (ln + ' ' + (fn ? fn[0]+'.' : '') + (pat ? pat[0]+'.' : '')) : '';
+}
+
+function togglePersonActive() {
+  personActiveState = !personActiveState;
+  updateToggleUI();
+}
+
+function updateToggleUI() {
+  const toggle = document.getElementById('p-toggle');
+  const label  = document.getElementById('p-toggle-label');
+  toggle.classList.toggle('on', personActiveState);
+  label.textContent = personActiveState ? 'Активний' : 'Неактивний';
+}
+
+function closePersonModal() {
+  document.getElementById('person-overlay').classList.remove('open');
+}
+
+function savePerson() {
+  const ln = document.getElementById('p-last-name').value.trim();
+  const fn = document.getElementById('p-first-name').value.trim();
+  if (!ln || !fn) { showToast('Введіть прізвище та ім\'я'); return; }
+  const g = id => document.getElementById(id).value.trim();
+  const data = {
+    last_name:ln,    last_name_g:g('p-last-name-g'),
+    first_name:fn,   first_name_g:g('p-first-name-g'),
+    patronymic:g('p-patronymic'), patronymic_g:g('p-patronymic-g'),
+    rank:g('p-rank'), rank_g:g('p-rank-g'),
+    position:g('p-position'), position_g:g('p-position-g'),
+    unit:g('p-unit'), unit_loc:g('p-unit-loc'),
+    is_active: personActiveState
+  };
+  if (editingPersonId) {
+    const idx = persons.findIndex(p => p.id === editingPersonId);
+    persons[idx] = Object.assign({ id: editingPersonId }, data);
+    showToast('Особу оновлено');
+  } else {
+    data.id = nextPersonId++;
+    persons.push(data);
+    showToast('Особу додано');
+  }
+  closePersonModal();
+  renderPersons();
+}
+
+function deletePerson(id) {
+  const p = persons.find(x => x.id === id);
+  persons = persons.filter(x => x.id !== id);
+  renderPersons();
+  showToast(makeSearchName(p) + ' — видалено');
+}
+
+/* =========================================================
+   OP TYPES TREE
+   ========================================================= */
+function renderOptypes() {
+  const container = document.getElementById('optypes-tree');
+  while (container.firstChild) container.removeChild(container.firstChild);
+
+  optypes.forEach(ot => {
+    const group = document.createElement('div');
+    group.className = 'optype-group';
+
+    const parentRow = document.createElement('div');
+    parentRow.className = 'optype-parent';
+
+    const chevron = document.createElement('div');
+    chevron.className = 'optype-chevron' + (collapsedGroups.has(ot.id) ? '' : ' open');
+    const chevSvg = makeSvg('M9 18l6-6-6-6', 12, 12, 2.5);
+    chevron.appendChild(chevSvg);
+    parentRow.appendChild(chevron);
+
+    parentRow.addEventListener('click', e => {
+      if (e.target.closest('.optype-parent-acts')) return;
+      collapsedGroups.has(ot.id) ? collapsedGroups.delete(ot.id) : collapsedGroups.add(ot.id);
+      renderOptypes();
+    });
+
+    const name = document.createElement('span');
+    name.className = 'optype-parent-name';
+    name.textContent = ot.name;
+    parentRow.appendChild(name);
+
+    const cnt = document.createElement('span');
+    cnt.className = 'optype-sub-count';
+    cnt.textContent = ot.children.length;
+    parentRow.appendChild(cnt);
+
+    const pActs = document.createElement('div');
+    pActs.className = 'optype-parent-acts';
+    pActs.appendChild(makeActBtn('e', 'Перейменувати', editSvg(), e => { e.stopPropagation(); openOptypeModal(ot.id, null, true); }));
+    pActs.appendChild(makeActBtn('d', 'Видалити тип',  deleteSvg(), e => { e.stopPropagation(); deleteOptype(ot.id, null); }));
+    parentRow.appendChild(pActs);
+    group.appendChild(parentRow);
+
+    if (!collapsedGroups.has(ot.id)) {
+      const children = document.createElement('div');
+      children.className = 'optype-children';
+
+      ot.children.forEach(ch => {
+        const row = document.createElement('div');
+        row.className = 'optype-child';
+
+        const dot = document.createElement('div');
+        dot.className = 'optype-child-dot';
+        row.appendChild(dot);
+
+        const chName = document.createElement('span');
+        chName.className = 'optype-child-name';
+        chName.textContent = ch.name;
+        row.appendChild(chName);
+
+        const chActs = document.createElement('div');
+        chActs.className = 'optype-child-acts';
+        chActs.appendChild(makeActBtn('e', 'Перейменувати', editSvg(), () => openOptypeModal(ch.id, ot.id, false)));
+        chActs.appendChild(makeActBtn('d', 'Видалити',      deleteSvg(), () => deleteOptype(ot.id, ch.id)));
+        row.appendChild(chActs);
+        children.appendChild(row);
+      });
+
+      const addSubBtn = document.createElement('button');
+      addSubBtn.className = 'btn-add-sub';
+      addSubBtn.addEventListener('click', () => openOptypeModal(null, ot.id, false));
+      const plusSvg = makeSvg('M12 5v14M5 12h14', 11, 11, 2.5);
+      addSubBtn.appendChild(plusSvg);
+      addSubBtn.appendChild(document.createTextNode(' Додати підтип'));
+      children.appendChild(addSubBtn);
+
+      group.appendChild(children);
+    }
+
+    container.appendChild(group);
+  });
+}
+
+/* openOptypeModal params:
+   - id: the id being edited (null = new)
+   - parentId: parent op_type id (null = it's a parent type itself)
+   - isParent: true if editing/adding a parent type
+*/
+function openOptypeModal(id, parentId, isParent) {
+  editingOptypeId = id;
+  editingOptypeParentId = parentId;
+  editingOptypeIsParent = isParent;
+
+  let title = 'Додати тип операції';
+  let nameVal = '';
+
+  if (isParent && id) {
+    const ot = optypes.find(o => o.id === id);
+    title = 'Перейменувати тип';
+    nameVal = ot ? ot.name : '';
+  } else if (!isParent && parentId && id) {
+    const ot = optypes.find(o => o.id === parentId);
+    const ch = ot ? ot.children.find(c => c.id === id) : null;
+    title = 'Перейменувати підтип';
+    nameVal = ch ? ch.name : '';
+  } else if (!isParent && parentId && !id) {
+    const ot = optypes.find(o => o.id === parentId);
+    title = 'Додати підтип' + (ot ? ' — ' + ot.name : '');
+  }
+
+  document.getElementById('optype-modal-title').textContent = title;
+  document.getElementById('optype-name').value = nameVal;
+  document.getElementById('optype-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('optype-name').focus(), 150);
+}
+
+function closeOptypeModal() {
+  document.getElementById('optype-overlay').classList.remove('open');
+}
+
+function saveOptype() {
+  const name = document.getElementById('optype-name').value.trim();
+  if (!name) { showToast('Введіть назву'); return; }
+
+  if (editingOptypeIsParent) {
+    if (editingOptypeId) {
+      const ot = optypes.find(o => o.id === editingOptypeId);
+      if (ot) ot.name = name;
+      showToast('Тип оновлено');
+    } else {
+      optypes.push({ id: nextOptypeId++, name, children: [] });
+      showToast('Тип операції додано');
+    }
+  } else {
+    if (editingOptypeId) {
+      const ot = optypes.find(o => o.id === editingOptypeParentId);
+      if (ot) { const ch = ot.children.find(c => c.id === editingOptypeId); if (ch) ch.name = name; }
+      showToast('Підтип оновлено');
+    } else {
+      const ot = optypes.find(o => o.id === editingOptypeParentId);
+      if (ot) ot.children.push({ id: nextOptypeId++, name });
+      showToast('Підтип додано');
+    }
+  }
+
+  closeOptypeModal();
+  renderOptypes();
+}
+
+function deleteOptype(parentId, childId) {
+  if (childId) {
+    const ot = optypes.find(o => o.id === parentId);
+    if (ot) ot.children = ot.children.filter(c => c.id !== childId);
+    showToast('Підтип видалено');
+  } else {
+    optypes = optypes.filter(o => o.id !== parentId);
+    showToast('Тип операції видалено');
+  }
+  renderOptypes();
+}
+
+/* =========================================================
+   SVG HELPERS
+   ========================================================= */
+function makeSvg(d, w, h, sw) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('width', w); svg.setAttribute('height', h);
+  svg.setAttribute('viewBox','0 0 24 24'); svg.setAttribute('fill','none');
+  svg.setAttribute('stroke','currentColor'); svg.setAttribute('stroke-width', sw);
+  svg.setAttribute('stroke-linecap','round'); svg.setAttribute('stroke-linejoin','round');
+  d.split('|').forEach(cmd => {
+    const tag = cmd.startsWith('M')||cmd.startsWith('L')||cmd.startsWith('m') ? 'path' :
+                cmd.includes(',')&&!cmd.includes(' ')&&cmd.startsWith('3') ? 'circle' : 'path';
+    const el = document.createElementNS('http://www.w3.org/2000/svg','path');
+    el.setAttribute('d', cmd);
+    svg.appendChild(el);
+  });
+  return svg;
+}
+
+function editSvg() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('width','14'); svg.setAttribute('height','14');
+  svg.setAttribute('viewBox','0 0 24 24'); svg.setAttribute('fill','none');
+  svg.setAttribute('stroke','currentColor'); svg.setAttribute('stroke-width','2');
+  svg.setAttribute('stroke-linecap','round'); svg.setAttribute('stroke-linejoin','round');
+  const p1 = document.createElementNS('http://www.w3.org/2000/svg','path');
+  p1.setAttribute('d','M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7');
+  const p2 = document.createElementNS('http://www.w3.org/2000/svg','path');
+  p2.setAttribute('d','M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z');
+  svg.appendChild(p1); svg.appendChild(p2);
+  return svg;
+}
+
+function deleteSvg() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('width','14'); svg.setAttribute('height','14');
+  svg.setAttribute('viewBox','0 0 24 24'); svg.setAttribute('fill','none');
+  svg.setAttribute('stroke','currentColor'); svg.setAttribute('stroke-width','2');
+  svg.setAttribute('stroke-linecap','round'); svg.setAttribute('stroke-linejoin','round');
+  const p1 = document.createElementNS('http://www.w3.org/2000/svg','polyline');
+  p1.setAttribute('points','3 6 5 6 21 6');
+  const p2 = document.createElementNS('http://www.w3.org/2000/svg','path');
+  p2.setAttribute('d','M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2');
+  svg.appendChild(p1); svg.appendChild(p2);
+  return svg;
+}
+
+function makeActBtn(cls, title, svgEl, handler) {
+  const btn = document.createElement('button');
+  btn.className = 'act ' + cls;
+  btn.title = title;
+  btn.addEventListener('click', handler);
+  btn.appendChild(svgEl);
+  return btn;
+}
+
+/* =========================================================
+   OVERLAY BACKDROP CLOSE
+   ========================================================= */
+document.getElementById('person-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closePersonModal();
+});
+document.getElementById('optype-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeOptypeModal();
+});
+
+/* =========================================================
+   TOAST
+   ========================================================= */
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+/* =========================================================
+   INIT
+   ========================================================= */
+renderPersons();
+renderOptypes();
+renderTabActions('general');
+</script>
+</body>
+</html>

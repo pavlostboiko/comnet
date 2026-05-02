@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MARSH — Користувачі</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --border:#e2e8f0; --border-light:#f1f5f9;
+    --text:#0f172a; --text-mid:#475569; --text-light:#94a3b8;
+    --accent:#475569; --accent-light:#e2e8f0; --accent-dark:#334155;
+    --accent-soft:rgba(71,85,105,0.08); --accent-ring:rgba(71,85,105,0.18);
+    --row-hover:#f1f5f9;
+    --red:#ef4444; --red-bg:#fef2f2;
+    --shadow:0 1px 3px rgba(15,23,42,0.06),0 0 0 1px rgba(15,23,42,0.04);
+    --shadow-xl:0 20px 40px rgba(15,23,42,0.14),0 0 0 1px rgba(15,23,42,0.05);
+    --radius:4px; --radius-sm:3px; --radius-pill:6px;
+    --row-pad-y:11px; --cell-pad-x:12px;
+    --font-body:14.5px; --font-mono:12.5px; --font-header:11px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+  .topbar{height:54px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;flex-shrink:0}
+  .logo-area{display:flex;align-items:center;gap:9px;margin-right:32px}
+  .logo-sq{width:28px;height:28px;background:var(--accent);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center}
+  .logo-text{font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.02em}
+  .nav-links{display:flex;align-items:stretch;height:100%}
+  .nav-link{display:flex;align-items:center;gap:6px;padding:0 14px;font-size:14px;font-weight:500;color:var(--text-mid);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;text-decoration:none}
+  .nav-link:hover{color:var(--text)}
+  .nav-link.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+  .nav-link .cnt{font-family:'DM Mono',monospace;font-size:10.5px;font-weight:500;background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:var(--radius-sm)}
+  .tb-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .tb-search{display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 12px;width:240px;transition:all .2s}
+  .tb-search:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-ring);background:var(--surface);width:320px}
+  .tb-search input{border:none;background:transparent;font-family:inherit;font-size:13.5px;color:var(--text);outline:none;width:100%}
+  .tb-search input::placeholder{color:var(--text-light)}
+  .tb-search .clear-x{width:16px;height:16px;border-radius:50%;background:var(--text-light);color:#fff;border:none;cursor:pointer;display:none;align-items:center;justify-content:center;padding:0;flex-shrink:0}
+  .tb-search .clear-x:hover{background:var(--text-mid)}
+  .tb-search.has-value .clear-x{display:flex}
+  .btn-primary{display:flex;align-items:center;gap:5px;padding:8px 14px;background:var(--accent);border:none;border-radius:var(--radius-sm);font-family:inherit;font-size:13.5px;font-weight:600;color:#fff;cursor:pointer;transition:all .15s}
+  .btn-primary:hover{background:var(--accent-dark);transform:translateY(-1px);box-shadow:0 4px 12px var(--accent-ring)}
+  .user-pill{display:flex;align-items:center;gap:6px;padding:4px 10px 4px 5px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-pill);cursor:pointer}
+  .user-dot{width:24px;height:24px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700;color:#fff}
+  .user-pill span{font-size:13px;font-weight:500;color:var(--text-mid)}
+
+  .content-scroll{flex:1;overflow-y:auto;padding:20px 24px}
+  .content-scroll::-webkit-scrollbar{width:6px}
+  .content-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+  .tile{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;animation:tileIn .3s ease-out both}
+  @keyframes tileIn{from{opacity:0;transform:translateY(6px)}}
+  .tile-header{padding:12px 20px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border-light)}
+  .tile-title{font-size:15px;font-weight:700;color:var(--text)}
+  .tile-count{font-family:'DM Mono',monospace;font-size:11.5px;font-weight:500;background:var(--accent-light);color:var(--accent);padding:2px 8px;border-radius:var(--radius-sm)}
+  .tile-tabs{display:flex;gap:2px;background:var(--bg);padding:3px;border-radius:var(--radius-sm);border:1px solid var(--border-light);margin-left:auto}
+  .tt-btn{padding:5px 13px;border:none;background:transparent;border-radius:var(--radius-sm);font-family:inherit;font-size:13px;font-weight:500;color:var(--text-light);cursor:pointer;transition:all .12s;white-space:nowrap;display:flex;align-items:center;gap:6px}
+  .tt-btn:hover{color:var(--text-mid)}
+  .tt-btn.on{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,0.06);font-weight:600}
+  .tt-btn .c{font-family:'DM Mono',monospace;font-size:10.5px;color:var(--text-light);background:var(--border-light);padding:0 6px;border-radius:var(--radius-sm);line-height:17px;min-width:20px;text-align:center;font-weight:500}
+  .tt-btn.on .c{background:var(--accent-light);color:var(--accent)}
+
+  .table-wrap{overflow-x:auto}
+  .table-wrap::-webkit-scrollbar{height:8px}
+  .table-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+  table{width:100%;border-collapse:collapse;min-width:800px}
+  thead tr{background:var(--bg);position:sticky;top:0;z-index:2}
+  th{padding:10px var(--cell-pad-x);text-align:left;font-size:var(--font-header);font-weight:600;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-light);border-bottom:1px solid var(--border);white-space:nowrap;user-select:none}
+  th:first-child{padding-left:20px}
+  th:last-child{padding-right:20px;width:40px}
+  th.sortable{cursor:pointer;transition:color .12s}
+  th.sortable:hover{color:var(--text)}
+  th.sortable .sort-icon{display:inline-flex;vertical-align:middle;margin-left:3px;opacity:0.5;transition:opacity .12s}
+  th.sortable:hover .sort-icon{opacity:0.8}
+  th.sortable.sorted{color:var(--accent)}
+  th.sortable.sorted .sort-icon{opacity:1;color:var(--accent)}
+
+  tbody tr{border-bottom:1px solid var(--border-light);transition:background .1s}
+  tbody tr:last-child{border-bottom:none}
+  tbody tr:nth-child(even){background:#f8fafc}
+  tbody tr:hover,tbody tr:nth-child(even):hover{background:var(--row-hover)}
+  td{padding:var(--row-pad-y) var(--cell-pad-x);font-size:var(--font-body);color:var(--text-mid);vertical-align:middle}
+  td:first-child{padding-left:20px}
+  td:last-child{padding-right:20px}
+
+  .td-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;color:#fff}
+  .av-admin{background:#475569}
+  .av-user1{background:#059669}
+  .av-user2{background:#7c3aed}
+  .td-name{font-size:var(--font-body);font-weight:600;color:var(--text)}
+  .td-login{font-family:'DM Mono',monospace;font-size:12.5px;color:var(--text-mid)}
+
+  /* role badges */
+  .role-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:var(--radius-pill);font-size:12px;font-weight:600}
+  .role-badge::before{content:'';width:5px;height:5px;border-radius:50%;flex-shrink:0}
+  .rb-admin{background:var(--accent-light);color:var(--accent-dark)}
+  .rb-admin::before{background:var(--accent)}
+  .rb-user1{background:#d1fae5;color:#065f46}
+  .rb-user1::before{background:#10b981}
+  .rb-user2{background:#ede9fe;color:#5b21b6}
+  .rb-user2::before{background:#7c3aed}
+
+  .role-desc{font-size:12.5px;color:var(--text-light);line-height:1.45}
+
+  .acts{display:flex;gap:2px;opacity:0;transition:opacity .12s;justify-content:flex-end}
+  tbody tr:hover .acts{opacity:1}
+  .act{width:28px;height:28px;border-radius:var(--radius-sm);border:none;background:transparent;cursor:pointer;color:var(--text-light);display:flex;align-items:center;justify-content:center;transition:all .12s}
+  .act:hover.e{background:var(--accent-light);color:var(--accent)}
+  .act:hover.d{background:#fee2e2;color:#dc2626}
+  .act.disabled{color:#cbd5e1;cursor:not-allowed}
+  .act.disabled:hover{background:transparent;color:#cbd5e1}
+  .act svg{width:14px;height:14px}
+
+  .t-foot{padding:10px 20px;border-top:1px solid var(--border-light);font-size:13px;color:var(--text-light);display:flex;align-items:center;background:var(--bg)}
+  .t-foot .count-text b{color:var(--text);font-weight:600}
+
+  .empty-state{padding:64px 24px;text-align:center;color:var(--text-light)}
+  .empty-state svg{width:44px;height:44px;color:var(--border);margin-bottom:14px}
+  .empty-state p{font-size:14.5px;margin-bottom:14px}
+  .empty-state .reset{color:var(--accent);cursor:pointer;font-weight:600;font-size:13.5px;text-decoration:underline}
+
+  /* MODAL */
+  .overlay{position:fixed;inset:0;background:rgba(15,23,42,0.4);backdrop-filter:blur(2px);z-index:100;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+  .overlay.open{opacity:1;pointer-events:all}
+  .modal{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow-xl);width:560px;max-width:calc(100vw - 48px);max-height:calc(100vh - 80px);overflow-y:auto;transform:translateY(12px) scale(0.98);transition:transform .2s}
+  .overlay.open .modal{transform:translateY(0) scale(1)}
+  .modal-head{padding:20px 24px 16px;border-bottom:1px solid var(--border-light);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface);z-index:1}
+  .modal-title{font-size:17px;font-weight:700}
+  .modal-close{width:30px;height:30px;border-radius:var(--radius-sm);border:none;background:transparent;cursor:pointer;color:var(--text-light);display:flex;align-items:center;justify-content:center;transition:all .12s}
+  .modal-close:hover{background:var(--bg);color:var(--text)}
+  .modal-body{padding:20px 24px}
+  .modal-foot{padding:16px 24px;border-top:1px solid var(--border-light);display:flex;justify-content:flex-end;gap:8px;position:sticky;bottom:0;background:var(--surface)}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px}
+  .form-group{display:flex;flex-direction:column;gap:6px}
+  .form-group.full{grid-column:span 2}
+  .form-label{font-size:12.5px;font-weight:600;color:var(--text-mid)}
+  .form-input{padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:13.5px;color:var(--text);background:var(--bg);outline:none;transition:all .15s}
+  .form-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);background:var(--surface)}
+  .form-input::placeholder{color:var(--text-light)}
+  .btn-cancel{padding:9px 16px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:13.5px;font-weight:500;color:var(--text-mid);cursor:pointer;transition:all .12s}
+  .btn-cancel:hover{border-color:var(--text-light);color:var(--text)}
+  .btn-submit{padding:9px 20px;background:var(--accent);border:none;border-radius:var(--radius-sm);font-family:inherit;font-size:13.5px;font-weight:600;color:#fff;cursor:pointer;transition:all .15s}
+  .btn-submit:hover{background:var(--accent-dark)}
+
+  /* role cards */
+  .role-cards{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+  .role-card{padding:11px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:12px;background:var(--surface)}
+  .role-card:hover{border-color:var(--text-light);background:var(--bg)}
+  .role-card-icon{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
+  .rci-admin{background:var(--accent)}
+  .rci-user1{background:#059669}
+  .rci-user2{background:#7c3aed}
+  .role-card-info{flex:1;min-width:0}
+  .role-card-title{font-size:13.5px;font-weight:600;color:var(--text);margin-bottom:2px}
+  .role-card-desc{font-size:11.5px;color:var(--text-light);line-height:1.4}
+  .role-card-check{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .12s}
+  .role-card.sel-admin{border-color:var(--accent);background:var(--accent-light)}
+  .role-card.sel-admin .role-card-check{border-color:var(--accent);background:var(--accent);color:#fff}
+  .role-card.sel-user1{border-color:#10b981;background:#ecfdf5}
+  .role-card.sel-user1 .role-card-check{border-color:#10b981;background:#10b981;color:#fff}
+  .role-card.sel-user2{border-color:#7c3aed;background:#f5f3ff}
+  .role-card.sel-user2 .role-card-check{border-color:#7c3aed;background:#7c3aed;color:#fff}
+  .role-card:not([class*="sel-"]) .role-card-check svg{display:none}
+
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--text);color:#fff;padding:11px 20px;border-radius:var(--radius-sm);font-size:13.5px;font-weight:500;box-shadow:var(--shadow-xl);z-index:200;opacity:0;transition:all .25s}
+  .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+  .toast .undo{color:#a3e635;cursor:pointer;font-weight:600;text-decoration:underline;padding:0 4px}
+  .toast .undo:hover{color:#d9f99d}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo-area">
+    <div class="logo-sq"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div>
+    <span class="logo-text">MARSH</span>
+  </div>
+  <div class="nav-links">
+    <a class="nav-link" href="vehicles.html">Автомобілі</a>
+    <a class="nav-link" href="routes.html">Маршрути</a>
+    <a class="nav-link" href="drivers.html">Водії</a>
+    <a class="nav-link" href="departures.html">Виїзди</a>
+    <a class="nav-link" href="schedule.html">Графік</a>
+    <a class="nav-link active" href="users.html">Користувачі <span class="cnt" id="nav-count">4</span></a>
+  </div>
+  <div class="tb-right">
+    <div class="tb-search" id="search-wrap">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-light);flex-shrink:0"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input id="search-input" placeholder="Пошук за ім'ям або логіном..." oninput="onSearchInput()">
+      <button class="clear-x" onclick="clearSearch()"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <button class="btn-primary" onclick="openAddModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg> Додати</button>
+    <div class="user-pill"><div class="user-dot">АД</div><span>Адмін</span></div>
+  </div>
+</div>
+
+<div class="content-scroll">
+  <div class="tile">
+    <div class="tile-header">
+      <span class="tile-title">Користувачі</span>
+      <span class="tile-count" id="tile-count">4</span>
+      <div class="tile-tabs">
+        <button class="tt-btn on" onclick="setFilter('all', this)">Всі <span class="c" id="c-all">4</span></button>
+        <button class="tt-btn" onclick="setFilter('admin', this)">Адміни <span class="c" id="c-adm">1</span></button>
+        <button class="tt-btn" onclick="setFilter('user1', this)">Оператори <span class="c" id="c-u1">2</span></button>
+        <button class="tt-btn" onclick="setFilter('user2', this)">Редактори <span class="c" id="c-u2">1</span></button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th class="sortable" data-sort="name">Користувач <span class="sort-icon"></span></th>
+          <th class="sortable" data-sort="login">Логін <span class="sort-icon"></span></th>
+          <th>Роль</th>
+          <th>Доступи</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="users-tbody"></tbody>
+      </table>
+    </div>
+    <div class="t-foot"><span class="count-text" id="count-text"></span></div>
+  </div>
+</div>
+
+<!-- USER MODAL -->
+<div class="overlay" id="user-overlay" onclick="handleOverlayClick(event,'user-overlay')">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="modal-title">Додати користувача</div>
+      <button class="modal-close" onclick="closeModal()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">ПІБ *</label><input class="form-input" id="f-name" placeholder="Іванов І.І." maxlength="50"></div>
+        <div class="form-group"><label class="form-label">Логін *</label><input class="form-input" id="f-login" placeholder="ivanov" maxlength="30" style="font-family:'DM Mono',monospace"></div>
+        <div class="form-group full">
+          <label class="form-label">Роль *</label>
+          <div class="role-cards" id="role-cards">
+            <div class="role-card" id="rc-admin" onclick="selectRole('admin')">
+              <div class="role-card-icon rci-admin"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z"/></svg></div>
+              <div class="role-card-info">
+                <div class="role-card-title">Адміністратор</div>
+                <div class="role-card-desc">Автомобілі, маршрути, водії, виїзди, графік, користувачі</div>
+              </div>
+              <div class="role-card-check"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+            </div>
+            <div class="role-card" id="rc-user1" onclick="selectRole('user1')">
+              <div class="role-card-icon rci-user1"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg></div>
+              <div class="role-card-info">
+                <div class="role-card-title">Оператор</div>
+                <div class="role-card-desc">Маршрути, водії, виїзди — створення та редагування</div>
+              </div>
+              <div class="role-card-check"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+            </div>
+            <div class="role-card" id="rc-user2" onclick="selectRole('user2')">
+              <div class="role-card-icon rci-user2"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>
+              <div class="role-card-info">
+                <div class="role-card-title">Редактор графіку</div>
+                <div class="role-card-desc">Заповнення маршрутних листів — тільки графік</div>
+              </div>
+              <div class="role-card-check"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeModal()">Скасувати</button>
+      <button class="btn-submit" id="modal-submit" onclick="submitUser()">Додати</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let nextId = 100;
+let users = [
+  { id:1, name:'Адміністратор', login:'admin', role:'admin' },
+  { id:2, name:'Коваль О.П.',   login:'koval', role:'user1' },
+  { id:3, name:'Бойко С.М.',    login:'boyko', role:'user1' },
+  { id:4, name:'Мороз В.Д.',    login:'moroz', role:'user2' },
+];
+
+const ROLES = {
+  admin: { label:'Адміністратор',    cls:'rb-admin', av:'av-admin', desc:'Автомобілі, маршрути, водії, виїзди, графік, користувачі' },
+  user1: { label:'Оператор',         cls:'rb-user1', av:'av-user1', desc:'Маршрути, водії, виїзди — створення та редагування' },
+  user2: { label:'Редактор графіку', cls:'rb-user2', av:'av-user2', desc:'Заповнення маршрутних листів — тільки графік' },
+};
+
+let editingId = null;
+let modalRole = null;
+let currentFilter = 'all';
+let sortState = { key:null, dir:'asc' };
+let lastDeleted = null;
+
+function initials(name) { return name.split(/\s+/).map(p => p[0]).join('').substring(0,2).toUpperCase(); }
+
+function showToast(msg, undoFn) {
+  const t = document.getElementById('toast');
+  t.innerHTML = msg + (undoFn ? ' <span class="undo" id="toast-undo">Скасувати</span>' : '');
+  t.classList.add('show');
+  if (undoFn) document.getElementById('toast-undo').onclick = () => { undoFn(); t.classList.remove('show'); };
+  clearTimeout(window._tt);
+  window._tt = setTimeout(() => t.classList.remove('show'), 5000);
+}
+
+function getFiltered() {
+  const q = document.getElementById('search-input').value.toLowerCase().trim();
+  let arr = users.filter(u => {
+    const fm = currentFilter === 'all' || u.role === currentFilter;
+    if (!fm) return false;
+    if (!q) return true;
+    return u.name.toLowerCase().includes(q) || u.login.toLowerCase().includes(q);
+  });
+  if (sortState.key) {
+    const k = sortState.key, dir = sortState.dir === 'asc' ? 1 : -1;
+    arr.sort((a,b) => (a[k] || '').localeCompare(b[k] || '', 'uk') * dir);
+  }
+  return arr;
+}
+
+function setSort(key) {
+  if (sortState.key === key) {
+    if (sortState.dir === 'asc') sortState.dir = 'desc';
+    else { sortState.key = null; sortState.dir = 'asc'; }
+  } else { sortState.key = key; sortState.dir = 'asc'; }
+  renderTable(); updateSortHeaders();
+}
+
+function updateSortHeaders() {
+  document.querySelectorAll('th.sortable').forEach(th => {
+    const k = th.dataset.sort;
+    th.classList.toggle('sorted', k === sortState.key);
+    const icon = th.querySelector('.sort-icon');
+    if (k === sortState.key) {
+      icon.innerHTML = sortState.dir === 'asc'
+        ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 15l-6-6-6 6"/></svg>'
+        : '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>';
+    } else {
+      icon.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 9l4-4 4 4M16 15l-4 4-4-4"/></svg>';
+    }
+  });
+}
+
+function renderTable() {
+  const filtered = getFiltered();
+  const tbody = document.getElementById('users-tbody');
+  const foot = document.getElementById('count-text');
+  document.getElementById('nav-count').textContent = users.length;
+  document.getElementById('tile-count').textContent = filtered.length;
+  document.getElementById('c-all').textContent = users.length;
+  document.getElementById('c-adm').textContent = users.filter(u => u.role === 'admin').length;
+  document.getElementById('c-u1').textContent = users.filter(u => u.role === 'user1').length;
+  document.getElementById('c-u2').textContent = users.filter(u => u.role === 'user2').length;
+
+  if (filtered.length === 0) {
+    const hasF = currentFilter !== 'all' || document.getElementById('search-input').value;
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+      <p>${hasF ? 'За вашими критеріями нічого не знайдено' : 'Поки немає користувачів'}</p>
+      ${hasF ? '<span class="reset" onclick="resetAll()">Скинути фільтри</span>' : ''}
+    </div></td></tr>`;
+    foot.innerHTML = '';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(u => {
+    const r = ROLES[u.role];
+    const isAdmin = u.id === 1;
+    return `<tr>
+      <td><div style="display:flex;align-items:center;gap:10px"><div class="td-avatar ${r.av}">${initials(u.name)}</div><div class="td-name">${u.name}</div></div></td>
+      <td><span class="td-login">${u.login}</span></td>
+      <td><span class="role-badge ${r.cls}">${r.label}</span></td>
+      <td><span class="role-desc">${r.desc}</span></td>
+      <td><div class="acts">
+        <button class="act e" onclick="openEditModal(${u.id})" title="Редагувати"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+        <button class="act d ${isAdmin?'disabled':''}" ${isAdmin ? 'title="Головного адміна не можна видалити"' : `onclick="deleteUser(${u.id})" title="Видалити"`}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg></button>
+      </div></td>
+    </tr>`;
+  }).join('');
+  foot.innerHTML = `Показано <b>${filtered.length}</b> з <b>${users.length}</b>`;
+}
+
+function onSearchInput() {
+  const inp = document.getElementById('search-input');
+  document.getElementById('search-wrap').classList.toggle('has-value', !!inp.value);
+  renderTable();
+}
+function clearSearch() { document.getElementById('search-input').value = ''; document.getElementById('search-wrap').classList.remove('has-value'); renderTable(); }
+function setFilter(f, btn) { currentFilter = f; document.querySelectorAll('.tt-btn').forEach(b => b.classList.remove('on')); btn.classList.add('on'); renderTable(); }
+function resetAll() { currentFilter = 'all'; document.getElementById('search-input').value = ''; document.getElementById('search-wrap').classList.remove('has-value'); document.querySelectorAll('.tt-btn').forEach((b,i) => b.classList.toggle('on', i === 0)); renderTable(); }
+
+function selectRole(role) {
+  modalRole = role;
+  ['admin','user1','user2'].forEach(r => {
+    const card = document.getElementById(`rc-${r}`);
+    card.className = 'role-card' + (r === role ? ` sel-${r}` : '');
+  });
+}
+
+function openAddModal() {
+  editingId = null;
+  document.getElementById('modal-title').textContent = 'Додати користувача';
+  document.getElementById('modal-submit').textContent = 'Додати';
+  document.getElementById('f-name').value = '';
+  document.getElementById('f-login').value = '';
+  ['admin','user1','user2'].forEach(r => document.getElementById(`rc-${r}`).className = 'role-card');
+  modalRole = null;
+  document.getElementById('user-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('f-name').focus(), 80);
+}
+
+function openEditModal(id) {
+  const u = users.find(u => u.id === id); if (!u) return;
+  editingId = id;
+  document.getElementById('modal-title').textContent = 'Редагувати користувача';
+  document.getElementById('modal-submit').textContent = 'Зберегти';
+  document.getElementById('f-name').value = u.name;
+  document.getElementById('f-login').value = u.login;
+  selectRole(u.role);
+  document.getElementById('user-overlay').classList.add('open');
+}
+
+function closeModal() { document.getElementById('user-overlay').classList.remove('open'); }
+
+function markRed(id) {
+  const el = document.getElementById(id);
+  el.style.borderColor = 'var(--red)';
+  setTimeout(() => el.style.borderColor = '', 2000);
+}
+
+function submitUser() {
+  const name = document.getElementById('f-name').value.trim();
+  const login = document.getElementById('f-login').value.trim();
+  let valid = true;
+  if (!name)  { markRed('f-name');  valid = false; }
+  if (!login) { markRed('f-login'); valid = false; }
+  if (!modalRole) {
+    const rc = document.getElementById('role-cards');
+    rc.style.outline = '2px solid var(--red)';
+    rc.style.borderRadius = 'var(--radius-sm)';
+    setTimeout(() => rc.style.outline = '', 2000);
+    valid = false;
+  }
+  if (!valid) return;
+
+  if (editingId !== null) {
+    const u = users.find(u => u.id === editingId);
+    if (u) { u.name = name; u.login = login; u.role = modalRole; }
+    showToast('Збережено');
+  } else {
+    users.push({ id: ++nextId, name, login, role: modalRole });
+    showToast(`Додано користувача «${name}»`);
+  }
+  closeModal();
+  renderTable();
+}
+
+function deleteUser(id) {
+  if (id === 1) return;
+  const u = users.find(u => u.id === id); if (!u) return;
+  lastDeleted = { ...u };
+  users = users.filter(u => u.id !== id);
+  renderTable();
+  showToast(`Видалено користувача «${u.name}»`, () => {
+    users.push(lastDeleted);
+    renderTable();
+  });
+}
+
+function handleOverlayClick(e, id) { if (e.target.id === id) document.getElementById(id).classList.remove('open'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.overlay.open').forEach(o => o.classList.remove('open')); });
+document.querySelectorAll('th.sortable').forEach(th => th.onclick = () => setSort(th.dataset.sort));
+
+renderTable(); updateSortHeaders();
+</script>
+</body>
+</html>

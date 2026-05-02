@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MARSH — Виїзди</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --border:#e2e8f0; --border-light:#f1f5f9;
+    --text:#0f172a; --text-mid:#475569; --text-light:#94a3b8;
+    --accent:#475569; --accent-light:#e2e8f0; --accent-dark:#334155;
+    --accent-soft:rgba(71,85,105,0.08); --accent-ring:rgba(71,85,105,0.18);
+    --row-hover:#f1f5f9;
+    --amber:#f59e0b; --amber-bg:#fffbeb; --amber-border:#fde68a; --amber-text:#92400e;
+    --red:#ef4444;
+    --shadow:0 1px 3px rgba(15,23,42,0.06),0 0 0 1px rgba(15,23,42,0.04);
+    --shadow-xl:0 20px 40px rgba(15,23,42,0.14),0 0 0 1px rgba(15,23,42,0.05);
+    --radius:4px; --radius-sm:3px; --radius-pill:6px;
+    --row-pad-y:11px; --cell-pad-x:12px;
+    --font-body:14.5px; --font-mono:12.5px; --font-header:11px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+  .topbar{height:54px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;flex-shrink:0}
+  .logo-area{display:flex;align-items:center;gap:9px;margin-right:32px}
+  .logo-sq{width:28px;height:28px;background:var(--accent);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center}
+  .logo-text{font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.02em}
+  .nav-links{display:flex;align-items:stretch;height:100%}
+  .nav-link{display:flex;align-items:center;gap:6px;padding:0 14px;font-size:14px;font-weight:500;color:var(--text-mid);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;text-decoration:none}
+  .nav-link:hover{color:var(--text)}
+  .nav-link.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+  .nav-link .cnt{font-family:'DM Mono',monospace;font-size:10.5px;font-weight:500;background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:var(--radius-sm)}
+  .tb-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .tb-search{display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 12px;width:240px;transition:all .2s}
+  .tb-search:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-ring);background:var(--surface);width:320px}
+  .tb-search input{border:none;background:transparent;font-family:inherit;font-size:13.5px;color:var(--text);outline:none;width:100%}
+  .tb-search input::placeholder{color:var(--text-light)}
+  .tb-search .clear-x{width:16px;height:16px;border-radius:50%;background:var(--text-light);color:#fff;border:none;cursor:pointer;display:none;align-items:center;justify-content:center;padding:0;flex-shrink:0}
+  .tb-search .clear-x:hover{background:var(--text-mid)}
+  .tb-search.has-value .clear-x{display:flex}
+  .btn-primary{display:flex;align-items:center;gap:5px;padding:8px 14px;background:var(--accent);border:none;border-radius:var(--radius-sm);font-family:inherit;font-size:13.5px;font-weight:600;color:#fff;cursor:pointer;transition:all .15s}
+  .btn-primary:hover{background:var(--accent-dark);transform:translateY(-1px);box-shadow:0 4px 12px var(--accent-ring)}
+  .user-pill{display:flex;align-items:center;gap:6px;padding:4px 10px 4px 5px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-pill);cursor:pointer}
+  .user-dot{width:24px;height:24px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700;color:#fff}
+  .user-pill span{font-size:13px;font-weight:500;color:var(--text-mid)}
+
+  .content-scroll{flex:1;overflow-y:auto;padding:20px 24px}
+  .content-scroll::-webkit-scrollbar{width:6px}
+  .content-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+  .tile{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;animation:tileIn .3s ease-out both}
+  @keyframes tileIn{from{opacity:0;transform:translateY(6px)}}
+  .tile-header{padding:12px 20px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border-light)}
+  .tile-title{font-size:15px;font-weight:700;color:var(--text)}
+  .tile-count{font-family:'DM Mono',monospace;font-size:11.5px;font-weight:500;background:var(--accent-light);color:var(--accent);padding:2px 8px;border-radius:var(--radius-sm)}
+
+  .month-nav{margin-left:auto;display:flex;align-items:center;gap:6px;background:var(--bg);padding:3px;border-radius:var(--radius-sm);border:1px solid var(--border-light)}
+  .mn-btn{width:26px;height:26px;border:none;background:transparent;border-radius:var(--radius-sm);cursor:pointer;color:var(--text-mid);display:flex;align-items:center;justify-content:center;transition:all .12s}
+  .mn-btn:hover{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,0.06)}
+  .mn-label{font-size:13px;font-weight:600;color:var(--text);padding:0 10px;min-width:140px;text-align:center;user-select:none}
+  .mn-today{padding:4px 10px;border:none;background:var(--surface);border-radius:var(--radius-sm);font-family:inherit;font-size:11.5px;font-weight:600;color:var(--text-mid);cursor:pointer;transition:all .12s;box-shadow:0 1px 2px rgba(0,0,0,0.06)}
+  .mn-today:hover{color:var(--accent)}
+
+  .table-wrap{overflow-x:auto;overflow-y:visible}
+  .table-wrap::-webkit-scrollbar{height:8px}
+  .table-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+  table{width:100%;border-collapse:collapse;min-width:1300px}
+  thead tr{background:var(--bg);position:sticky;top:0;z-index:2}
+  th{padding:10px var(--cell-pad-x);text-align:left;font-size:var(--font-header);font-weight:600;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-light);border-bottom:1px solid var(--border);white-space:nowrap;user-select:none}
+  th:first-child{padding-left:20px}
+  th:last-child{padding-right:20px;width:40px}
+  th.sortable{cursor:pointer;transition:color .12s}
+  th.sortable:hover{color:var(--text)}
+  th.sortable .sort-icon{display:inline-flex;vertical-align:middle;margin-left:3px;opacity:0.5;transition:opacity .12s}
+  th.sortable:hover .sort-icon{opacity:0.8}
+  th.sortable.sorted{color:var(--accent)}
+  th.sortable.sorted .sort-icon{opacity:1;color:var(--accent)}
+
+  tbody tr{border-bottom:1px solid var(--border-light);transition:background .1s}
+  tbody tr:last-child{border-bottom:none}
+  tbody tr:nth-child(even){background:#f8fafc}
+  tbody tr:hover,tbody tr:nth-child(even):hover{background:var(--row-hover)}
+  td{padding:var(--row-pad-y) var(--cell-pad-x);font-size:var(--font-body);color:var(--text-mid);vertical-align:middle;white-space:nowrap}
+  td:first-child{padding-left:20px}
+  td:last-child{padding-right:20px}
+
+  .td-date{font-family:'DM Mono',monospace;font-size:var(--font-mono);color:var(--text);font-weight:500;font-variant-numeric:tabular-nums}
+  .td-date.empty{color:var(--text-light);font-weight:400}
+  .td-code{font-family:'DM Mono',monospace;font-size:var(--font-mono);font-weight:600;color:var(--accent);background:var(--accent-light);padding:3px 9px;border-radius:var(--radius-sm);display:inline-block}
+  .td-route{font-size:13px;color:var(--text-mid);line-height:1.4;max-width:320px;white-space:normal;word-break:break-word;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .td-vehicle{display:flex;align-items:center;gap:8px}
+  .td-vehicle-idx{font-family:'DM Mono',monospace;font-size:11.5px;font-weight:600;color:var(--accent);background:var(--accent-light);padding:3px 8px;border-radius:var(--radius-sm)}
+  .td-vehicle-name{font-size:13px;font-weight:500;color:var(--text-mid)}
+  .td-driver{font-size:13px;color:var(--text-mid);font-weight:500}
+  .td-dist{font-family:'DM Mono',monospace;font-size:var(--font-mono);color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+  .td-dist .unit{font-size:10.5px;color:var(--text-light);font-weight:400;margin-left:3px}
+  .td-basis{font-size:13px;color:var(--text-mid);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block}
+
+  .acts{display:flex;gap:2px;opacity:0;transition:opacity .12s;justify-content:flex-end}
+  tbody tr:hover .acts{opacity:1}
+  .act{width:28px;height:28px;border-radius:var(--radius-sm);border:none;background:transparent;cursor:pointer;color:var(--text-light);display:flex;align-items:center;justify-content:center;transition:all .12s}
+  .act:hover.e{background:var(--accent-light);color:var(--accent)}
+  .act:hover.d{background:#fee2e2;color:#dc2626}
+  .act svg{width:14px;height:14px}
+
+  .t-foot{padding:10px 20px;border-top:1px solid var(--border-light);font-size:13px;color:var(--text-light);display:flex;align-items:center;background:var(--bg)}
+  .t-foot .count-text b{color:var(--text);font-weight:600}
+
+  .empty-state{padding:64px 24px;text-align:center;color:var(--text-light)}
+  .empty-state svg{width:44px;height:44px;color:var(--border);margin-bottom:14px}
+  .empty-state p{font-size:14.5px;margin-bottom:14px}
+  .empty-state .reset{color:var(--accent);cursor:pointer;font-weight:600;font-size:13.5px;text-decoration:underline}
+
+  /* MODAL */
+  .overlay{position:fixed;inset:0;background:rgba(15,23,42,0.4);backdrop-filter:blur(2px);z-index:100;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+  .overlay.open{opacity:1;pointer-events:all}
+  .modal{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow-xl);width:580px;max-width:calc(100vw - 48px);max-height:calc(100vh - 80px);overflow-y:auto;transform:translateY(12px) scale(0.98);transition:transform .2s}
+  .overlay.open .modal{transform:translateY(0) scale(1)}
+  .modal-head{padding:20px 24px 16px;border-bottom:1px solid var(--border-light);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface);z-index:1}
+  .modal-title{font-size:17px;font-weight:700}
+  .modal-close{width:30px;height:30px;border-radius:var(--radius-sm);border:none;background:transparent;cursor:pointer;color:var(--text-light);display:flex;align-items:center;justify-content:center;transition:all .12s}
+  .modal-close:hover{background:var(--bg);color:var(--text)}
+  .modal-body{padding:20px 24px}
+  .modal-foot{padding:16px 24px;border-top:1px solid var(--border-light);display:flex;justify-content:flex-end;gap:8px;position:sticky;bottom:0;background:var(--surface)}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px}
+  .form-group{display:flex;flex-direction:column;gap:6px}
+  .form-group.full{grid-column:span 2}
+  .form-label{font-size:12.5px;font-weight:600;color:var(--text-mid)}
+  .form-input,.form-select{padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:13.5px;color:var(--text);background:var(--bg);outline:none;transition:all .15s}
+  .form-input:focus,.form-select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);background:var(--surface)}
+  .form-input::placeholder{color:var(--text-light)}
+  .form-select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2394a3b8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px;cursor:pointer}
+  .form-select:disabled{background-color:#f8fafc;color:var(--text-light);cursor:not-allowed}
+  .route-info{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--accent-soft);border:1px solid var(--accent-light);border-radius:var(--radius-sm);margin-top:4px;min-height:34px}
+  .route-info-dist{font-family:'DM Mono',monospace;font-size:12.5px;font-weight:600;color:var(--accent);flex-shrink:0}
+  .btn-cancel{padding:9px 16px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:13.5px;font-weight:500;color:var(--text-mid);cursor:pointer;transition:all .12s}
+  .btn-cancel:hover{border-color:var(--text-light);color:var(--text)}
+  .btn-submit{padding:9px 20px;background:var(--accent);border:none;border-radius:var(--radius-sm);font-family:inherit;font-size:13.5px;font-weight:600;color:#fff;cursor:pointer;transition:all .15s}
+  .btn-submit:hover{background:var(--accent-dark)}
+
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--text);color:#fff;padding:11px 20px;border-radius:var(--radius-sm);font-size:13.5px;font-weight:500;box-shadow:var(--shadow-xl);z-index:200;opacity:0;transition:all .25s}
+  .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+  .toast .undo{color:#a3e635;cursor:pointer;font-weight:600;text-decoration:underline;padding:0 4px}
+  .toast .undo:hover{color:#d9f99d}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo-area">
+    <div class="logo-sq"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div>
+    <span class="logo-text">MARSH</span>
+  </div>
+  <div class="nav-links">
+    <a class="nav-link" href="vehicles.html">Автомобілі</a>
+    <a class="nav-link" href="routes.html">Маршрути</a>
+    <a class="nav-link" href="drivers.html">Водії</a>
+    <a class="nav-link active" href="departures.html">Виїзди <span class="cnt" id="nav-count">20</span></a>
+    <a class="nav-link" href="schedule.html">Графік</a>
+    <a class="nav-link" href="users.html">Користувачі</a>
+  </div>
+  <div class="tb-right">
+    <div class="tb-search" id="search-wrap">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-light);flex-shrink:0"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input id="search-input" placeholder="Пошук за маршрутом, авто, водієм..." oninput="onSearchInput()">
+      <button class="clear-x" onclick="clearSearch()"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <button class="btn-primary" onclick="openAddModal()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg> Додати</button>
+    <div class="user-pill"><div class="user-dot">ОП</div><span>Оператор</span></div>
+  </div>
+</div>
+
+<div class="content-scroll">
+  <div class="tile">
+    <div class="tile-header">
+      <span class="tile-title">Журнал виїздів</span>
+      <span class="tile-count" id="tile-count">0</span>
+      <div class="month-nav">
+        <button class="mn-btn" onclick="prevMonth()" title="Попередній місяць"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <span class="mn-label" id="month-label"></span>
+        <button class="mn-btn" onclick="nextMonth()" title="Наступний місяць"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></button>
+        <button class="mn-today" onclick="goToday()">Сьогодні</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th class="sortable" data-sort="startDate">Дата старту <span class="sort-icon"></span></th>
+          <th>Дата фінішу</th>
+          <th>Код</th>
+          <th>Маршрут</th>
+          <th>Авто</th>
+          <th>Водій</th>
+          <th style="text-align:right">Відстань</th>
+          <th>Підстава</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="dep-tbody"></tbody>
+      </table>
+    </div>
+    <div class="t-foot"><span class="count-text" id="count-text"></span></div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="overlay" id="dep-overlay" onclick="handleOverlayClick(event,'dep-overlay')">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="dep-modal-title">Додати виїзд</div>
+      <button class="modal-close" onclick="closeModal()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group full"><label class="form-label">Маршрут *</label><select class="form-select" id="f-route" onchange="onRouteChange()"></select><div class="route-info" id="route-info"><span style="color:var(--text-light);font-size:12px">Оберіть маршрут щоб побачити деталі</span></div></div>
+        <div class="form-group full"><label class="form-label">Автомобіль *</label><select class="form-select" id="f-vehicle" onchange="onVehicleChange()"></select></div>
+        <div class="form-group full"><label class="form-label">Водій *</label><select class="form-select" id="f-driver"></select></div>
+        <div class="form-group"><label class="form-label">Дата старту *</label><input class="form-input" type="date" id="f-start"></div>
+        <div class="form-group"><label class="form-label">Дата фінішу</label><input class="form-input" type="date" id="f-end"></div>
+        <div class="form-group full"><label class="form-label">Підстава</label><input class="form-input" id="f-basis" placeholder="мед, зв'язок, відрядження..." maxlength="50"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeModal()">Скасувати</button>
+      <button class="btn-submit" id="dep-modal-submit" onclick="submitDeparture()">Додати</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const routes = [
+  { id:1,  code:'Л37', route:"Межова → Новолозуватівка → Слов'янка → Андронівка → Калинівка → Сергіївка → Новоолександрівка → Сергіївка → Калинівка → Андронівка → Слов'янка → Новолозуватівка → Межова", distance:68, basis:'мед' },
+  { id:2,  code:'Б98', route:'Покровськ → Гродівка → Родинське → Миролюбівка → Зеленівка → Миролюбівка → Родинське → Гродівка → Покровськ', distance:42, basis:'відрядження' },
+  { id:3,  code:'К15', route:'Краматорськ → Олексієво-Дружківка → Дружківка → Костянтинівка → Ліски → Костянтинівка → Дружківка → Олексієво-Дружківка → Краматорськ', distance:55, basis:"зв'язок" },
+  { id:4,  code:'М44', route:'Мирноград → Курахове → Вугледар → Новогродівка → Селидове → Новогродівка → Вугледар → Курахове → Мирноград', distance:78, basis:'отримання запчастин' },
+  { id:5,  code:'С22', route:"Слов'янськ → Лиман → Ямпіль → Закітне → Ямпіль → Лиман → Слов'янськ", distance:91, basis:'мед' },
+  { id:6,  code:'В71', route:'Волноваха → Докучаєвськ → Оленівка → Стила → Оленівка → Докучаєвськ → Волноваха', distance:60, basis:'відрядження' },
+  { id:7,  code:'Н83', route:'Новопавлівка → Велика Новосілка → Тимошівка → Комар → Тимошівка → Велика Новосілка → Новопавлівка', distance:47, basis:"зв'язок" },
+  { id:8,  code:'П56', route:'Покровськ → Мирноград → Первомайськ → Білозерське → Первомайськ → Мирноград → Покровськ', distance:38, basis:'' },
+  { id:9,  code:'Г29', route:'Горлівка → Дзержинськ → Торецьк → Щербинівка → Торецьк → Дзержинськ → Горлівка', distance:52, basis:'отримання продовольства' },
+  { id:10, code:'З63', route:'Запоріжжя → Токмак → Оріхів → Гуляйполе → Оріхів → Токмак → Запоріжжя', distance:184, basis:'відрядження' },
+  { id:11, code:'Д18', route:'Дніпро → Павлоград → Петропавлівка → Магдалинівка → Петропавлівка → Павлоград → Дніпро', distance:137, basis:'мед' },
+  { id:12, code:'Х51', route:'Харків → Чугуїв → Балаклія → Ізюм → Балаклія → Чугуїв → Харків', distance:196, basis:"зв'язок" },
+];
+const vehicles = [
+  { id:1,  index:'1001W', name:'Nissan Navara',     drivers:[{id:1,name:'Іваненко І.І.'},{id:2,name:'Петренко П.П.'}] },
+  { id:2,  index:'1002W', name:'Nissan Navara',     drivers:[{id:9,name:'Шевченко В.М.'}] },
+  { id:3,  index:'1003W', name:'Honda CR-V',        drivers:[{id:3,name:'Коваленко О.М.'}] },
+  { id:4,  index:'1004W', name:'Toyota Hilux',      drivers:[{id:4,name:'Мельник А.В.'},{id:5,name:'Бондаренко С.Ю.'}] },
+  { id:5,  index:'1005W', name:'Toyota Hilux',      drivers:[{id:6,name:'Сидоренко Д.Р.'}] },
+  { id:6,  index:'1006W', name:'Toyota Hilux',      drivers:[{id:7,name:'Ткаченко О.В.'},{id:8,name:'Павленко І.С.'}] },
+  { id:7,  index:'1007W', name:'Toyota Hilux',      drivers:[] },
+  { id:8,  index:'1008W', name:'Nissan Pathfinder', drivers:[{id:10,name:'Кравченко П.І.'}] },
+  { id:9,  index:'1009W', name:'Man TGE',           drivers:[{id:11,name:'Романенко С.В.'}] },
+  { id:10, index:'1010W', name:'VW Transporter T4', drivers:[] },
+  { id:11, index:'1011W', name:'VW Transporter T5', drivers:[{id:12,name:'Луценко А.Д.'}] },
+  { id:12, index:'1012W', name:'Toyota Hiace',      drivers:[{id:13,name:'Лисенко М.С.'}] },
+  { id:13, index:'1013W', name:'VW Crafter',        drivers:[{id:14,name:'Гриценко В.О.'}] },
+];
+
+let nextId = 100;
+let departures = [
+  { id:1,  startDate:'2026-03-01', endDate:'',           routeId:8,  vehicleId:4,  driverId:4,  basis:'' },
+  { id:2,  startDate:'2026-03-01', endDate:'2026-03-02', routeId:12, vehicleId:11, driverId:12, basis:"зв'язок" },
+  { id:3,  startDate:'2026-03-03', endDate:'',           routeId:1,  vehicleId:1,  driverId:1,  basis:'мед' },
+  { id:4,  startDate:'2026-03-03', endDate:'2026-03-04', routeId:4,  vehicleId:2,  driverId:9,  basis:'отримання запчастин' },
+  { id:5,  startDate:'2026-03-04', endDate:'',           routeId:2,  vehicleId:5,  driverId:6,  basis:'відрядження' },
+  { id:6,  startDate:'2026-03-05', endDate:'2026-03-06', routeId:11, vehicleId:12, driverId:13, basis:'мед' },
+  { id:7,  startDate:'2026-03-06', endDate:'',           routeId:7,  vehicleId:4,  driverId:5,  basis:"зв'язок" },
+  { id:8,  startDate:'2026-03-07', endDate:'',           routeId:6,  vehicleId:6,  driverId:7,  basis:'відрядження' },
+  { id:9,  startDate:'2026-03-08', endDate:'',           routeId:3,  vehicleId:3,  driverId:3,  basis:"зв'язок" },
+  { id:10, startDate:'2026-03-10', endDate:'',           routeId:8,  vehicleId:1,  driverId:2,  basis:'' },
+  { id:11, startDate:'2026-03-10', endDate:'2026-03-11', routeId:10, vehicleId:13, driverId:14, basis:'відрядження' },
+  { id:12, startDate:'2026-03-12', endDate:'',           routeId:1,  vehicleId:5,  driverId:6,  basis:'мед' },
+  { id:13, startDate:'2026-03-13', endDate:'',           routeId:4,  vehicleId:6,  driverId:8,  basis:'отримання запчастин' },
+  { id:14, startDate:'2026-03-14', endDate:'',           routeId:2,  vehicleId:8,  driverId:10, basis:'відрядження' },
+  { id:15, startDate:'2026-03-15', endDate:'2026-03-16', routeId:11, vehicleId:9,  driverId:11, basis:'мед' },
+  { id:16, startDate:'2026-03-17', endDate:'',           routeId:6,  vehicleId:1,  driverId:1,  basis:'відрядження' },
+  { id:17, startDate:'2026-03-18', endDate:'',           routeId:3,  vehicleId:4,  driverId:4,  basis:"зв'язок" },
+  { id:18, startDate:'2026-03-20', endDate:'2026-03-21', routeId:12, vehicleId:13, driverId:14, basis:"зв'язок" },
+  { id:19, startDate:'2026-03-22', endDate:'',           routeId:7,  vehicleId:2,  driverId:9,  basis:'мед' },
+  { id:20, startDate:'2026-03-25', endDate:'2026-03-26', routeId:10, vehicleId:11, driverId:12, basis:'відрядження' },
+];
+
+let editingId = null;
+let sortState = { key:null, dir:'asc' };
+let lastDeleted = null;
+const _now = new Date();
+let viewYear = 2026;
+let viewMonth = 2; // March (починаємо з місяця з даних)
+
+const UA_MONTHS = ['Січень','Лютий','Березень','Квітень','Травень','Червень','Липень','Серпень','Вересень','Жовтень','Листопад','Грудень'];
+
+function prevMonth() { viewMonth--; if (viewMonth<0){viewMonth=11;viewYear--;} renderTable(); }
+function nextMonth() { viewMonth++; if (viewMonth>11){viewMonth=0;viewYear++;} renderTable(); }
+function goToday() { viewYear = _now.getFullYear(); viewMonth = _now.getMonth(); renderTable(); }
+
+const getRoute = id => routes.find(r => r.id === id) || null;
+const getVehicle = id => vehicles.find(v => v.id === id) || null;
+function getDriverName(vid, did) { const v = getVehicle(vid); if (!v) return '—'; const d = v.drivers.find(d => d.id === did); return d ? d.name : '—'; }
+function fmtDate(iso) { if (!iso) return null; const [y,m,d] = iso.split('-'); return `${d}.${m}.${y}`; }
+
+function showToast(msg, undoFn) {
+  const t = document.getElementById('toast');
+  t.innerHTML = msg + (undoFn ? ' <span class="undo" id="toast-undo">Скасувати</span>' : '');
+  t.classList.add('show');
+  if (undoFn) document.getElementById('toast-undo').onclick = () => { undoFn(); t.classList.remove('show'); };
+  clearTimeout(window._tt);
+  window._tt = setTimeout(() => t.classList.remove('show'), 5000);
+}
+
+function getFiltered() {
+  const q = document.getElementById('search-input').value.toLowerCase().trim();
+  const prefix = `${viewYear}-${String(viewMonth+1).padStart(2,'0')}`;
+  let arr = departures.filter(dep => dep.startDate.startsWith(prefix));
+  if (q) {
+    arr = arr.filter(dep => {
+      const r = getRoute(dep.routeId), v = getVehicle(dep.vehicleId);
+      return (r && (r.code.toLowerCase().includes(q) || r.route.toLowerCase().includes(q)))
+        || (v && (v.index.toLowerCase().includes(q) || v.name.toLowerCase().includes(q)))
+        || getDriverName(dep.vehicleId, dep.driverId).toLowerCase().includes(q)
+        || (dep.basis || '').toLowerCase().includes(q);
+    });
+  }
+  if (sortState.key) {
+    const k = sortState.key, dir = sortState.dir === 'asc' ? 1 : -1;
+    arr.sort((a,b) => (a[k] || '').localeCompare(b[k] || '', 'uk') * dir);
+  } else {
+    arr.sort((a,b) => b.startDate.localeCompare(a.startDate));
+  }
+  return arr;
+}
+
+function setSort(key) {
+  if (sortState.key === key) {
+    if (sortState.dir === 'asc') sortState.dir = 'desc';
+    else { sortState.key = null; sortState.dir = 'asc'; }
+  } else { sortState.key = key; sortState.dir = 'asc'; }
+  renderTable(); updateSortHeaders();
+}
+
+function updateSortHeaders() {
+  document.querySelectorAll('th.sortable').forEach(th => {
+    const k = th.dataset.sort;
+    th.classList.toggle('sorted', k === sortState.key);
+    const icon = th.querySelector('.sort-icon');
+    if (k === sortState.key) {
+      icon.innerHTML = sortState.dir === 'asc'
+        ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 15l-6-6-6 6"/></svg>'
+        : '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>';
+    } else {
+      icon.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 9l4-4 4 4M16 15l-4 4-4-4"/></svg>';
+    }
+  });
+}
+
+function renderTable() {
+  const filtered = getFiltered();
+  const tbody = document.getElementById('dep-tbody');
+  const foot = document.getElementById('count-text');
+  document.getElementById('nav-count').textContent = departures.length;
+  document.getElementById('tile-count').textContent = filtered.length;
+  document.getElementById('month-label').textContent = `${UA_MONTHS[viewMonth]} ${viewYear}`;
+
+  if (filtered.length === 0) {
+    const hasSearch = document.getElementById('search-input').value;
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+      <p>${hasSearch ? 'За вашими критеріями нічого не знайдено' : `Виїздів за ${UA_MONTHS[viewMonth]} ${viewYear} не зафіксовано`}</p>
+      ${hasSearch ? '<span class="reset" onclick="clearSearch()">Скинути пошук</span>' : ''}
+    </div></td></tr>`;
+    foot.innerHTML = '';
+    return;
+  }
+  tbody.innerHTML = filtered.map(dep => renderRow(dep)).join('');
+  foot.innerHTML = `Показано <b>${filtered.length}</b> ${filtered.length === 1 ? 'виїзд' : filtered.length < 5 ? 'виїзди' : 'виїздів'} за ${UA_MONTHS[viewMonth].toLowerCase()} ${viewYear}`;
+}
+
+function renderRow(dep) {
+  const r = getRoute(dep.routeId), v = getVehicle(dep.vehicleId);
+  const driverName = getDriverName(dep.vehicleId, dep.driverId);
+  const endFmt = fmtDate(dep.endDate);
+  return `<tr>
+    <td><span class="td-date">${fmtDate(dep.startDate)}</span></td>
+    <td>${endFmt ? `<span class="td-date">${endFmt}</span>` : '<span class="td-date empty">—</span>'}</td>
+    <td>${r ? `<span class="td-code">${r.code}</span>` : '—'}</td>
+    <td><div class="td-route">${r ? r.route : '—'}</div></td>
+    <td>${v ? `<div class="td-vehicle"><span class="td-vehicle-idx">${v.index}</span><span class="td-vehicle-name">${v.name}</span></div>` : '—'}</td>
+    <td class="td-driver">${driverName}</td>
+    <td style="text-align:right"><span class="td-dist">${r ? r.distance : '—'}<span class="unit">${r ? 'км' : ''}</span></span></td>
+    <td><span class="td-basis" title="${dep.basis || ''}">${dep.basis || '—'}</span></td>
+    <td><div class="acts">
+      <button class="act e" onclick="openEditModal(${dep.id})" title="Редагувати"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+      <button class="act d" onclick="deleteDeparture(${dep.id})" title="Видалити"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg></button>
+    </div></td>
+  </tr>`;
+}
+
+function onSearchInput() {
+  const inp = document.getElementById('search-input');
+  document.getElementById('search-wrap').classList.toggle('has-value', !!inp.value);
+  renderTable();
+}
+function clearSearch() { document.getElementById('search-input').value = ''; document.getElementById('search-wrap').classList.remove('has-value'); renderTable(); }
+
+function populateRouteSelect(selectedId) {
+  const sel = document.getElementById('f-route');
+  sel.innerHTML = '<option value="">— оберіть маршрут —</option>' +
+    routes.map(r => `<option value="${r.id}"${r.id === selectedId ? ' selected' : ''}>${r.code} — ${r.route.split(' → ')[0]} → ...</option>`).join('');
+}
+function populateVehicleSelect(selectedId) {
+  const sel = document.getElementById('f-vehicle');
+  sel.innerHTML = '<option value="">— оберіть авто —</option>' +
+    vehicles.map(v => `<option value="${v.id}"${v.id === selectedId ? ' selected' : ''}>${v.index} ${v.name}</option>`).join('');
+}
+
+function onRouteChange() {
+  const routeId = parseInt(document.getElementById('f-route').value);
+  const r = getRoute(routeId);
+  const info = document.getElementById('route-info');
+  if (r) {
+    info.innerHTML = `<span class="route-info-dist">${r.distance} км</span><span style="color:var(--border)">·</span><span style="color:var(--text-mid);font-size:11.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.route}</span>`;
+    document.getElementById('f-basis').value = r.basis || '';
+  } else {
+    info.innerHTML = '<span style="color:var(--text-light);font-size:12px">Оберіть маршрут щоб побачити деталі</span>';
+  }
+}
+
+function onVehicleChange(selectedDriverId) {
+  const vid = parseInt(document.getElementById('f-vehicle').value);
+  const v = getVehicle(vid);
+  const dSel = document.getElementById('f-driver');
+  if (v && v.drivers.length > 0) {
+    dSel.innerHTML = v.drivers.map((d,i) => `<option value="${d.id}"${d.id === selectedDriverId ? ' selected' : ''}>${d.name}${i === 0 ? ' (Водій 1)' : ' (Водій 2)'}</option>`).join('');
+    dSel.disabled = false;
+  } else {
+    dSel.innerHTML = '<option value="">— немає призначених водіїв —</option>';
+    dSel.disabled = true;
+  }
+}
+
+function openAddModal() {
+  editingId = null;
+  document.getElementById('dep-modal-title').textContent = 'Додати виїзд';
+  document.getElementById('dep-modal-submit').textContent = 'Додати';
+  populateRouteSelect(null);
+  populateVehicleSelect(null);
+  document.getElementById('f-driver').innerHTML = '<option value="">— спочатку оберіть авто —</option>';
+  document.getElementById('f-driver').disabled = true;
+  ['f-start','f-end','f-basis'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('route-info').innerHTML = '<span style="color:var(--text-light);font-size:12px">Оберіть маршрут щоб побачити деталі</span>';
+  document.getElementById('dep-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('f-route').focus(), 80);
+}
+
+function openEditModal(id) {
+  const dep = departures.find(d => d.id === id); if (!dep) return;
+  editingId = id;
+  document.getElementById('dep-modal-title').textContent = 'Редагувати виїзд';
+  document.getElementById('dep-modal-submit').textContent = 'Зберегти';
+  populateRouteSelect(dep.routeId);
+  populateVehicleSelect(dep.vehicleId);
+  onRouteChange();
+  onVehicleChange(dep.driverId);
+  document.getElementById('f-start').value = dep.startDate;
+  document.getElementById('f-end').value = dep.endDate || '';
+  document.getElementById('f-basis').value = dep.basis || '';
+  document.getElementById('dep-overlay').classList.add('open');
+}
+
+function closeModal() { document.getElementById('dep-overlay').classList.remove('open'); }
+
+function submitDeparture() {
+  const routeId = parseInt(document.getElementById('f-route').value);
+  const vehicleId = parseInt(document.getElementById('f-vehicle').value);
+  const driverId = parseInt(document.getElementById('f-driver').value);
+  const startDate = document.getElementById('f-start').value;
+  let valid = true;
+  [['f-route', !isNaN(routeId)], ['f-vehicle', !isNaN(vehicleId)], ['f-driver', !isNaN(driverId)], ['f-start', !!startDate]].forEach(([id, ok]) => {
+    const el = document.getElementById(id);
+    if (!ok) { el.style.borderColor = 'var(--red)'; setTimeout(() => el.style.borderColor = '', 2000); valid = false; }
+  });
+  if (!valid) return;
+  const data = { routeId, vehicleId, driverId, startDate, endDate: document.getElementById('f-end').value || '', basis: document.getElementById('f-basis').value.trim() };
+  if (editingId !== null) {
+    const dep = departures.find(d => d.id === editingId);
+    if (dep) Object.assign(dep, data);
+    showToast('Збережено');
+  } else {
+    departures.push({ id: ++nextId, ...data });
+    showToast('Виїзд додано');
+  }
+  closeModal();
+  renderTable();
+}
+
+function deleteDeparture(id) {
+  const dep = departures.find(d => d.id === id); if (!dep) return;
+  lastDeleted = { ...dep };
+  departures = departures.filter(d => d.id !== id);
+  renderTable();
+  const r = getRoute(dep.routeId);
+  showToast(`Видалено виїзд${r ? ' «' + r.code + '»' : ''}`, () => { departures.push(lastDeleted); renderTable(); });
+}
+
+function handleOverlayClick(e, id) { if (e.target.id === id) document.getElementById(id).classList.remove('open'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.overlay.open').forEach(o => o.classList.remove('open')); });
+document.querySelectorAll('th.sortable').forEach(th => th.onclick = () => setSort(th.dataset.sort));
+
+renderTable(); updateSortHeaders();
+</script>
+</body>
+</html>

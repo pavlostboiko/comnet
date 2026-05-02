@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MARSH — Водії</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#fff; --border:#e2e8f0; --border-light:#f1f5f9;
+    --text:#0f172a; --text-mid:#475569; --text-light:#94a3b8;
+    --accent:#475569; --accent-light:#e2e8f0; --accent-dark:#334155;
+    --accent-soft:rgba(71,85,105,0.08); --accent-ring:rgba(71,85,105,0.18);
+    --row-hover:#f1f5f9;
+    --amber:#f59e0b; --amber-bg:#fffbeb; --amber-border:#fde68a; --amber-text:#92400e;
+    --red:#ef4444; --red-bg:#fef2f2;
+    --shadow:0 1px 3px rgba(15,23,42,0.06),0 0 0 1px rgba(15,23,42,0.04);
+    --shadow-xl:0 20px 40px rgba(15,23,42,0.14),0 0 0 1px rgba(15,23,42,0.05);
+    --radius:4px; --radius-sm:3px; --radius-pill:6px;
+    --row-pad-y:11px; --cell-pad-x:12px;
+    --font-body:14.5px; --font-mono:12.5px; --font-header:11px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+  .topbar{height:54px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;flex-shrink:0}
+  .logo-area{display:flex;align-items:center;gap:9px;margin-right:32px}
+  .logo-sq{width:28px;height:28px;background:var(--accent);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center}
+  .logo-text{font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.02em}
+  .nav-links{display:flex;align-items:stretch;height:100%}
+  .nav-link{display:flex;align-items:center;gap:6px;padding:0 14px;font-size:14px;font-weight:500;color:var(--text-mid);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;text-decoration:none}
+  .nav-link:hover{color:var(--text)}
+  .nav-link.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+  .nav-link .cnt{font-family:'DM Mono',monospace;font-size:10.5px;font-weight:500;background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:var(--radius-sm)}
+  .tb-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .tb-search{display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 12px;width:240px;transition:all .2s}
+  .tb-search:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-ring);background:var(--surface);width:320px}
+  .tb-search input{border:none;background:transparent;font-family:inherit;font-size:13.5px;color:var(--text);outline:none;width:100%}
+  .tb-search input::placeholder{color:var(--text-light)}
+  .tb-search .clear-x{width:16px;height:16px;border-radius:50%;background:var(--text-light);color:#fff;border:none;cursor:pointer;display:none;align-items:center;justify-content:center;padding:0;flex-shrink:0}
+  .tb-search .clear-x:hover{background:var(--text-mid)}
+  .tb-search.has-value .clear-x{display:flex}
+  .user-pill{display:flex;align-items:center;gap:6px;padding:4px 10px 4px 5px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-pill);cursor:pointer}
+  .user-dot{width:24px;height:24px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700;color:#fff}
+  .user-pill span{font-size:13px;font-weight:500;color:var(--text-mid)}
+
+  .content-scroll{flex:1;overflow-y:auto;padding:20px 24px}
+  .content-scroll::-webkit-scrollbar{width:6px}
+  .content-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+  .tile{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;animation:tileIn .3s ease-out both}
+  @keyframes tileIn{from{opacity:0;transform:translateY(6px)}}
+  .tile-header{padding:12px 20px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border-light)}
+  .tile-title{font-size:15px;font-weight:700;color:var(--text)}
+  .tile-count{font-family:'DM Mono',monospace;font-size:11.5px;font-weight:500;background:var(--accent-light);color:var(--accent);padding:2px 8px;border-radius:var(--radius-sm)}
+  .tile-tabs{display:flex;gap:2px;background:var(--bg);padding:3px;border-radius:var(--radius-sm);border:1px solid var(--border-light);margin-left:auto}
+  .tt-btn{padding:5px 13px;border:none;background:transparent;border-radius:var(--radius-sm);font-family:inherit;font-size:13px;font-weight:500;color:var(--text-light);cursor:pointer;transition:all .12s;white-space:nowrap;display:flex;align-items:center;gap:6px}
+  .tt-btn:hover{color:var(--text-mid)}
+  .tt-btn.on{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,0.06);font-weight:600}
+  .tt-btn .c{font-family:'DM Mono',monospace;font-size:10.5px;color:var(--text-light);background:var(--border-light);padding:0 6px;border-radius:var(--radius-sm);line-height:17px;min-width:20px;text-align:center;font-weight:500}
+  .tt-btn.on .c{background:var(--accent-light);color:var(--accent)}
+
+  .table-wrap{overflow-x:auto}
+  .table-wrap::-webkit-scrollbar{height:8px}
+  .table-wrap::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+  table{width:100%;border-collapse:collapse;min-width:800px}
+  thead tr{background:var(--bg);position:sticky;top:0;z-index:2}
+  th{padding:10px var(--cell-pad-x);text-align:left;font-size:var(--font-header);font-weight:600;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-light);border-bottom:1px solid var(--border);white-space:nowrap;user-select:none}
+  th:first-child{padding-left:20px}
+  th:last-child{padding-right:20px}
+  th.sortable{cursor:pointer;transition:color .12s}
+  th.sortable:hover{color:var(--text)}
+  th.sortable .sort-icon{display:inline-flex;vertical-align:middle;margin-left:3px;opacity:0.5;transition:opacity .12s}
+  th.sortable:hover .sort-icon{opacity:0.8}
+  th.sortable.sorted{color:var(--accent)}
+  th.sortable.sorted .sort-icon{opacity:1;color:var(--accent)}
+
+  tbody tr{border-bottom:1px solid var(--border-light);transition:background .1s}
+  tbody tr:last-child{border-bottom:none}
+  tbody tr:nth-child(even){background:#f8fafc}
+  tbody tr:hover,tbody tr:nth-child(even):hover{background:var(--row-hover)}
+  td{padding:var(--row-pad-y) var(--cell-pad-x);font-size:var(--font-body);color:var(--text-mid);vertical-align:middle}
+  td:first-child{padding-left:20px}
+  td:last-child{padding-right:20px}
+
+  .td-avatar{width:32px;height:32px;border-radius:50%;background:var(--accent-light);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+  .td-name{font-size:var(--font-body);font-weight:600;color:var(--text)}
+  .td-ipn{font-family:'DM Mono',monospace;font-size:11px;color:var(--text-light);margin-top:1px}
+  .td-vehicle{display:flex;align-items:center;gap:8px}
+  .td-vidx{font-family:'DM Mono',monospace;font-size:11.5px;font-weight:600;color:var(--accent);background:var(--accent-light);padding:3px 8px;border-radius:var(--radius-sm)}
+
+  /* absence badges */
+  .abs-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:var(--radius-pill);font-size:12px;font-weight:600}
+  .abs-badge::before{content:'';width:5px;height:5px;border-radius:50%;flex-shrink:0}
+  .abs-vacation{background:#dbeafe;color:#1e40af}
+  .abs-vacation::before{background:#3b82f6}
+  .abs-trip{background:#fffbeb;color:#92400e}
+  .abs-trip::before{background:#f59e0b}
+  .abs-sick{background:#fee2e2;color:#991b1b}
+  .abs-sick::before{background:#ef4444}
+
+  .btn-abs{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:12.5px;font-weight:500;color:var(--text-mid);cursor:pointer;transition:all .12s}
+  .btn-abs:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+  .btn-abs svg{width:13px;height:13px}
+  .abs-cnt{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;background:var(--accent);color:#fff;padding:0 6px;border-radius:var(--radius-sm);line-height:16px;min-width:18px;text-align:center}
+
+  .t-foot{padding:10px 20px;border-top:1px solid var(--border-light);font-size:13px;color:var(--text-light);display:flex;align-items:center;background:var(--bg)}
+  .t-foot .count-text b{color:var(--text);font-weight:600}
+
+  .empty-state{padding:64px 24px;text-align:center;color:var(--text-light)}
+  .empty-state svg{width:44px;height:44px;color:var(--border);margin-bottom:14px}
+  .empty-state p{font-size:14.5px;margin-bottom:14px}
+  .empty-state .reset{color:var(--accent);cursor:pointer;font-weight:600;font-size:13.5px;text-decoration:underline}
+
+  /* MODAL */
+  .overlay{position:fixed;inset:0;background:rgba(15,23,42,0.4);backdrop-filter:blur(2px);z-index:100;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+  .overlay.open{opacity:1;pointer-events:all}
+  .abs-modal{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow-xl);width:500px;max-width:calc(100vw - 48px);max-height:calc(100vh - 80px);overflow-y:auto;transform:translateY(12px) scale(0.98);transition:transform .2s}
+  .overlay.open .abs-modal{transform:translateY(0) scale(1)}
+  .modal-head{padding:20px 24px 16px;border-bottom:1px solid var(--border-light);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface);z-index:1}
+  .modal-title{font-size:17px;font-weight:700}
+  .modal-sub{font-size:12.5px;color:var(--text-light);font-weight:400;font-family:'DM Mono',monospace;margin-top:2px}
+  .modal-close{width:30px;height:30px;border-radius:var(--radius-sm);border:none;background:transparent;cursor:pointer;color:var(--text-light);display:flex;align-items:center;justify-content:center;transition:all .12s}
+  .modal-close:hover{background:var(--bg);color:var(--text)}
+
+  .dm-section{padding:14px 20px;border-bottom:1px solid var(--border-light)}
+  .dm-section:last-child{border-bottom:none}
+  .dm-section-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-light);margin-bottom:10px}
+
+  .abs-list{display:flex;flex-direction:column;gap:6px}
+  .abs-item{display:grid;grid-template-columns:auto 1fr auto auto;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg)}
+  .abs-item-reason{}
+  .abs-item-dates{font-family:'DM Mono',monospace;font-size:11.5px;color:var(--text-mid);display:flex;align-items:center}
+  .abs-item-days{font-size:11.5px;color:var(--text-light);font-weight:500}
+  .btn-del-abs{width:26px;height:26px;border-radius:var(--radius-sm);border:none;background:transparent;cursor:pointer;color:var(--text-light);display:flex;align-items:center;justify-content:center;transition:all .12s}
+  .btn-del-abs:hover{background:#fee2e2;color:#dc2626}
+  .btn-del-abs svg{width:13px;height:13px}
+  .abs-empty{font-size:13px;color:var(--text-light);text-align:center;padding:14px 0}
+
+  .abs-form{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end}
+  .form-group{display:flex;flex-direction:column;gap:5px}
+  .form-label{font-size:11.5px;font-weight:600;color:var(--text-mid)}
+  .form-input,.form-select{padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:13px;color:var(--text);background:var(--surface);outline:none;transition:all .15s;width:100%}
+  .form-input:focus,.form-select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .form-select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2394a3b8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px;cursor:pointer}
+  .btn-add-abs{padding:8px 14px;background:var(--accent);border:none;border-radius:var(--radius-sm);font-family:inherit;font-size:12.5px;font-weight:600;color:#fff;cursor:pointer;transition:all .15s;height:36px}
+  .btn-add-abs:hover{background:var(--accent-dark)}
+  .form-row-full{grid-column:1 / -1;margin-top:10px}
+
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--text);color:#fff;padding:11px 20px;border-radius:var(--radius-sm);font-size:13.5px;font-weight:500;box-shadow:var(--shadow-xl);z-index:200;opacity:0;transition:all .25s}
+  .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+  .toast .undo{color:#a3e635;cursor:pointer;font-weight:600;text-decoration:underline;padding:0 4px}
+  .toast .undo:hover{color:#d9f99d}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo-area">
+    <div class="logo-sq"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div>
+    <span class="logo-text">MARSH</span>
+  </div>
+  <div class="nav-links">
+    <a class="nav-link" href="vehicles.html">Автомобілі</a>
+    <a class="nav-link" href="routes.html">Маршрути</a>
+    <a class="nav-link active" href="drivers.html">Водії <span class="cnt" id="nav-count">14</span></a>
+    <a class="nav-link" href="departures.html">Виїзди</a>
+    <a class="nav-link" href="schedule.html">Графік</a>
+    <a class="nav-link" href="users.html">Користувачі</a>
+  </div>
+  <div class="tb-right">
+    <div class="tb-search" id="search-wrap">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-light);flex-shrink:0"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input id="search-input" placeholder="Пошук за ПІБ або ІПН..." oninput="onSearchInput()">
+      <button class="clear-x" onclick="clearSearch()"><svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="user-pill"><div class="user-dot">ОП</div><span>Оператор</span></div>
+  </div>
+</div>
+
+<div class="content-scroll">
+  <div class="tile">
+    <div class="tile-header">
+      <span class="tile-title">Водії</span>
+      <span class="tile-count" id="tile-count">14</span>
+      <div class="tile-tabs">
+        <button class="tt-btn on" onclick="setFilter('all', this)">Всі <span class="c" id="c-all">14</span></button>
+        <button class="tt-btn" onclick="setFilter('present', this)">Присутні <span class="c" id="c-p">13</span></button>
+        <button class="tt-btn" onclick="setFilter('absent', this)">Відсутні <span class="c" id="c-ab">1</span></button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th class="sortable" data-sort="name">ПІБ <span class="sort-icon"></span></th>
+          <th class="sortable" data-sort="ipn">ІПН <span class="sort-icon"></span></th>
+          <th>Автомобіль</th>
+          <th>Зараз відсутній</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="drivers-tbody"></tbody>
+      </table>
+    </div>
+    <div class="t-foot"><span class="count-text" id="count-text"></span></div>
+  </div>
+</div>
+
+<!-- ABSENCE MODAL -->
+<div class="overlay" id="abs-overlay" onclick="handleOverlayClick(event,'abs-overlay')">
+  <div class="abs-modal">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title" id="abs-modal-title">Водій</div>
+        <div class="modal-sub" id="abs-modal-sub"></div>
+      </div>
+      <button class="modal-close" onclick="closeAbsModal()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="dm-section">
+      <div class="dm-section-title">Відсутності</div>
+      <div id="abs-list"></div>
+    </div>
+    <div class="dm-section">
+      <div class="dm-section-title">Додати відсутність</div>
+      <div class="abs-form">
+        <div class="form-group">
+          <label class="form-label">Початок</label>
+          <input class="form-input" type="date" id="f-abs-start">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Кінець</label>
+          <input class="form-input" type="date" id="f-abs-end">
+        </div>
+        <button class="btn-add-abs" onclick="addAbsence()">Додати</button>
+        <div class="form-row-full form-group">
+          <label class="form-label">Причина</label>
+          <select class="form-select" id="f-abs-reason">
+            <option value="">— оберіть причину —</option>
+            <option value="відпустка">Відпустка</option>
+            <option value="відрядження">Відрядження</option>
+            <option value="лікарняний">Лікарняний</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const vehicles = [
+  { id:1,  index:'1001W', name:'Nissan Navara' },
+  { id:2,  index:'1002W', name:'Nissan Navara' },
+  { id:3,  index:'1003W', name:'Honda CR-V' },
+  { id:4,  index:'1004W', name:'Toyota Hilux' },
+  { id:5,  index:'1005W', name:'Toyota Hilux' },
+  { id:6,  index:'1006W', name:'Toyota Hilux' },
+  { id:8,  index:'1008W', name:'Nissan Pathfinder' },
+  { id:9,  index:'1009W', name:'Man TGE' },
+  { id:11, index:'1011W', name:'VW Transporter T5' },
+  { id:12, index:'1012W', name:'Toyota Hiace' },
+  { id:13, index:'1013W', name:'VW Crafter' },
+];
+
+const drivers = [
+  { id:1,  name:'Іваненко І.І.',    ipn:'1234567890', vehicleId:1 },
+  { id:2,  name:'Петренко П.П.',    ipn:'2345678901', vehicleId:1 },
+  { id:3,  name:'Коваленко О.М.',   ipn:'3456789012', vehicleId:3 },
+  { id:4,  name:'Мельник А.В.',     ipn:'4567890123', vehicleId:4 },
+  { id:5,  name:'Бондаренко С.Ю.',  ipn:'5678901234', vehicleId:4 },
+  { id:6,  name:'Сидоренко Д.Р.',   ipn:'6789012345', vehicleId:5 },
+  { id:7,  name:'Ткаченко О.В.',    ipn:'7890123456', vehicleId:6 },
+  { id:8,  name:'Павленко І.С.',    ipn:'8901234567', vehicleId:6 },
+  { id:9,  name:'Шевченко В.М.',    ipn:'9012345678', vehicleId:2 },
+  { id:10, name:'Кравченко П.І.',   ipn:'0123456789', vehicleId:8 },
+  { id:11, name:'Романенко С.В.',   ipn:'1122334455', vehicleId:9 },
+  { id:12, name:'Луценко А.Д.',     ipn:'2233445566', vehicleId:11 },
+  { id:13, name:'Лисенко М.С.',     ipn:'3344556677', vehicleId:12 },
+  { id:14, name:'Гриценко В.О.',    ipn:'4455667788', vehicleId:13 },
+];
+
+let nextAbsId = 100;
+let absences = [
+  { id:1, driverId:3,  startDate:'2026-04-15', endDate:'2026-04-22', reason:'лікарняний' },
+  { id:2, driverId:7,  startDate:'2026-04-25', endDate:'2026-05-08', reason:'відпустка' },
+  { id:3, driverId:11, startDate:'2026-04-20', endDate:'2026-04-22', reason:'відрядження' },
+  { id:4, driverId:2,  startDate:'2026-03-15', endDate:'2026-03-31', reason:'відпустка' },
+  { id:5, driverId:5,  startDate:'2026-05-20', endDate:'2026-05-27', reason:'відпустка' },
+  { id:6, driverId:9,  startDate:'2026-04-10', endDate:'2026-04-10', reason:'відрядження' },
+];
+
+let absModalDriverId = null;
+let currentFilter = 'all';
+let sortState = { key:null, dir:'asc' };
+let lastDeleted = null;
+const TODAY = new Date().toISOString().slice(0, 10);
+
+const getVehicle = id => vehicles.find(v => v.id === id) || null;
+const getActiveAbsence = id => absences.find(a => a.driverId === id && a.startDate <= TODAY && a.endDate >= TODAY) || null;
+const getDriverAbsences = id => absences.filter(a => a.driverId === id).sort((a,b) => b.startDate.localeCompare(a.startDate));
+function countDays(s, e) { return Math.round((new Date(e) - new Date(s)) / 86400000) + 1; }
+function fmtDate(iso) { const [y,m,d] = iso.split('-'); return `${d}.${m}.${y}`; }
+function initials(name) { return name.split(/\s+/).map(p => p[0]).join('').substring(0,2).toUpperCase(); }
+
+const REASON_LABELS = { відпустка:'Відпустка', відрядження:'Відрядження', лікарняний:'Лікарняний' };
+const REASON_CLASS = { відпустка:'abs-vacation', відрядження:'abs-trip', лікарняний:'abs-sick' };
+const absBadge = reason => `<span class="abs-badge ${REASON_CLASS[reason]}">${REASON_LABELS[reason]}</span>`;
+
+function showToast(msg, undoFn) {
+  const t = document.getElementById('toast');
+  t.innerHTML = msg + (undoFn ? ' <span class="undo" id="toast-undo">Скасувати</span>' : '');
+  t.classList.add('show');
+  if (undoFn) document.getElementById('toast-undo').onclick = () => { undoFn(); t.classList.remove('show'); };
+  clearTimeout(window._tt);
+  window._tt = setTimeout(() => t.classList.remove('show'), 5000);
+}
+
+function getFiltered() {
+  const q = document.getElementById('search-input').value.toLowerCase().trim();
+  let arr = drivers.filter(d => {
+    const active = getActiveAbsence(d.id);
+    const fm = currentFilter === 'all' || (currentFilter === 'present' && !active) || (currentFilter === 'absent' && active);
+    if (!fm) return false;
+    if (!q) return true;
+    const v = getVehicle(d.vehicleId);
+    return d.name.toLowerCase().includes(q) || d.ipn.includes(q)
+      || (v && (v.index.toLowerCase().includes(q) || v.name.toLowerCase().includes(q)));
+  });
+  if (sortState.key) {
+    const k = sortState.key, dir = sortState.dir === 'asc' ? 1 : -1;
+    arr.sort((a,b) => (a[k] || '').localeCompare(b[k] || '', 'uk') * dir);
+  }
+  return arr;
+}
+
+function setSort(key) {
+  if (sortState.key === key) {
+    if (sortState.dir === 'asc') sortState.dir = 'desc';
+    else { sortState.key = null; sortState.dir = 'asc'; }
+  } else { sortState.key = key; sortState.dir = 'asc'; }
+  renderTable(); updateSortHeaders();
+}
+
+function updateSortHeaders() {
+  document.querySelectorAll('th.sortable').forEach(th => {
+    const k = th.dataset.sort;
+    th.classList.toggle('sorted', k === sortState.key);
+    const icon = th.querySelector('.sort-icon');
+    if (k === sortState.key) {
+      icon.innerHTML = sortState.dir === 'asc'
+        ? '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 15l-6-6-6 6"/></svg>'
+        : '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>';
+    } else {
+      icon.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 9l4-4 4 4M16 15l-4 4-4-4"/></svg>';
+    }
+  });
+}
+
+function renderTable() {
+  const filtered = getFiltered();
+  const tbody = document.getElementById('drivers-tbody');
+  const foot = document.getElementById('count-text');
+  document.getElementById('nav-count').textContent = drivers.length;
+  document.getElementById('tile-count').textContent = filtered.length;
+  document.getElementById('c-all').textContent = drivers.length;
+  const absentCount = drivers.filter(d => getActiveAbsence(d.id)).length;
+  document.getElementById('c-p').textContent = drivers.length - absentCount;
+  document.getElementById('c-ab').textContent = absentCount;
+
+  if (filtered.length === 0) {
+    const hasF = currentFilter !== 'all' || document.getElementById('search-input').value;
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+      <p>${hasF ? 'За вашими критеріями нічого не знайдено' : 'Поки немає водіїв'}</p>
+      ${hasF ? '<span class="reset" onclick="resetAll()">Скинути фільтри</span>' : ''}
+    </div></td></tr>`;
+    foot.innerHTML = '';
+    return;
+  }
+  tbody.innerHTML = filtered.map(d => renderRow(d)).join('');
+  foot.innerHTML = `Показано <b>${filtered.length}</b> з <b>${drivers.length}</b>`;
+}
+
+function renderRow(d) {
+  const v = getVehicle(d.vehicleId);
+  const abs = getActiveAbsence(d.id);
+  const total = absences.filter(a => a.driverId === d.id).length;
+  const vehicleCell = v
+    ? `<div class="td-vehicle"><span class="td-vidx">${v.index}</span><span style="font-size:13px;font-weight:500;color:var(--text-mid)">${v.name}</span></div>`
+    : `<span style="color:var(--text-light)">—</span>`;
+  const absCell = abs ? absBadge(abs.reason) : `<span style="color:var(--text-light);font-size:13px">—</span>`;
+  return `<tr>
+    <td><div style="display:flex;align-items:center;gap:10px"><div class="td-avatar">${initials(d.name)}</div><div class="td-name">${d.name}</div></div></td>
+    <td><span style="font-family:'DM Mono',monospace;font-size:12.5px;color:var(--text-mid)">${d.ipn}</span></td>
+    <td>${vehicleCell}</td>
+    <td>${absCell}</td>
+    <td><div style="display:flex;justify-content:flex-end">
+      <button class="btn-abs" onclick="openAbsModal(${d.id})">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        Відсутності${total > 0 ? ` <span class="abs-cnt">${total}</span>` : ''}
+      </button>
+    </div></td>
+  </tr>`;
+}
+
+function onSearchInput() {
+  const inp = document.getElementById('search-input');
+  document.getElementById('search-wrap').classList.toggle('has-value', !!inp.value);
+  renderTable();
+}
+function clearSearch() { document.getElementById('search-input').value = ''; document.getElementById('search-wrap').classList.remove('has-value'); renderTable(); }
+function setFilter(f, btn) { currentFilter = f; document.querySelectorAll('.tt-btn').forEach(b => b.classList.remove('on')); btn.classList.add('on'); renderTable(); }
+function resetAll() { currentFilter = 'all'; document.getElementById('search-input').value = ''; document.getElementById('search-wrap').classList.remove('has-value'); document.querySelectorAll('.tt-btn').forEach((b,i) => b.classList.toggle('on', i === 0)); renderTable(); }
+
+function openAbsModal(driverId) {
+  absModalDriverId = driverId;
+  const d = drivers.find(d => d.id === driverId);
+  document.getElementById('abs-modal-title').textContent = d.name;
+  document.getElementById('abs-modal-sub').textContent = `ІПН: ${d.ipn}`;
+  ['f-abs-start','f-abs-end','f-abs-reason'].forEach(id => document.getElementById(id).value = '');
+  renderAbsList();
+  document.getElementById('abs-overlay').classList.add('open');
+}
+
+function closeAbsModal() { document.getElementById('abs-overlay').classList.remove('open'); }
+
+function renderAbsList() {
+  const list = document.getElementById('abs-list');
+  const da = getDriverAbsences(absModalDriverId);
+  if (da.length === 0) { list.innerHTML = '<div class="abs-empty">Відсутностей не зафіксовано</div>'; return; }
+  list.innerHTML = `<div class="abs-list">${da.map(a => {
+    const days = countDays(a.startDate, a.endDate);
+    const isActive = a.startDate <= TODAY && a.endDate >= TODAY;
+    const isFuture = a.startDate > TODAY;
+    const dot = isActive ? '<span style="width:6px;height:6px;border-radius:50%;background:#10b981;display:inline-block;margin-right:6px"></span>' : isFuture ? '<span style="width:6px;height:6px;border-radius:50%;background:#94a3b8;display:inline-block;margin-right:6px"></span>' : '';
+    return `<div class="abs-item">
+      <div>${absBadge(a.reason)}</div>
+      <div class="abs-item-dates">${dot}${fmtDate(a.startDate)} — ${fmtDate(a.endDate)}</div>
+      <div class="abs-item-days">${days} ${days === 1 ? 'день' : days < 5 ? 'дні' : 'днів'}</div>
+      <button class="btn-del-abs" onclick="deleteAbsence(${a.id})" title="Видалити"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg></button>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function addAbsence() {
+  const start = document.getElementById('f-abs-start').value;
+  const end = document.getElementById('f-abs-end').value;
+  const reason = document.getElementById('f-abs-reason').value;
+  let valid = true;
+  [['f-abs-start',start],['f-abs-end',end],['f-abs-reason',reason]].forEach(([id,v]) => {
+    const el = document.getElementById(id);
+    if (!v) { el.style.borderColor = 'var(--red)'; setTimeout(() => el.style.borderColor = '', 2000); valid = false; }
+  });
+  if (!valid) return;
+  if (end < start) {
+    const el = document.getElementById('f-abs-end');
+    el.style.borderColor = 'var(--red)'; setTimeout(() => el.style.borderColor = '', 2000);
+    return;
+  }
+  absences.push({ id: ++nextAbsId, driverId: absModalDriverId, startDate: start, endDate: end, reason });
+  ['f-abs-start','f-abs-end','f-abs-reason'].forEach(id => document.getElementById(id).value = '');
+  renderAbsList(); renderTable();
+}
+
+function deleteAbsence(id) {
+  const a = absences.find(a => a.id === id); if (!a) return;
+  lastDeleted = { ...a };
+  absences = absences.filter(a => a.id !== id);
+  renderAbsList(); renderTable();
+  showToast('Відсутність видалено', () => { absences.push(lastDeleted); renderAbsList(); renderTable(); });
+}
+
+function handleOverlayClick(e, id) { if (e.target.id === id) document.getElementById(id).classList.remove('open'); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') document.querySelectorAll('.overlay.open').forEach(o => o.classList.remove('open')); });
+document.querySelectorAll('th.sortable').forEach(th => th.onclick = () => setSort(th.dataset.sort));
+
+renderTable(); updateSortHeaders();
+</script>
+</body>
+</html>

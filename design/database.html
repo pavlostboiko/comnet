@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ComNet — Переміщення</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f8fafc; --surface:#ffffff; --border:#e2e8f0; --border-light:#f1f5f9;
+    --text:#0f172a; --text-mid:#475569; --text-light:#94a3b8;
+    --accent:#475569; --accent-light:#e2e8f0; --accent-dark:#334155;
+    --accent-soft:rgba(71,85,105,0.08); --accent-ring:rgba(71,85,105,0.18);
+    --row-hover:#f1f5f9;
+    --green:#10b981; --green-bg:#d1fae5; --green-text:#065f46;
+    --red:#ef4444; --red-bg:#fee2e2; --red-text:#991b1b;
+    --blue-bg:#eff6ff; --blue-text:#2563eb;
+    --shadow:0 1px 3px rgba(15,23,42,0.06),0 0 0 1px rgba(15,23,42,0.04);
+    --shadow-xl:0 20px 40px rgba(15,23,42,0.14),0 0 0 1px rgba(15,23,42,0.05);
+    --radius:4px; --radius-sm:3px; --radius-pill:6px;
+    --row-pad-y:10px; --cell-pad-x:12px;
+    --font-body:14px; --font-mono:12.5px; --font-header:11px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+
+  /* TOPBAR */
+  .topbar { height:54px; background:var(--surface); border-bottom:1px solid var(--border); display:flex; align-items:center; padding:0 24px; gap:0; flex-shrink:0; }
+  .logo-area { display:flex; align-items:center; gap:9px; margin-right:32px; }
+  .logo-sq { width:28px; height:28px; background:var(--accent); border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center; }
+  .logo-text { font-size:15px; font-weight:700; letter-spacing:-0.02em; }
+  .nav-links { display:flex; align-items:stretch; height:100%; }
+  .nav-link { display:flex; align-items:center; gap:6px; padding:0 14px; font-size:14px; font-weight:500; color:var(--text-mid); cursor:pointer; border-bottom:2px solid transparent; transition:all 0.15s; text-decoration:none; }
+  .nav-link:hover { color:var(--text); }
+  .nav-link.active { color:var(--accent); border-bottom-color:var(--accent); font-weight:600; }
+  .tb-right { margin-left:auto; display:flex; align-items:center; gap:10px; }
+  .tb-search { display:flex; align-items:center; gap:6px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:7px 12px; width:240px; transition:all 0.2s; }
+  .tb-search:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-ring); background:var(--surface); width:300px; }
+  .tb-search input { border:none; background:transparent; font-family:inherit; font-size:13.5px; color:var(--text); outline:none; width:100%; }
+  .tb-search input::placeholder { color:var(--text-light); }
+  .btn-primary { display:flex; align-items:center; gap:5px; padding:8px 14px; background:var(--accent); border:none; border-radius:var(--radius-sm); font-family:inherit; font-size:13.5px; font-weight:600; color:white; cursor:pointer; transition:all 0.15s; }
+  .btn-primary:hover { background:var(--accent-dark); transform:translateY(-1px); box-shadow:0 4px 12px var(--accent-ring); }
+  .user-pill { display:flex; align-items:center; gap:6px; padding:4px 10px 4px 5px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-pill); cursor:pointer; }
+  .user-dot { width:24px; height:24px; background:var(--accent); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:9.5px; font-weight:700; color:white; }
+  .user-pill span { font-size:13px; font-weight:500; color:var(--text-mid); }
+
+  /* CONTENT */
+  .content-scroll { flex:1; overflow-y:auto; padding:20px 24px; }
+  .content-scroll::-webkit-scrollbar { width:6px; }
+  .content-scroll::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+  /* TILE */
+  .tile { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; animation:tileIn 0.3s ease-out both; }
+  @keyframes tileIn { from { opacity:0; transform:translateY(6px); } }
+  .tile-header { padding:12px 20px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--border-light); flex-wrap:wrap; }
+  .tile-title { font-size:15px; font-weight:700; }
+  .tile-count { font-family:'DM Mono',monospace; font-size:11.5px; font-weight:500; background:var(--accent-light); color:var(--accent); padding:2px 8px; border-radius:var(--radius-sm); }
+  .tile-tabs { display:flex; gap:2px; background:var(--bg); padding:3px; border-radius:var(--radius-sm); border:1px solid var(--border-light); margin-left:auto; }
+  .tt-btn { padding:5px 13px; border:none; background:transparent; border-radius:var(--radius-sm); font-family:inherit; font-size:13px; font-weight:500; color:var(--text-light); cursor:pointer; transition:all 0.12s; white-space:nowrap; display:flex; align-items:center; gap:6px; }
+  .tt-btn:hover { color:var(--text-mid); }
+  .tt-btn.on { background:var(--surface); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,0.06); font-weight:600; }
+  .tt-btn .c { font-family:'DM Mono',monospace; font-size:10.5px; color:var(--text-light); background:var(--border-light); padding:0 6px; border-radius:var(--radius-sm); line-height:17px; min-width:20px; text-align:center; }
+  .tt-btn.on .c { background:var(--accent-light); color:var(--accent); }
+
+  /* CHIPS */
+  .sub-row { padding:9px 20px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--border-light); background:var(--bg); flex-wrap:wrap; }
+  .sub-row-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:var(--text-light); flex-shrink:0; }
+  .sub-chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .sub-chip { padding:4px 11px; border:1px solid var(--border); background:var(--surface); border-radius:var(--radius-pill); font-size:12.5px; font-weight:500; color:var(--text-mid); cursor:pointer; transition:all 0.12s; display:flex; align-items:center; gap:5px; }
+  .sub-chip:hover { border-color:var(--text-light); color:var(--text); }
+  .sub-chip.on { background:var(--accent); border-color:var(--accent); color:white; font-weight:600; }
+  .sub-chip .c { font-family:'DM Mono',monospace; font-size:10.5px; background:var(--border-light); color:var(--text-light); padding:0 5px; border-radius:var(--radius-sm); line-height:16px; }
+  .sub-chip.on .c { background:rgba(255,255,255,0.25); color:white; }
+  .sub-clear { margin-left:auto; font-size:12px; color:var(--text-light); cursor:pointer; padding:3px 8px; border-radius:var(--radius-sm); transition:all 0.12s; flex-shrink:0; }
+  .sub-clear:hover { color:var(--text); background:var(--border-light); }
+
+  /* TABLE */
+  .table-wrap { overflow-x:auto; }
+  .table-wrap::-webkit-scrollbar { height:6px; }
+  .table-wrap::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+  table { width:100%; border-collapse:collapse; min-width:1260px; }
+  thead tr { background:var(--bg); }
+  th { padding:9px var(--cell-pad-x); text-align:left; font-size:var(--font-header); font-weight:600; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-light); border-bottom:1px solid var(--border); white-space:nowrap; user-select:none; }
+  th:first-child { padding-left:20px; }
+  th:last-child { padding-right:20px; width:52px; }
+  tbody tr { border-bottom:1px solid var(--border-light); transition:background 0.1s; }
+  tbody tr:last-child { border-bottom:none; }
+  tbody tr:nth-child(even) { background:#f8fafc; }
+  tbody tr:hover { background:var(--row-hover) !important; }
+  td { padding:var(--row-pad-y) var(--cell-pad-x); font-size:var(--font-body); color:var(--text-mid); vertical-align:middle; white-space:nowrap; }
+  td:first-child { padding-left:20px; }
+  td:last-child { padding-right:20px; }
+  .td-mono { font-family:'DM Mono',monospace; font-size:var(--font-mono); }
+  .td-num { font-family:'DM Mono',monospace; font-size:var(--font-mono); text-align:right; font-variant-numeric:tabular-nums; }
+  .td-item { font-weight:600; color:var(--text); max-width:300px; overflow:hidden; text-overflow:ellipsis; }
+  .td-idx { font-family:'DM Mono',monospace; font-size:11px; font-weight:600; color:var(--accent); background:var(--accent-light); padding:2px 8px; border-radius:var(--radius-sm); display:inline-block; }
+
+  .qty-in { color:var(--green-text); font-weight:600; }
+  .qty-out { color:var(--red-text); font-weight:600; }
+  .qty-dash { color:var(--text-light); }
+
+  .cat-badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-sm); font-size:11.5px; font-weight:600; font-family:'DM Mono',monospace; }
+  .cat-1 { background:#eff6ff; color:#2563eb; }
+  .cat-2 { background:#ecfdf5; color:#059669; }
+  .cat-3 { background:#fef9c3; color:#a16207; }
+  .cat-pr { background:#f0fdf4; color:#16a34a; }
+  .cat-npr { background:#fef2f2; color:#dc2626; }
+
+  .doc-badge { display:inline-block; padding:2px 9px; border-radius:var(--radius-sm); font-size:11.5px; font-weight:600; }
+  .doc-440 { background:#eff6ff; color:#3b82f6; }
+  .doc-431 { background:#fdf4ff; color:#a855f7; }
+  .doc-57  { background:#fff7ed; color:#ea580c; }
+
+  /* Row actions */
+  .acts { display:flex; gap:2px; opacity:0; transition:opacity 0.12s; justify-content:flex-end; }
+  tbody tr:hover .acts { opacity:1; }
+  .act { width:28px; height:28px; border-radius:var(--radius-sm); border:none; background:transparent; cursor:pointer; color:var(--text-light); display:flex; align-items:center; justify-content:center; transition:all 0.12s; }
+  .act:hover.e { background:var(--accent-light); color:var(--accent); }
+  .act:hover.d { background:var(--red-bg); color:var(--red); }
+  .act svg { width:14px; height:14px; }
+
+  /* Footer */
+  .t-foot { padding:10px 20px; border-top:1px solid var(--border-light); font-size:13px; color:var(--text-light); display:flex; align-items:center; gap:16px; background:var(--bg); }
+  .t-foot b { color:var(--text); font-weight:600; }
+
+  /* Empty */
+  .empty-state { padding:60px 24px; text-align:center; color:var(--text-light); }
+  .empty-state svg { width:44px; height:44px; color:var(--border); margin-bottom:14px; }
+  .empty-state p { font-size:14px; margin-bottom:12px; }
+  .empty-state .reset { color:var(--accent); cursor:pointer; font-weight:600; font-size:13.5px; }
+
+  /* MODAL */
+  .overlay { position:fixed; inset:0; background:rgba(15,23,42,0.4); backdrop-filter:blur(2px); z-index:100; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.2s; }
+  .overlay.open { opacity:1; pointer-events:all; }
+  .modal { background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow-xl); width:620px; max-width:calc(100vw - 48px); max-height:calc(100vh - 80px); overflow-y:auto; transform:translateY(12px) scale(0.98); transition:transform 0.2s; }
+  .overlay.open .modal { transform:translateY(0) scale(1); }
+  .modal-head { padding:20px 24px 16px; border-bottom:1px solid var(--border-light); display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; background:var(--surface); z-index:1; }
+  .modal-title { font-size:17px; font-weight:700; }
+  .modal-close { width:30px; height:30px; border-radius:var(--radius-sm); border:none; background:transparent; cursor:pointer; color:var(--text-light); display:flex; align-items:center; justify-content:center; transition:all 0.12s; }
+  .modal-close:hover { background:var(--bg); color:var(--text); }
+  .modal-body { padding:20px 24px; }
+  .modal-foot { padding:16px 24px; border-top:1px solid var(--border-light); display:flex; justify-content:flex-end; gap:8px; position:sticky; bottom:0; background:var(--surface); }
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px 16px; }
+  .form-group { display:flex; flex-direction:column; gap:6px; }
+  .form-group.full { grid-column:span 2; }
+  .form-label { font-size:12.5px; font-weight:600; color:var(--text-mid); }
+  .form-input { padding:9px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:inherit; font-size:13.5px; color:var(--text); background:var(--bg); outline:none; transition:all 0.15s; }
+  .form-input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); background:var(--surface); }
+  .form-input::placeholder { color:var(--text-light); }
+  .form-select { padding:9px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:inherit; font-size:13.5px; color:var(--text); background:var(--bg); outline:none; cursor:pointer; transition:all 0.15s; appearance:none; background-image:url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2394a3b8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; padding-right:28px; }
+  .form-select:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .btn-cancel { padding:9px 16px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); font-family:inherit; font-size:13.5px; font-weight:500; color:var(--text-mid); cursor:pointer; transition:all 0.12s; }
+  .btn-cancel:hover { border-color:var(--text-light); color:var(--text); }
+  .btn-submit { padding:9px 20px; background:var(--accent); border:none; border-radius:var(--radius-sm); font-family:inherit; font-size:13.5px; font-weight:600; color:white; cursor:pointer; transition:all 0.15s; }
+  .btn-submit:hover { background:var(--accent-dark); }
+
+  /* Toast */
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(80px); background:var(--text); color:white; padding:11px 20px; border-radius:var(--radius-sm); font-size:13.5px; font-weight:500; box-shadow:var(--shadow-xl); z-index:200; opacity:0; transition:all 0.25s; }
+  .toast.show { transform:translateX(-50%) translateY(0); opacity:1; }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo-area">
+    <div class="logo-sq">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+        <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+        <line x1="12" y1="22.08" x2="12" y2="12"/>
+      </svg>
+    </div>
+    <span class="logo-text">ComNet</span>
+  </div>
+  <div class="nav-links">
+    <a class="nav-link" href="items.html">Майно</a>
+    <a class="nav-link active" href="database.html">Переміщення</a>
+    <a class="nav-link" href="residues.html">Залишки</a>
+    <a class="nav-link" href="#">Звіти</a>
+    <a class="nav-link" href="#">Документи</a>
+    <a class="nav-link" href="#">Налаштування</a>
+  </div>
+  <div class="tb-right">
+    <div class="tb-search" id="search-wrap">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--text-light);flex-shrink:0"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input id="search-input" placeholder="Пошук за назвою, документом..." oninput="renderTable()">
+    </div>
+    <button class="btn-primary" onclick="openModal()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+      Додати
+    </button>
+    <div class="user-pill"><div class="user-dot">ОП</div><span>Оператор</span></div>
+  </div>
+</div>
+
+<!-- CONTENT -->
+<div class="content-scroll">
+  <div class="tile">
+    <div class="tile-header">
+      <span class="tile-title">Переміщення</span>
+      <span class="tile-count" id="tile-count">0</span>
+      <div class="tile-tabs">
+        <button class="tt-btn on" onclick="setTab('all',this)">Всі <span class="c" id="c-all">0</span></button>
+        <button class="tt-btn" onclick="setTab('in',this)">Надходження <span class="c" id="c-in">0</span></button>
+        <button class="tt-btn" onclick="setTab('out',this)">Вибуття <span class="c" id="c-out">0</span></button>
+        <button class="tt-btn" onclick="setTab('move',this)">Переміщення <span class="c" id="c-move">0</span></button>
+      </div>
+    </div>
+    <div class="sub-row">
+      <span class="sub-row-label">Підрозділ</span>
+      <div class="sub-chips" id="unit-chips"></div>
+      <span class="sub-clear" id="sub-clear" onclick="clearUnit()" style="display:none">× Скинути</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:44px">#</th>
+            <th style="width:100px">Дата</th>
+            <th style="width:130px">Тип документа</th>
+            <th style="width:110px">№ документа</th>
+            <th style="width:130px">Звідки</th>
+            <th style="width:130px">Куди</th>
+            <th style="width:80px">Категорія</th>
+            <th>Найменування</th>
+            <th style="width:50px;text-align:right">Од.</th>
+            <th style="width:90px;text-align:right">Надійшло</th>
+            <th style="width:90px;text-align:right">Вибуло</th>
+            <th style="width:100px;text-align:right">Ціна, грн</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="ops-tbody"></tbody>
+      </table>
+    </div>
+    <div class="t-foot">
+      <span id="count-text"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ADD MODAL -->
+<div class="overlay" id="modal-overlay" onclick="handleOverlayClick(event)">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="modal-title">Додати операцію</div>
+      <button class="modal-close" onclick="closeModal()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Дата *</label>
+          <input class="form-input" id="f-date" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Тип документа *</label>
+          <select class="form-select" id="f-doc-type">
+            <option value="">— оберіть —</option>
+            <option value="Н-440/25">Н-440/25 (Накладна)</option>
+            <option value="Н-431">Н-431 (з ПДВ)</option>
+            <option value="РВ-57">РВ-57 (Розподільча відомість)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">№ документа</label>
+          <input class="form-input" id="f-doc-num" placeholder="001/25">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Категорія</label>
+          <select class="form-select" id="f-cat">
+            <option value="">— оберіть —</option>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="пр.">пр. (придатне)</option>
+            <option value="непр.">непр. (непридатне)</option>
+            <option value="пот.рем.">пот.рем.</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Звідки</label>
+          <input class="form-input" id="f-from" placeholder="Склад бригади / назва підрозділу" list="units-list">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Куди</label>
+          <input class="form-input" id="f-to" placeholder="Назва підрозділу" list="units-list">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Найменування *</label>
+          <input class="form-input" id="f-item" placeholder="Бронежилет 6Б45">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Одиниця виміру</label>
+          <input class="form-input" id="f-uom" placeholder="шт">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ціна, грн</label>
+          <input class="form-input" id="f-price" type="number" step="0.01" placeholder="0.00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Надійшло</label>
+          <input class="form-input" id="f-qty-in" type="number" step="0.0001" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Вибуло</label>
+          <input class="form-input" id="f-qty-out" type="number" step="0.0001" placeholder="0">
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Примітки (серійні номери тощо)</label>
+          <input class="form-input" id="f-notes" placeholder="сер. № ...">
+        </div>
+      </div>
+      <datalist id="units-list">
+        <option value="Склад бригади">
+        <option value="1 рота">
+        <option value="2 рота">
+        <option value="3 рота">
+        <option value="4 рота">
+        <option value="5 рота">
+        <option value="Штаб">
+      </datalist>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeModal()">Скасувати</button>
+      <button class="btn-submit" onclick="submitOp()">Додати</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const INTERNAL = ["1 рота","2 рота","3 рота","4 рота","5 рота","Штаб"];
+let nextId = 100;
+let editId = null;
+let tab = 'all';
+let unit = null;
+
+let ops = [
+  {id:1,  date:"2025-01-10", doc_type:"Н-440/25", doc_num:"001/25", from:"Склад бригади",    to:"Штаб",    cat:"1",   item:"Бронежилет 6Б45",       uom:"шт",    qty_in:30,  qty_out:null, price:8500},
+  {id:2,  date:"2025-01-10", doc_type:"Н-440/25", doc_num:"001/25", from:"Склад бригади",    to:"Штаб",    cat:"1",   item:"Автомат АК-74М",        uom:"шт",    qty_in:25,  qty_out:null, price:15200},
+  {id:3,  date:"2025-01-10", doc_type:"Н-440/25", doc_num:"001/25", from:"Склад бригади",    to:"Штаб",    cat:"1",   item:"Каска М21-С",           uom:"шт",    qty_in:30,  qty_out:null, price:4800},
+  {id:4,  date:"2025-01-15", doc_type:"Н-440/25", doc_num:"002/25", from:"Штаб",             to:"1 рота",  cat:"1",   item:"Бронежилет 6Б45",       uom:"шт",    qty_in:8,   qty_out:8,    price:8500},
+  {id:5,  date:"2025-01-15", doc_type:"Н-440/25", doc_num:"002/25", from:"Штаб",             to:"1 рота",  cat:"1",   item:"Автомат АК-74М",        uom:"шт",    qty_in:6,   qty_out:6,    price:15200},
+  {id:6,  date:"2025-01-15", doc_type:"Н-440/25", doc_num:"002/25", from:"Штаб",             to:"1 рота",  cat:"1",   item:"Каска М21-С",           uom:"шт",    qty_in:8,   qty_out:8,    price:4800},
+  {id:7,  date:"2025-02-01", doc_type:"Н-440/25", doc_num:"003/25", from:"Склад бригади",    to:"Штаб",    cat:"2",   item:"Рюкзак тактичний",      uom:"шт",    qty_in:50,  qty_out:null, price:2800},
+  {id:8,  date:"2025-02-01", doc_type:"Н-440/25", doc_num:"003/25", from:"Склад бригади",    to:"Штаб",    cat:"1",   item:"Аптечка IFAK",          uom:"шт",    qty_in:120, qty_out:null, price:1200},
+  {id:9,  date:"2025-02-05", doc_type:"Н-440/25", doc_num:"004/25", from:"Штаб",             to:"2 рота",  cat:"1",   item:"Бронежилет 6Б45",       uom:"шт",    qty_in:7,   qty_out:7,    price:8500},
+  {id:10, date:"2025-02-05", doc_type:"Н-440/25", doc_num:"004/25", from:"Штаб",             to:"2 рота",  cat:"1",   item:"Автомат АК-74М",        uom:"шт",    qty_in:7,   qty_out:7,    price:15200},
+  {id:11, date:"2025-02-05", doc_type:"Н-440/25", doc_num:"004/25", from:"Штаб",             to:"2 рота",  cat:"2",   item:"Рюкзак тактичний",      uom:"шт",    qty_in:12,  qty_out:12,   price:2800},
+  {id:12, date:"2025-02-10", doc_type:"Н-440/25", doc_num:"005/25", from:"Штаб",             to:"3 рота",  cat:"1",   item:"Бронежилет 6Б45",       uom:"шт",    qty_in:6,   qty_out:6,    price:8500},
+  {id:13, date:"2025-02-10", doc_type:"Н-440/25", doc_num:"005/25", from:"Штаб",             to:"3 рота",  cat:"1",   item:"Автомат АК-74М",        uom:"шт",    qty_in:5,   qty_out:5,    price:15200},
+  {id:14, date:"2025-02-10", doc_type:"Н-440/25", doc_num:"005/25", from:"Штаб",             to:"3 рота",  cat:"2",   item:"Рюкзак тактичний",      uom:"шт",    qty_in:10,  qty_out:10,   price:2800},
+  {id:15, date:"2025-02-15", doc_type:"Н-440/25", doc_num:"006/25", from:"Склад бригади",    to:"Штаб",    cat:"1",   item:"Радіостанція Р-187-П1", uom:"шт",    qty_in:15,  qty_out:null, price:45000},
+  {id:16, date:"2025-02-20", doc_type:"Н-440/25", doc_num:"007/25", from:"Штаб",             to:"1 рота",  cat:"1",   item:"Радіостанція Р-187-П1", uom:"шт",    qty_in:3,   qty_out:3,    price:45000},
+  {id:17, date:"2025-02-20", doc_type:"Н-440/25", doc_num:"007/25", from:"Штаб",             to:"2 рота",  cat:"1",   item:"Радіостанція Р-187-П1", uom:"шт",    qty_in:3,   qty_out:3,    price:45000},
+  {id:18, date:"2025-03-01", doc_type:"Н-440/25", doc_num:"008/25", from:"Штаб",             to:"1 рота",  cat:"1",   item:"Аптечка IFAK",          uom:"шт",    qty_in:20,  qty_out:20,   price:1200},
+  {id:19, date:"2025-03-01", doc_type:"Н-440/25", doc_num:"008/25", from:"Штаб",             to:"3 рота",  cat:"1",   item:"Аптечка IFAK",          uom:"шт",    qty_in:15,  qty_out:15,   price:1200},
+  {id:20, date:"2025-03-01", doc_type:"Н-440/25", doc_num:"008/25", from:"Штаб",             to:"4 рота",  cat:"1",   item:"Аптечка IFAK",          uom:"шт",    qty_in:15,  qty_out:15,   price:1200},
+  {id:21, date:"2025-03-10", doc_type:"Н-431",    doc_num:"001/25", from:"ТОВ «Тактика-Л»", to:"Штаб",    cat:"1",   item:"Турнікет CAT",          uom:"шт",    qty_in:200, qty_out:null, price:850},
+  {id:22, date:"2025-03-15", doc_type:"Н-440/25", doc_num:"009/25", from:"Штаб",             to:"1 рота",  cat:"1",   item:"Турнікет CAT",          uom:"шт",    qty_in:40,  qty_out:40,   price:850},
+  {id:23, date:"2025-03-15", doc_type:"Н-440/25", doc_num:"009/25", from:"Штаб",             to:"4 рота",  cat:"1",   item:"Турнікет CAT",          uom:"шт",    qty_in:40,  qty_out:40,   price:850},
+  {id:24, date:"2025-03-20", doc_type:"Н-440/25", doc_num:"010/25", from:"Штаб",             to:"4 рота",  cat:"1",   item:"Бронежилет 6Б45",       uom:"шт",    qty_in:6,   qty_out:6,    price:8500},
+  {id:25, date:"2025-03-20", doc_type:"Н-440/25", doc_num:"010/25", from:"Штаб",             to:"5 рота",  cat:"1",   item:"Бронежилет 6Б45",       uom:"шт",    qty_in:3,   qty_out:3,    price:8500},
+  {id:26, date:"2025-04-02", doc_type:"РВ-57",    doc_num:"001/25", from:"1 рота",           to:"1 рота",  cat:"1",   item:"Бронежилет 6Б45",       uom:"шт",    qty_in:null, qty_out:8,   price:8500},
+  {id:27, date:"2025-04-10", doc_type:"Н-440/25", doc_num:"011/25", from:"Склад бригади",    to:"Штаб",    cat:"2",   item:"Мішок спальний зим.",   uom:"шт",    qty_in:60,  qty_out:null, price:3200},
+  {id:28, date:"2025-04-10", doc_type:"Н-440/25", doc_num:"011/25", from:"Склад бригади",    to:"Штаб",    cat:"1",   item:"Плащ-намет",             uom:"шт",    qty_in:50,  qty_out:null, price:320},
+];
+
+function opType(o) {
+  const fromInt = INTERNAL.includes(o.from);
+  const toInt   = INTERNAL.includes(o.to);
+  if (fromInt && toInt) return 'move';
+  if (!fromInt && toInt) return 'in';
+  return 'out';
+}
+
+function getFiltered() {
+  const q = document.getElementById('search-input').value.toLowerCase().trim();
+  return ops.filter(o => {
+    if (tab !== 'all' && opType(o) !== tab) return false;
+    if (unit && o.from !== unit && o.to !== unit) return false;
+    if (q && ![o.item, o.doc_num, o.doc_type, o.from, o.to].some(v => (v||'').toLowerCase().includes(q))) return false;
+    return true;
+  });
+}
+
+function formatDate(d) {
+  const [y,m,day] = d.split('-');
+  return `${day}.${m}.${y}`;
+}
+
+function fmtQty(v) {
+  if (!v) return null;
+  return Number.isInteger(v) ? v.toString() : v.toFixed(4).replace(/\.?0+$/, '');
+}
+
+function fmtPrice(v) {
+  if (!v && v !== 0) return '—';
+  return v.toLocaleString('uk-UA', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function catClass(c) {
+  if (!c) return '';
+  if (c === 'пр.') return 'cat-pr';
+  if (c === 'непр.') return 'cat-npr';
+  return 'cat-' + c;
+}
+
+function docClass(t) {
+  if (!t) return '';
+  if (t.startsWith('Н-440')) return 'doc-440';
+  if (t.startsWith('Н-431')) return 'doc-431';
+  if (t.startsWith('РВ'))   return 'doc-57';
+  return '';
+}
+
+function renderUnitChips() {
+  const counts = {};
+  ops.forEach(o => {
+    if (o.from && INTERNAL.includes(o.from)) counts[o.from] = (counts[o.from]||0)+1;
+    if (o.to   && INTERNAL.includes(o.to))   counts[o.to]   = (counts[o.to]||0)+1;
+  });
+  const wrap = document.getElementById('unit-chips');
+  wrap.textContent = '';
+  INTERNAL.forEach(u => {
+    if (!counts[u]) return;
+    const chip = document.createElement('div');
+    chip.className = 'sub-chip' + (unit === u ? ' on' : '');
+    chip.onclick = () => setUnit(u);
+    const label = document.createTextNode(u + ' ');
+    const cnt = document.createElement('span');
+    cnt.className = 'c';
+    cnt.textContent = counts[u];
+    chip.appendChild(label);
+    chip.appendChild(cnt);
+    wrap.appendChild(chip);
+  });
+  document.getElementById('sub-clear').style.display = unit ? '' : 'none';
+}
+
+function renderTable() {
+  const filtered = getFiltered();
+  const tbody = document.getElementById('ops-tbody');
+  tbody.textContent = '';
+
+  const allCnt  = ops.length;
+  const inCnt   = ops.filter(o => opType(o) === 'in').length;
+  const outCnt  = ops.filter(o => opType(o) === 'out').length;
+  const moveCnt = ops.filter(o => opType(o) === 'move').length;
+  document.getElementById('tile-count').textContent = filtered.length;
+  document.getElementById('c-all').textContent  = allCnt;
+  document.getElementById('c-in').textContent   = inCnt;
+  document.getElementById('c-out').textContent  = outCnt;
+  document.getElementById('c-move').textContent = moveCnt;
+
+  if (filtered.length === 0) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 13;
+    const div = document.createElement('div');
+    div.className = 'empty-state';
+    const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svg.setAttribute('viewBox','0 0 24 24'); svg.setAttribute('fill','none'); svg.setAttribute('stroke','currentColor'); svg.setAttribute('stroke-width','1.5');
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d','M9 17H7A5 5 0 017 7h2M15 7h2a5 5 0 010 10h-2M8 12h8');
+    svg.appendChild(path);
+    const p = document.createElement('p');
+    p.textContent = 'Нічого не знайдено';
+    const reset = document.createElement('span');
+    reset.className = 'reset';
+    reset.textContent = 'Скинути фільтри';
+    reset.onclick = resetFilters;
+    div.appendChild(svg); div.appendChild(p); div.appendChild(reset);
+    td.appendChild(div); tr.appendChild(td); tbody.appendChild(tr);
+    document.getElementById('count-text').textContent = '';
+    return;
+  }
+
+  filtered.forEach((o, i) => {
+    const tr = document.createElement('tr');
+
+    const qIn  = fmtQty(o.qty_in);
+    const qOut = fmtQty(o.qty_out);
+
+    const cells = [
+      // #
+      (() => { const td = document.createElement('td'); const span = document.createElement('span'); span.className='td-idx'; span.textContent=o.id; td.appendChild(span); return td; })(),
+      // Дата
+      (() => { const td = document.createElement('td'); td.className='td-mono'; td.textContent=formatDate(o.date); return td; })(),
+      // Тип документа
+      (() => { const td = document.createElement('td'); if(o.doc_type){const span=document.createElement('span');span.className='doc-badge '+docClass(o.doc_type);span.textContent=o.doc_type;td.appendChild(span);}else{td.textContent='—';} return td; })(),
+      // № документа
+      (() => { const td = document.createElement('td'); td.className='td-mono'; td.textContent=o.doc_num||'—'; return td; })(),
+      // Звідки
+      (() => { const td = document.createElement('td'); td.textContent=o.from||'—'; return td; })(),
+      // Куди
+      (() => { const td = document.createElement('td'); td.textContent=o.to||'—'; return td; })(),
+      // Категорія
+      (() => { const td = document.createElement('td'); if(o.cat){const span=document.createElement('span');span.className='cat-badge '+catClass(o.cat);span.textContent=o.cat;td.appendChild(span);}else{td.textContent='—';} return td; })(),
+      // Найменування
+      (() => { const td = document.createElement('td'); td.className='td-item'; td.textContent=o.item||'—'; return td; })(),
+      // Од.
+      (() => { const td = document.createElement('td'); td.className='td-mono'; td.style.textAlign='right'; td.textContent=o.uom||'—'; return td; })(),
+      // Надійшло
+      (() => { const td = document.createElement('td'); td.className='td-num'; if(qIn){td.className='td-num qty-in';td.textContent=qIn;}else{const s=document.createElement('span');s.className='qty-dash';s.textContent='—';td.appendChild(s);} return td; })(),
+      // Вибуло
+      (() => { const td = document.createElement('td'); td.className='td-num'; if(qOut){td.className='td-num qty-out';td.textContent=qOut;}else{const s=document.createElement('span');s.className='qty-dash';s.textContent='—';td.appendChild(s);} return td; })(),
+      // Ціна
+      (() => { const td = document.createElement('td'); td.className='td-num'; td.textContent=fmtPrice(o.price); return td; })(),
+      // Дії
+      (() => {
+        const td = document.createElement('td');
+        const div = document.createElement('div');
+        div.className = 'acts';
+        const btnE = document.createElement('button');
+        btnE.className = 'act e'; btnE.title = 'Редагувати';
+        btnE.onclick = () => openEdit(o.id);
+        btnE.appendChild((() => { const s=document.createElementNS('http://www.w3.org/2000/svg','svg');s.setAttribute('viewBox','0 0 24 24');s.setAttribute('fill','none');s.setAttribute('stroke','currentColor');s.setAttribute('stroke-width','2');const p=document.createElementNS('http://www.w3.org/2000/svg','path');p.setAttribute('d','M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7');const p2=document.createElementNS('http://www.w3.org/2000/svg','path');p2.setAttribute('d','M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z');s.appendChild(p);s.appendChild(p2);return s; })());
+        const btnD = document.createElement('button');
+        btnD.className = 'act d'; btnD.title = 'Видалити';
+        btnD.onclick = () => deleteOp(o.id);
+        btnD.appendChild((() => { const s=document.createElementNS('http://www.w3.org/2000/svg','svg');s.setAttribute('viewBox','0 0 24 24');s.setAttribute('fill','none');s.setAttribute('stroke','currentColor');s.setAttribute('stroke-width','2');const pl=document.createElementNS('http://www.w3.org/2000/svg','polyline');pl.setAttribute('points','3 6 5 6 21 6');const p=document.createElementNS('http://www.w3.org/2000/svg','path');p.setAttribute('d','M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2');s.appendChild(pl);s.appendChild(p);return s; })());
+        div.appendChild(btnE); div.appendChild(btnD); td.appendChild(div);
+        return td;
+      })(),
+    ];
+
+    cells.forEach(td => tr.appendChild(td));
+    tbody.appendChild(tr);
+  });
+
+  const foot = document.getElementById('count-text');
+  foot.textContent = '';
+  const b1 = document.createElement('b'); b1.textContent = filtered.length;
+  const b2 = document.createElement('b'); b2.textContent = ops.length;
+  foot.appendChild(document.createTextNode('Показано '));
+  foot.appendChild(b1);
+  foot.appendChild(document.createTextNode(' з '));
+  foot.appendChild(b2);
+}
+
+function setTab(t, btn) {
+  tab = t;
+  document.querySelectorAll('.tt-btn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  renderTable();
+}
+
+function setUnit(u) {
+  unit = unit === u ? null : u;
+  renderUnitChips();
+  renderTable();
+}
+
+function clearUnit() { unit = null; renderUnitChips(); renderTable(); }
+function resetFilters() {
+  tab = 'all'; unit = null;
+  document.getElementById('search-input').value = '';
+  document.querySelectorAll('.tt-btn').forEach((b,i) => b.classList.toggle('on', i===0));
+  renderUnitChips(); renderTable();
+}
+
+function deleteOp(id) {
+  ops = ops.filter(o => o.id !== id);
+  renderUnitChips(); renderTable();
+  showToast('Запис видалено');
+}
+
+function openModal() {
+  editId = null;
+  document.getElementById('modal-title').textContent = 'Додати операцію';
+  document.querySelector('.btn-submit').textContent = 'Додати';
+  ['f-date','f-doc-num','f-from','f-to','f-item','f-uom','f-price','f-qty-in','f-qty-out','f-notes'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('f-doc-type').value = '';
+  document.getElementById('f-cat').value = '';
+  document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('modal-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('f-date').focus(), 100);
+}
+
+function openEdit(id) {
+  const o = ops.find(x => x.id === id);
+  if (!o) return;
+  editId = id;
+  document.getElementById('modal-title').textContent = 'Редагувати операцію';
+  document.querySelector('.btn-submit').textContent = 'Зберегти';
+  document.getElementById('f-date').value     = o.date || '';
+  document.getElementById('f-doc-type').value = o.doc_type || '';
+  document.getElementById('f-doc-num').value  = o.doc_num || '';
+  document.getElementById('f-cat').value      = o.cat || '';
+  document.getElementById('f-from').value     = o.from || '';
+  document.getElementById('f-to').value       = o.to || '';
+  document.getElementById('f-item').value     = o.item || '';
+  document.getElementById('f-uom').value      = o.uom || '';
+  document.getElementById('f-price').value    = o.price != null ? o.price : '';
+  document.getElementById('f-qty-in').value   = o.qty_in != null ? o.qty_in : '';
+  document.getElementById('f-qty-out').value  = o.qty_out != null ? o.qty_out : '';
+  document.getElementById('f-notes').value    = o.notes || '';
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
+
+function handleOverlayClick(e) {
+  if (e.target.id === 'modal-overlay') closeModal();
+}
+
+function submitOp() {
+  const item = document.getElementById('f-item').value.trim();
+  const date = document.getElementById('f-date').value;
+  if (!item || !date) {
+    ['f-item','f-date'].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el.value.trim()) { el.style.outline = '2px solid var(--red)'; setTimeout(() => el.style.outline = '', 2000); }
+    });
+    return;
+  }
+  const data = {
+    date,
+    doc_type: document.getElementById('f-doc-type').value || '',
+    doc_num:  document.getElementById('f-doc-num').value.trim(),
+    cat:      document.getElementById('f-cat').value || '',
+    from:     document.getElementById('f-from').value.trim(),
+    to:       document.getElementById('f-to').value.trim(),
+    item,
+    uom:      document.getElementById('f-uom').value.trim() || 'шт',
+    price:    parseFloat(document.getElementById('f-price').value) || null,
+    qty_in:   parseFloat(document.getElementById('f-qty-in').value) || null,
+    qty_out:  parseFloat(document.getElementById('f-qty-out').value) || null,
+    notes:    document.getElementById('f-notes').value.trim(),
+  };
+  if (editId !== null) {
+    const o = ops.find(x => x.id === editId);
+    if (o) Object.assign(o, data);
+    showToast('Збережено');
+  } else {
+    ops.push({ id: ++nextId, ...data });
+    showToast('Запис додано');
+  }
+  closeModal();
+  renderUnitChips();
+  renderTable();
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(window._tt);
+  window._tt = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+});
+
+renderUnitChips();
+renderTable();
+</script>
+</body>
+</html>
