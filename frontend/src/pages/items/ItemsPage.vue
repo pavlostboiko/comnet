@@ -2,12 +2,6 @@
   <div class="page-wrap">
     <TopBar>
       <template #actions>
-        <div class="tb-search" :class="{ focused: searchFocused }">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            style="color:var(--text-light);flex-shrink:0"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-          <input v-model="search" placeholder="Пошук за назвою, №, серійним..."
-            @focus="searchFocused=true" @blur="searchFocused=false">
-        </div>
         <button class="btn-primary" @click="openForm(null)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <path d="M12 5v14M5 12h14"/>
@@ -34,6 +28,20 @@
               Несерійні <span class="c">{{ tabCounts.nonserial }}</span>
             </button>
           </div>
+        </div>
+
+        <!-- Search row -->
+        <div class="search-row">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            style="color:var(--text-light);flex-shrink:0"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input ref="searchInputRef" v-model="search"
+            placeholder="Пошук за назвою, №, серійним номером..."
+            @keydown.esc="search = ''" />
+          <kbd v-if="!search" class="search-hint">/</kbd>
+          <button v-if="search" class="search-clear" @click="search = ''; searchInputRef.focus()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
         </div>
 
         <!-- Type filter chips -->
@@ -347,7 +355,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import { createItem, deleteItem as apiDelete, getItem, getItems, updateItem } from '../../api/items.js'
 
@@ -360,11 +368,11 @@ const DOC_TYPE_LABELS = {
 }
 
 // ── State ──────────────────────────────────────────────────────
-const items       = ref([])
-const loading     = ref(false)
-const search      = ref('')
-const searchFocused = ref(false)
-const activeTab   = ref('all')
+const items        = ref([])
+const loading      = ref(false)
+const search       = ref('')
+const searchInputRef = ref(null)
+const activeTab    = ref('all')
 const selectedType = ref(null)
 
 // Card
@@ -547,8 +555,22 @@ async function confirmDelete(item) {
   await fetchItems()
 }
 
+// ── Keyboard shortcut ──────────────────────────────────────────
+function onKeyDown(e) {
+  const tag = document.activeElement?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+  if (e.key === '/' || e.key === '.') {
+    e.preventDefault()
+    searchInputRef.value?.focus()
+  }
+}
+
 // ── Init ───────────────────────────────────────────────────────
-onMounted(fetchItems)
+onMounted(() => {
+  fetchItems()
+  document.addEventListener('keydown', onKeyDown)
+})
+onUnmounted(() => document.removeEventListener('keydown', onKeyDown))
 </script>
 
 <style scoped>
@@ -558,12 +580,16 @@ onMounted(fetchItems)
 .content-scroll::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
 
 /* Topbar slot */
-.tb-search { display:flex; align-items:center; gap:6px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); padding:7px 12px; width:240px; transition:all 0.2s; }
-.tb-search.focused { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-ring); background:var(--surface); width:300px; }
-.tb-search input { border:none; background:transparent; font-family:inherit; font-size:13.5px; color:var(--text); outline:none; width:100%; }
-.tb-search input::placeholder { color:var(--text-light); }
 .btn-primary { display:flex; align-items:center; gap:5px; padding:8px 14px; background:var(--accent); border:none; border-radius:var(--radius-sm); font-family:inherit; font-size:13.5px; font-weight:600; color:white; cursor:pointer; transition:all 0.15s; white-space:nowrap; }
 .btn-primary:hover { background:var(--accent-dark); }
+
+/* Search row */
+.search-row { padding:10px 20px; display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--border-light); background:var(--surface); }
+.search-row input { flex:1; border:none; background:transparent; font-family:inherit; font-size:14px; color:var(--text); outline:none; }
+.search-row input::placeholder { color:var(--text-light); }
+.search-hint { font-family:'DM Mono',monospace; font-size:11px; color:var(--text-light); background:var(--border-light); border:1px solid var(--border); border-radius:3px; padding:1px 5px; line-height:16px; flex-shrink:0; }
+.search-clear { width:20px; height:20px; border:none; background:transparent; cursor:pointer; color:var(--text-light); display:flex; align-items:center; justify-content:center; border-radius:3px; flex-shrink:0; }
+.search-clear:hover { background:var(--border-light); color:var(--text); }
 
 /* Tile */
 .tile { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; }
