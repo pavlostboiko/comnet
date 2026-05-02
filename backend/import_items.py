@@ -7,6 +7,7 @@ Usage:
     docker compose exec backend python import_items.py /app/items.xlsx --dry-run
 """
 
+import re
 import sys
 from decimal import Decimal, InvalidOperation
 
@@ -30,6 +31,11 @@ COLUMN_MAP = {
 }
 
 SKIP_COLUMNS = {'Інвентарний', 'Сума', 'Додл. інформація', 'Додл. Інформація'}
+
+
+def strip_type_prefix(val: str) -> str:
+    """'2. Радіостанції' → 'Радіостанції'"""
+    return re.sub(r'^\d+\.\s*', '', val).strip()
 
 
 def parse_decimal(val) -> Decimal | None:
@@ -114,7 +120,7 @@ def main():
                 unit_of_measure  = str(row_vals['unit_of_measure']).strip()   if row_vals.get('unit_of_measure')  else None,
                 price            = parse_decimal(row_vals.get('price')),
                 quantity         = parse_decimal(row_vals.get('quantity')) or Decimal('1'),
-                item_type        = str(row_vals['item_type']).strip()          if row_vals.get('item_type')        else None,
+                item_type        = strip_type_prefix(str(row_vals['item_type'])) if row_vals.get('item_type')        else None,
                 notes            = str(row_vals['notes']).strip()              if row_vals.get('notes')            else None,
                 is_official      = True,
             )
