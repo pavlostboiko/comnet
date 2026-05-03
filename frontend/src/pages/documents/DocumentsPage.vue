@@ -1,57 +1,78 @@
 <template>
   <div class="page-wrap">
-    <TopBar />
-    <div class="tile">
-      <div class="tile-header">
-        <h2>Документи</h2>
-        <div class="header-actions">
-          <select v-model="typeFilter" class="type-filter">
-            <option value="">Всі типи</option>
-            <option value="надходження">Надходження</option>
-            <option value="переміщення">Переміщення</option>
-            <option value="накладна_25">Накладна (Дод. 25)</option>
-          </select>
-          <div class="create-menu" ref="menuRef">
-            <button class="btn-primary" @click="menuOpen = !menuOpen">+ Новий документ ▾</button>
-            <div v-if="menuOpen" class="dropdown-menu">
-              <div class="dropdown-item" @click="createNew('надходження')">Надходження</div>
-              <div class="dropdown-item" @click="createNew('переміщення')">Переміщення</div>
-              <div class="dropdown-item" @click="createNew('накладна_25')">Накладна (Дод. 25)</div>
-            </div>
+    <TopBar>
+      <template #actions>
+        <div class="create-menu" ref="menuRef">
+          <button class="btn-primary" @click="menuOpen = !menuOpen">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Новий документ
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          <div v-if="menuOpen" class="dropdown-menu">
+            <div class="dropdown-item" @click="createNew('надходження')">Надходження</div>
+            <div class="dropdown-item" @click="createNew('переміщення')">Переміщення</div>
+            <div class="dropdown-item" @click="createNew('накладна_25')">Накладна (Дод. 25)</div>
           </div>
         </div>
-      </div>
+      </template>
+    </TopBar>
 
-      <div v-if="loading" class="empty-state">Завантаження...</div>
-      <div v-else-if="!filtered.length" class="empty-state">Документів немає</div>
-      <table v-else class="data-table">
-        <thead>
-          <tr>
-            <th>Тип</th>
-            <th>№</th>
-            <th>Дата</th>
-            <th>Звідки</th>
-            <th>Куди</th>
-            <th>Позицій</th>
-            <th>Статус</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="doc in filtered" :key="doc.id" @click="open(doc)" class="clickable-row">
-            <td><span class="type-badge" :class="typeClass(doc.doc_type)">{{ typeLabel(doc.doc_type) }}</span></td>
-            <td>{{ doc.doc_number || '—' }}</td>
-            <td>{{ doc.doc_date || '—' }}</td>
-            <td class="unit-cell">{{ doc.from_unit || '—' }}</td>
-            <td class="unit-cell">{{ doc.to_unit || '—' }}</td>
-            <td class="center">{{ doc.items_count }}</td>
-            <td><span class="status-badge" :class="doc.status">{{ statusLabel(doc.status) }}</span></td>
-            <td class="actions-cell" @click.stop>
-              <button class="btn-sm btn-danger" @click="remove(doc)" :disabled="doc.status !== 'draft'">Видалити</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div class="content-scroll">
+      <div class="tile">
+        <div class="tile-header">
+          <span class="tile-title">Документи</span>
+          <span class="tile-count">{{ filtered.length }}</span>
+          <div class="tile-tabs">
+            <button
+              v-for="opt in typeOptions" :key="opt.value"
+              class="tt-btn" :class="{ on: typeFilter === opt.value }"
+              @click="typeFilter = opt.value"
+            >
+              {{ opt.label }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="loading" class="empty-state">Завантаження…</div>
+        <div v-else-if="!filtered.length" class="empty-state">Документів немає</div>
+        <div v-else class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Тип</th>
+                <th>№</th>
+                <th>Дата</th>
+                <th>Звідки</th>
+                <th>Куди</th>
+                <th style="text-align:center">Позицій</th>
+                <th>Статус</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="doc in filtered" :key="doc.id" @click="open(doc)">
+                <td><span class="type-badge" :class="typeClass(doc.doc_type)">{{ typeLabel(doc.doc_type) }}</span></td>
+                <td class="td-mono">{{ doc.doc_number || '—' }}</td>
+                <td class="td-mono">{{ doc.doc_date || '—' }}</td>
+                <td class="td-unit">{{ doc.from_unit || '—' }}</td>
+                <td class="td-unit">{{ doc.to_unit || '—' }}</td>
+                <td class="td-center">{{ doc.items_count }}</td>
+                <td><span class="status-badge" :class="doc.status">{{ statusLabel(doc.status) }}</span></td>
+                <td class="td-acts" @click.stop>
+                  <button class="act-del" @click="remove(doc)" :disabled="doc.status !== 'draft'">Видалити</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="t-foot">{{ docs.length }} документів</div>
+      </div>
     </div>
   </div>
 </template>
@@ -62,12 +83,19 @@ import { useRouter } from 'vue-router'
 import { getDocuments, deleteDocument, createDocument } from '../../api/documents'
 import TopBar from '../../components/TopBar.vue'
 
-const router = useRouter()
-const docs = ref([])
+const router  = useRouter()
+const docs    = ref([])
 const loading = ref(false)
 const typeFilter = ref('')
-const menuOpen = ref(false)
-const menuRef = ref(null)
+const menuOpen   = ref(false)
+const menuRef    = ref(null)
+
+const typeOptions = [
+  { value: '',            label: 'Всі' },
+  { value: 'надходження', label: 'Надходження' },
+  { value: 'переміщення', label: 'Переміщення' },
+  { value: 'накладна_25', label: 'Накладна' },
+]
 
 const filtered = computed(() =>
   typeFilter.value ? docs.value.filter(d => d.doc_type === typeFilter.value) : docs.value
@@ -89,9 +117,7 @@ async function load() {
   finally { loading.value = false }
 }
 
-function open(doc) {
-  router.push(`/documents/${doc.id}`)
-}
+function open(doc) { router.push(`/documents/${doc.id}`) }
 
 async function createNew(docType) {
   menuOpen.value = false
@@ -114,53 +140,64 @@ onBeforeUnmount(() => document.removeEventListener('click', onClickOutside))
 </script>
 
 <style scoped>
-.page-wrap { padding: 16px; }
-.tile { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
-.tile-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.tile-header h2 { margin: 0; font-size: 18px; }
-.header-actions { display: flex; gap: 8px; align-items: center; }
-.type-filter {
-  border: 1px solid #e2e8f0; border-radius: 6px; padding: 7px 10px;
-  font-size: 14px; outline: none; background: #fff;
-}
-.create-menu { position: relative; }
-.btn-primary {
-  background: #2563eb; color: #fff; border: none; border-radius: 6px;
-  padding: 8px 14px; cursor: pointer; font-size: 14px;
-}
-.btn-primary:hover { background: #1d4ed8; }
-.dropdown-menu {
-  position: absolute; right: 0; top: calc(100% + 4px); z-index: 100;
-  background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,.12); min-width: 180px; overflow: hidden;
-}
-.dropdown-item { padding: 10px 14px; cursor: pointer; font-size: 14px; }
-.dropdown-item:hover { background: #f1f5f9; }
-.data-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.data-table th { background: #f8fafc; padding: 10px 12px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 12px; }
-.data-table td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
-.clickable-row { cursor: pointer; }
-.clickable-row:hover td { background: #f8fafc; }
-.center { text-align: center; }
-.unit-cell { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.actions-cell { white-space: nowrap; }
-.btn-sm {
-  padding: 4px 10px; border-radius: 4px; font-size: 13px; cursor: pointer;
-  border: 1px solid #fca5a5; color: #dc2626; background: #fff;
-}
-.btn-sm:hover:not(:disabled) { background: #fef2f2; }
-.btn-sm:disabled { opacity: 0.4; cursor: default; }
-.type-badge {
-  display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 500;
-}
-.type-badge.incoming { background: #d1fae5; color: #065f46; }
-.type-badge.transfer { background: #dbeafe; color: #1e40af; }
-.type-badge.invoice  { background: #fef3c7; color: #92400e; }
-.status-badge {
-  display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px;
-}
-.status-badge.draft  { background: #f1f5f9; color: #475569; }
-.status-badge.signed { background: #d1fae5; color: #065f46; font-weight: 600; }
-.status-badge.receiver_signed { background: #ede9fe; color: #5b21b6; font-weight: 600; }
-.empty-state { color: #94a3b8; padding: 40px; text-align: center; }
+.page-wrap { height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+.content-scroll { flex:1; overflow-y:auto; padding:20px 24px; }
+.content-scroll::-webkit-scrollbar { width:6px; }
+.content-scroll::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+/* TopBar slot */
+.btn-primary { display:flex; align-items:center; gap:5px; padding:8px 14px; background:var(--accent); border:none; border-radius:var(--radius-sm); font-family:inherit; font-size:13.5px; font-weight:600; color:white; cursor:pointer; transition:all 0.15s; white-space:nowrap; }
+.btn-primary:hover { background:var(--accent-dark); }
+.create-menu { position:relative; }
+.dropdown-menu { position:absolute; right:0; top:calc(100% + 6px); z-index:200; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow-xl); min-width:180px; overflow:hidden; }
+.dropdown-item { padding:10px 14px; cursor:pointer; font-size:13.5px; color:var(--text-mid); transition:background 0.1s; }
+.dropdown-item:hover { background:var(--bg); color:var(--text); }
+
+/* Tile */
+.tile { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; }
+.tile-header { padding:12px 20px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--border-light); }
+.tile-title { font-size:15px; font-weight:700; }
+.tile-count { font-family:'DM Mono',monospace; font-size:11.5px; font-weight:500; background:var(--accent-light); color:var(--accent); padding:2px 8px; border-radius:var(--radius-sm); }
+.tile-tabs { display:flex; gap:2px; background:var(--bg); padding:3px; border-radius:var(--radius-sm); border:1px solid var(--border-light); margin-left:auto; }
+.tt-btn { padding:5px 13px; border:none; background:transparent; border-radius:var(--radius-sm); font-family:inherit; font-size:13px; font-weight:500; color:var(--text-light); cursor:pointer; transition:all 0.12s; }
+.tt-btn:hover { color:var(--text-mid); }
+.tt-btn.on { background:var(--surface); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,0.06); font-weight:600; }
+
+/* Table */
+.table-wrap { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; }
+thead tr { background:var(--bg); }
+th { padding:9px 12px; text-align:left; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-light); border-bottom:1px solid var(--border); white-space:nowrap; }
+th:first-child { padding-left:20px; }
+th:last-child { padding-right:20px; width:80px; }
+tbody tr { border-bottom:1px solid var(--border-light); transition:background 0.1s; cursor:pointer; }
+tbody tr:last-child { border-bottom:none; }
+tbody tr:nth-child(even) { background:#f8fafc; }
+tbody tr:hover { background:var(--row-hover) !important; }
+td { padding:10px 12px; font-size:14px; color:var(--text-mid); vertical-align:middle; }
+td:first-child { padding-left:20px; }
+td:last-child { padding-right:20px; }
+.td-mono  { font-family:'DM Mono',monospace; font-size:13px; }
+.td-unit  { max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
+.td-center { text-align:center; font-family:'DM Mono',monospace; font-size:13px; }
+.td-acts  { white-space:nowrap; }
+
+/* Badges */
+.type-badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-sm); font-size:12px; font-weight:600; }
+.type-badge.incoming { background:#d1fae5; color:#065f46; }
+.type-badge.transfer { background:#dbeafe; color:#1e40af; }
+.type-badge.invoice  { background:#fef3c7; color:#92400e; }
+
+.status-badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-sm); font-size:12px; font-weight:500; }
+.status-badge.draft           { background:var(--bg); color:var(--text-light); border:1px solid var(--border); }
+.status-badge.signed          { background:#d1fae5; color:#065f46; font-weight:600; }
+.status-badge.receiver_signed { background:#ede9fe; color:#5b21b6; font-weight:600; }
+
+/* Delete button */
+.act-del { padding:4px 10px; border-radius:var(--radius-sm); font-size:12.5px; cursor:pointer; border:1px solid var(--border); color:var(--text-light); background:transparent; font-family:inherit; transition:all 0.12s; }
+.act-del:hover:not(:disabled) { border-color:var(--red); color:var(--red); background:var(--red-bg); }
+.act-del:disabled { opacity:0.35; cursor:default; }
+
+.empty-state { color:var(--text-light); padding:48px; text-align:center; font-size:14px; }
+.t-foot { padding:9px 20px; border-top:1px solid var(--border-light); font-size:13px; color:var(--text-light); background:var(--bg); }
 </style>
