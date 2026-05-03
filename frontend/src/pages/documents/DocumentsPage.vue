@@ -112,9 +112,16 @@ const typeOptions = [
   { value: 'накладна_25', label: 'Накладна' },
 ]
 
-const filtered = computed(() =>
-  typeFilter.value ? docs.value.filter(d => d.doc_type === typeFilter.value) : docs.value
-)
+const filtered = computed(() => {
+  const list = typeFilter.value
+    ? docs.value.filter(d => d.doc_type === typeFilter.value)
+    : docs.value
+  return [...list].sort((a, b) => {
+    const da = a.doc_date || ''
+    const db = b.doc_date || ''
+    return da < db ? 1 : da > db ? -1 : b.id - a.id
+  })
+})
 
 function typeLabel(t) {
   return { надходження: 'Надходження', переміщення: 'Переміщення', накладна_25: 'Накладна' }[t] || t
