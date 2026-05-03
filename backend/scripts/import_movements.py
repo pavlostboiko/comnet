@@ -3,11 +3,14 @@ Import movements from Excel file and create linked Document records.
 
 Usage:
     docker compose exec backend python scripts/import_movements.py <file.xlsx>
+    docker compose exec backend python scripts/import_movements.py <file.xlsx> --check
+
+--check prints first 5 rows with column values so you can verify the mapping.
 
 Excel format (header in row 2, data from row 3):
     A  - Дата внесення       → entry_date
     B  - Найменування        → item_name
-    D  - № картки            → item_card_num
+    D  - № картки            → item_card_num (FK check against items)
     E  - Одиниця виміру      → unit_of_measure
     F  - Категорія           → category
     G  - Надійшло            → qty_in
@@ -32,7 +35,6 @@ import sys
 import os
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
-from collections import defaultdict
 
 import openpyxl
 from sqlalchemy import create_engine, text
@@ -44,11 +46,41 @@ from app.models import Movement, Person, Document
 DATABASE_URL = os.environ['DATABASE_URL']
 engine = create_engine(DATABASE_URL)
 
-# Map Excel op type → our Document.doc_type
 OP_TYPE_MAP = {
-    'надходження':            'надходження',
-    'внутрішнє переміщення':  'переміщення',
-    'переміщення':            'переміщення',
+    'надходження':           'надходження',
+    'внутрішнє переміщення': 'переміщення',
+    'переміщення':           'переміщення',
+}
+
+COL_LABELS = {
+    0:  'A  entry_date',
+    1:  'B  item_name',
+    2:  'C  (не працює)',
+    3:  'D  item_card_num',
+    4:  'E  unit_of_measure',
+    5:  'F  category',
+    6:  'G  qty_in',
+    7:  'H  qty_out',
+    8:  'I  from_unit',
+    9:  'J  to_unit',
+    10: 'K  mvo_from',
+    11: 'L  mvo_to',
+    12: 'M  basis',
+    13: 'N  doc_date',
+    14: 'O  doc_number',
+    15: 'P  (№ без префіксу)',
+    16: 'Q  serial_number',
+    17: 'R  (виконавець)',
+    18: 'S  nomenclature_code',
+    19: 'T  (термін дії)',
+    20: 'U  price',
+    21: 'V  service',
+    22: 'W  (Поле 10)',
+    23: 'X  (Поле 11)',
+    24: 'Y  doc_type_excel',
+    25: 'Z  op_type',
+    26: 'AA (запасне)',
+    27: 'AB recipient_category',
 }
 
 
@@ -84,111 +116,141 @@ def parse_decimal(val):
         return None
 
 
+def col(row, idx):
+    return row[idx].value if idx < len(row) else None
+
+
 def build_person_map(session):
-    persons = session.query(Person).all()
     mapping = {}
-    for p in persons:
+    for p in session.query(Person).all():
         if p.first_name and p.last_name:
-            key = f"{p.first_name} {p.last_name}".strip().lower()
-            mapping[key] = p.id
+            mapping[f"{p.first_name} {p.last_name}".strip().lower()] = p.id
         if p.search_name:
             mapping[p.search_name.strip().lower()] = p.id
     return mapping
 
 
-def col(row, idx):
-    return row[idx].value if idx < len(row) else None
+def build_item_card_set(session):
+    rows = session.execute(text("SELECT number FROM items WHERE number IS NOT NULL")).fetchall()
+    return {r[0] for r in rows}
+
+
+def check_mode(rows):
+    print("\n=== CHECK MODE: перші 5 рядків ===\n")
+    for i, row in enumerate(rows[:5], start=3):
+        print(f"--- Рядок {i} ---")
+        for idx, label in COL_LABELS.items():
+            val = col(row, idx)
+            if val is not None and str(val).strip():
+                print(f"  [{label}] = {repr(val)}")
+    print("\n=== END CHECK ===\n")
 
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python scripts/import_movements.py <file.xlsx>")
+        print("Usage: python scripts/import_movements.py <file.xlsx> [--check]")
         sys.exit(1)
 
     filepath = sys.argv[1]
+    check = '--check' in sys.argv
+
     if not os.path.exists(filepath):
         print(f"File not found: {filepath}")
         sys.exit(1)
 
     wb = openpyxl.load_workbook(filepath, data_only=True)
     ws = wb.active
-
     rows = list(ws.iter_rows(min_row=3))
     print(f"Found {len(rows)} data rows")
 
+    if check:
+        check_mode(rows)
+        return
+
     with Session(engine) as session:
-        person_map = build_person_map(session)
-        print(f"Loaded {len(person_map)} persons from DB")
+        person_map    = build_person_map(session)
+        item_card_set = build_item_card_set(session)
+        print(f"Loaded {len(person_map)} persons, {len(item_card_set)} item cards from DB")
 
         admin_id = session.execute(
             text("SELECT id FROM users WHERE username = 'admin' LIMIT 1")
         ).scalar()
 
-        # ── Pass 1: build document groups ─────────────────────────────────
-        # Key: (doc_number, doc_date, mapped_doc_type)
-        # Value: first row data for Document header fields
-        doc_groups = {}
+        # ── Pass 1: collect document keys ─────────────────────────────────
+        doc_keys = {}  # (doc_number, doc_date, doc_type) → header fields
         movement_rows = []
-
         skipped = 0
+
         for i, row in enumerate(rows, start=3):
-            item_name = clean(col(row, 1))  # B
+            item_name = clean(col(row, 1))
             if not item_name:
                 skipped += 1
                 continue
 
-            doc_number  = clean(col(row, 14))   # O
-            doc_date    = parse_date(col(row, 13))  # N
-            op_type_raw = clean(col(row, 25))   # Z — тип операції
-            doc_type    = OP_TYPE_MAP.get(
-                (op_type_raw or '').lower().strip(),
-                op_type_raw or 'надходження'
-            )
+            doc_number  = clean(col(row, 14))
+            doc_date    = parse_date(col(row, 13))
+            op_type_raw = clean(col(row, 25))
+            doc_type    = OP_TYPE_MAP.get((op_type_raw or '').lower(), op_type_raw or 'надходження')
+            doc_key     = (doc_number, doc_date, doc_type)
 
-            doc_key = (doc_number, doc_date, doc_type)
-
-            if doc_key not in doc_groups and (doc_number or doc_date):
-                doc_groups[doc_key] = {
-                    'from_unit': clean(col(row, 8)),   # I
-                    'to_unit':   clean(col(row, 9)),   # J
-                    'basis':     clean(col(row, 12)),  # M
-                    'service':   clean(col(row, 21)),  # V
+            if doc_key not in doc_keys and (doc_number or doc_date):
+                doc_keys[doc_key] = {
+                    'from_unit': clean(col(row, 8)),
+                    'to_unit':   clean(col(row, 9)),
+                    'basis':     clean(col(row, 12)),
+                    'service':   clean(col(row, 21)),
                 }
-
             movement_rows.append((i, row, doc_key))
 
-        print(f"Found {len(doc_groups)} unique documents")
+        print(f"Found {len(doc_keys)} unique documents in file")
 
-        # ── Pass 2: create Document records ───────────────────────────────
-        doc_id_map = {}  # doc_key → Document.id
+        # ── Pass 2: get or create Document records ─────────────────────────
+        doc_id_map = {}
+        created_docs = 0
+        reused_docs  = 0
 
-        for doc_key, hdr in doc_groups.items():
+        for doc_key, hdr in doc_keys.items():
             doc_number, doc_date, doc_type = doc_key
-            doc = Document(
-                doc_type   = doc_type,
-                doc_number = doc_number,
-                doc_date   = doc_date,
-                from_unit  = hdr['from_unit'],
-                to_unit    = hdr['to_unit'],
-                basis      = hdr['basis'],
-                service    = hdr['service'],
-                status     = 'signed',
-                signed_at  = datetime.now(timezone.utc),
-                created_by = admin_id,
-            )
-            session.add(doc)
-            session.flush()  # get doc.id
-            doc_id_map[doc_key] = doc.id
 
-        print(f"Created {len(doc_id_map)} Document records")
+            existing = session.execute(
+                text("""SELECT id FROM documents
+                        WHERE doc_number IS NOT DISTINCT FROM :num
+                          AND doc_date   IS NOT DISTINCT FROM :date
+                          AND doc_type   = :dtype
+                        LIMIT 1"""),
+                {'num': doc_number, 'date': doc_date, 'dtype': doc_type}
+            ).scalar()
+
+            if existing:
+                doc_id_map[doc_key] = existing
+                reused_docs += 1
+            else:
+                doc = Document(
+                    doc_type   = doc_type,
+                    doc_number = doc_number,
+                    doc_date   = doc_date,
+                    from_unit  = hdr['from_unit'],
+                    to_unit    = hdr['to_unit'],
+                    basis      = hdr['basis'],
+                    service    = hdr['service'],
+                    status     = 'signed',
+                    signed_at  = datetime.now(timezone.utc),
+                    created_by = admin_id,
+                )
+                session.add(doc)
+                session.flush()
+                doc_id_map[doc_key] = doc.id
+                created_docs += 1
+
+        print(f"Documents: {created_docs} created, {reused_docs} reused")
 
         # ── Pass 3: create Movement records ───────────────────────────────
         imported = 0
         unmatched_persons = set()
 
         for i, row, doc_key in movement_rows:
-            mvo_from_name = clean(col(row, 10))  # K
-            mvo_to_name   = clean(col(row, 11))  # L
+            mvo_from_name = clean(col(row, 10))
+            mvo_to_name   = clean(col(row, 11))
             mvo_from_id = person_map.get(mvo_from_name.lower()) if mvo_from_name else None
             mvo_to_id   = person_map.get(mvo_to_name.lower())   if mvo_to_name   else None
 
@@ -197,27 +259,33 @@ def main():
             if mvo_to_name and not mvo_to_id:
                 unmatched_persons.add(mvo_to_name)
 
+            raw_card = clean(col(row, 3))
+            item_card_num = raw_card if raw_card in item_card_set else None
+            if raw_card and not item_card_num:
+                pass  # silently skip invalid FK, don't spam output
+
             m = Movement(
                 document_id       = doc_id_map.get(doc_key),
-                entry_date        = parse_date(col(row, 0)),    # A
-                item_name         = clean(col(row, 1)),          # B
-                unit_of_measure   = clean(col(row, 4)),          # E
-                category          = clean(col(row, 5)),          # F
-                qty_in            = parse_decimal(col(row, 6)),  # G
-                qty_out           = parse_decimal(col(row, 7)),  # H
-                from_unit         = clean(col(row, 8)),          # I
-                to_unit           = clean(col(row, 9)),          # J
+                entry_date        = parse_date(col(row, 0)),
+                item_name         = clean(col(row, 1)),
+                item_card_num     = item_card_num,
+                unit_of_measure   = clean(col(row, 4)),
+                category          = clean(col(row, 5)),
+                qty_in            = parse_decimal(col(row, 6)),
+                qty_out           = parse_decimal(col(row, 7)),
+                from_unit         = clean(col(row, 8)),
+                to_unit           = clean(col(row, 9)),
                 mvo_from_id       = mvo_from_id,
                 mvo_to_id         = mvo_to_id,
-                basis             = clean(col(row, 12)),         # M
-                doc_date          = parse_date(col(row, 13)),    # N
-                doc_number        = clean(col(row, 14)),         # O
-                serial_number     = clean(col(row, 16)),         # Q
-                nomenclature_code = clean(col(row, 18)),         # S
-                price             = parse_decimal(col(row, 20)), # U
-                service           = clean(col(row, 21)),         # V
-                doc_type          = clean(col(row, 24)),         # Y — Excel doc type label
-                recipient_category= clean(col(row, 27)),         # AB
+                basis             = clean(col(row, 12)),
+                doc_date          = parse_date(col(row, 13)),
+                doc_number        = clean(col(row, 14)),
+                serial_number     = clean(col(row, 16)),
+                nomenclature_code = clean(col(row, 18)),
+                price             = parse_decimal(col(row, 20)),
+                service           = clean(col(row, 21)),
+                doc_type          = clean(col(row, 24)),
+                recipient_category= clean(col(row, 27)),
                 created_by        = admin_id,
             )
             session.add(m)
@@ -226,12 +294,11 @@ def main():
         session.commit()
 
         if unmatched_persons:
-            print(f"\nWarning: {len(unmatched_persons)} МВО not found in persons table:")
+            print(f"\nWarning: МВО not found in persons ({len(unmatched_persons)}):")
             for name in sorted(unmatched_persons):
                 print(f"  - {name}")
 
-        print(f"\nDone: {imported} movements imported, {skipped} skipped, "
-              f"{len(doc_id_map)} documents created")
+        print(f"\nDone: {imported} movements, {skipped} skipped empty rows")
 
 
 if __name__ == '__main__':
