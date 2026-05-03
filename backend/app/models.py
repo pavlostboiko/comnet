@@ -138,6 +138,8 @@ class Movement(Base):
     created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     document = relationship("Document", back_populates="movements")
+    mvo_from = relationship("Person", foreign_keys=[mvo_from_id])
+    mvo_to   = relationship("Person", foreign_keys=[mvo_to_id])
 
 
 class Document(Base):

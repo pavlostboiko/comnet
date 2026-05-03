@@ -225,6 +225,8 @@ class MovementListRead(BaseModel):
     doc_date: Optional[str] = None
     from_unit: Optional[str] = None
     to_unit: Optional[str] = None
+    mvo_from_name: Optional[str] = None
+    mvo_to_name: Optional[str] = None
     category: Optional[str] = None
     item_name: Optional[str] = None
     item_card_num: Optional[str] = None
@@ -234,6 +236,27 @@ class MovementListRead(BaseModel):
     price: Optional[Decimal] = None
 
     model_config = {"from_attributes": True}
+
+    @classmethod
+    def from_movement(cls, m):
+        return cls(
+            id=m.id,
+            entry_date=m.entry_date,
+            doc_type=m.doc_type,
+            doc_number=m.doc_number,
+            doc_date=m.doc_date,
+            from_unit=m.from_unit,
+            to_unit=m.to_unit,
+            mvo_from_name=m.mvo_from.search_name if m.mvo_from else None,
+            mvo_to_name=m.mvo_to.search_name if m.mvo_to else None,
+            category=m.category,
+            item_name=m.item_name,
+            item_card_num=m.item_card_num,
+            unit_of_measure=m.unit_of_measure,
+            qty_in=m.qty_in,
+            qty_out=m.qty_out,
+            price=m.price,
+        )
 
 
 class MovementRead(BaseModel):

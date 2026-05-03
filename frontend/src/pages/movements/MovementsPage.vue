@@ -59,7 +59,9 @@
                 <th style="width:130px">Тип документа</th>
                 <th style="width:110px">№ документа</th>
                 <th style="width:130px">Звідки</th>
+                <th style="width:110px">МВО звідки</th>
                 <th style="width:130px">Куди</th>
+                <th style="width:110px">МВО куди</th>
                 <th style="width:80px">Категорія</th>
                 <th>Найменування</th>
                 <th style="width:50px;text-align:right">Од.</th>
@@ -71,10 +73,10 @@
             </thead>
             <tbody>
               <tr v-if="loading">
-                <td colspan="13" style="text-align:center;padding:32px;color:var(--text-light)">Завантаження…</td>
+                <td colspan="15" style="text-align:center;padding:32px;color:var(--text-light)">Завантаження…</td>
               </tr>
               <tr v-else-if="!filtered.length">
-                <td colspan="13" style="text-align:center;padding:32px;color:var(--text-light)">Нічого не знайдено</td>
+                <td colspan="15" style="text-align:center;padding:32px;color:var(--text-light)">Нічого не знайдено</td>
               </tr>
               <tr v-for="m in filtered" :key="m.id">
                 <td><span class="td-idx">{{ m.id }}</span></td>
@@ -85,7 +87,9 @@
                 </td>
                 <td class="td-mono">{{ m.doc_number || '—' }}</td>
                 <td class="td-unit">{{ m.from_unit || '—' }}</td>
+                <td class="td-unit td-mvo">{{ m.mvo_from_name || '—' }}</td>
                 <td class="td-unit">{{ m.to_unit || '—' }}</td>
+                <td class="td-unit td-mvo">{{ m.mvo_to_name || '—' }}</td>
                 <td>
                   <span v-if="m.category" class="cat-badge" :class="catClass(m.category)">{{ m.category }}</span>
                   <span v-else class="dim">—</span>
@@ -595,6 +599,7 @@ td:last-child  { padding-right:20px; }
 .td-num   { font-family:'DM Mono',monospace; font-size:12.5px; font-variant-numeric:tabular-nums; }
 .td-item  { font-weight:600; color:var(--text); max-width:260px; overflow:hidden; text-overflow:ellipsis; }
 .td-unit  { max-width:130px; overflow:hidden; text-overflow:ellipsis; font-size:13px; }
+.td-mvo   { max-width:110px; color:var(--text-light); font-size:12px; }
 .card-ref { font-family:'DM Mono',monospace; font-size:11px; color:var(--text-light); background:var(--accent-light); padding:1px 6px; border-radius:var(--radius-sm); margin-left:6px; }
 .dim      { color:var(--text-light); }
 .qty-in   { color:#065f46; font-weight:600; }

@@ -20,11 +20,12 @@ def _get_or_404(db: Session, movement_id: int) -> Movement:
 
 @router.get("", response_model=List[MovementListRead])
 def list_movements(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    return (
+    movements = (
         db.query(Movement)
         .order_by(Movement.entry_date.desc().nullslast(), Movement.id.desc())
         .all()
     )
+    return [MovementListRead.from_movement(m) for m in movements]
 
 
 @router.get("/{movement_id}", response_model=MovementRead)
