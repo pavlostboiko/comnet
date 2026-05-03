@@ -28,8 +28,13 @@ const routes = [
   },
   {
     path: '/documents',
-    component: () => import('../pages/PlaceholderPage.vue'),
-    meta: { requiresAuth: true, label: 'Документи' },
+    component: () => import('../pages/documents/DocumentsPage.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/documents/:id',
+    component: () => import('../pages/documents/DocumentFormPage.vue'),
+    meta: { requiresAuth: true },
   },
   {
     path: '/settings',

@@ -9,6 +9,7 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models import User
 from app.routers import auth as auth_router
+from app.routers import documents as documents_router
 from app.routers import items as items_router
 from app.routers import movements as movements_router
 from app.routers import settings as settings_router
@@ -53,6 +54,7 @@ app.include_router(auth_router.router)
 app.include_router(items_router.router)
 app.include_router(movements_router.router)
 app.include_router(settings_router.router)
+app.include_router(documents_router.router)
 
 
 @app.get("/api/health")

@@ -295,3 +295,91 @@ class MovementCreate(BaseModel):
 
 class MovementUpdate(MovementCreate):
     pass
+
+
+# --- Invoices (Накладна вимога Додаток 25) ---
+
+class InvoiceItemCreate(BaseModel):
+    sort_order: Optional[int] = None
+    item_name: Optional[str] = None
+    nomenclature_code: Optional[str] = None
+    unit_of_measure: Optional[str] = None
+    category: Optional[str] = None
+    quantity: Optional[Decimal] = None
+    qty_received: Optional[Decimal] = None
+    price: Optional[Decimal] = None
+    amount: Optional[Decimal] = None
+    notes: Optional[str] = None
+
+
+class InvoiceItemRead(InvoiceItemCreate):
+    id: int
+
+    model_config = {"from_attributes": True}
+
+
+class InvoiceCreate(BaseModel):
+    doc_number: Optional[str] = None
+    doc_date: Optional[str] = None
+    from_unit: Optional[str] = None
+    to_unit: Optional[str] = None
+    status: str = "draft"
+    # накладна-specific header stored in extra_data
+    validity_date: Optional[str] = None
+    composed_date: Optional[str] = None
+    composed_location: Optional[str] = None
+    operation_date: Optional[str] = None
+    service: Optional[str] = None
+    op_type_text: Optional[str] = None
+    basis: Optional[str] = None
+    responsible_recipient: Optional[str] = None
+    sender_id: Optional[int] = None
+    receiver_id: Optional[int] = None
+    commander_id: Optional[int] = None
+    mvo_from_id: Optional[int] = None
+    mvo_to_id: Optional[int] = None
+    total_qty_words: Optional[str] = None
+    total_amount_words: Optional[str] = None
+    items: List[InvoiceItemCreate] = []
+
+
+class InvoiceRead(BaseModel):
+    id: int
+    doc_number: Optional[str] = None
+    doc_date: Optional[str] = None
+    from_unit: Optional[str] = None
+    to_unit: Optional[str] = None
+    status: str
+    validity_date: Optional[str] = None
+    composed_date: Optional[str] = None
+    composed_location: Optional[str] = None
+    operation_date: Optional[str] = None
+    service: Optional[str] = None
+    op_type_text: Optional[str] = None
+    basis: Optional[str] = None
+    responsible_recipient: Optional[str] = None
+    sender_id: Optional[int] = None
+    receiver_id: Optional[int] = None
+    commander_id: Optional[int] = None
+    mvo_from_id: Optional[int] = None
+    mvo_to_id: Optional[int] = None
+    total_qty_words: Optional[str] = None
+    total_amount_words: Optional[str] = None
+    items: List[InvoiceItemRead] = []
+
+    model_config = {"from_attributes": True}
+
+
+class InvoiceListRead(BaseModel):
+    id: int
+    doc_number: Optional[str] = None
+    doc_date: Optional[str] = None
+    from_unit: Optional[str] = None
+    to_unit: Optional[str] = None
+    status: str
+
+    model_config = {"from_attributes": True}
+
+
+class InvoiceUpdate(InvoiceCreate):
+    pass

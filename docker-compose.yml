@@ -21,6 +21,12 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')\" 2>/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
 
   frontend:
     build:
@@ -31,6 +37,22 @@ services:
       - "${FRONTEND_PORT:-3000}:80"
     depends_on:
       - backend
+
+  playwright:
+    profiles: ["test"]
+    build:
+      context: ./tests/e2e
+    env_file: .env
+    environment:
+      TEST_USER: ${FIRST_ADMIN_USERNAME:-admin}
+      TEST_PASS: ${FIRST_ADMIN_PASSWORD:-admin123}
+    depends_on:
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./tests/e2e/results:/results
 
 volumes:
   pgdata:
