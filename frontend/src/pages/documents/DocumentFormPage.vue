@@ -26,8 +26,8 @@
           </button>
         </template>
 
-        <!-- накладна_25: Print + XLSX (always visible) -->
-        <template v-if="form.doc_type === 'накладна_25'">
+        <!-- накладна (будь-який тип): Print + XLSX -->
+        <template v-if="isNakl">
           <button class="btn-outline" @click="printDoc">Друк / PDF</button>
           <button class="btn-outline" @click="exportXlsx" :disabled="exporting">
             {{ exporting ? '...' : 'XLSX' }}
@@ -246,6 +246,7 @@ const unitSettings = ref(null)
 
 const emptyForm = () => ({
   doc_type: 'переміщення',
+  doc_type_label: null,
   doc_number: '', doc_date: '', from_unit: '', to_unit: '',
   basis: '', service: '',
   validity_date: '', composed_date: '', composed_location: '',
@@ -259,6 +260,11 @@ const emptyForm = () => ({
 const form = ref(emptyForm())
 
 const isReadonly = computed(() => form.value.status !== 'draft')
+// накладна_25 created in-app OR imported переміщення via "Накладна (вимога)"
+const isNakl = computed(() =>
+  form.value.doc_type === 'накладна_25' ||
+  (form.value.doc_type_label || '').includes('Накладна')
+)
 
 const personFields = [
   { key: 'sender_id',    label: 'Передає' },

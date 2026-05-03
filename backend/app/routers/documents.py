@@ -118,6 +118,7 @@ def _doc_to_dict(doc: Document) -> dict:
     return {
         "id": doc.id,
         "doc_type": doc.doc_type,
+        "doc_type_label": doc.movements[0].doc_type if doc.movements else None,
         "doc_number": doc.doc_number,
         "doc_date": doc.doc_date,
         "from_unit": doc.from_unit,
