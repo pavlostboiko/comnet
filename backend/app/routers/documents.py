@@ -157,7 +157,7 @@ def list_documents(
             "from_unit": d.from_unit,
             "to_unit": d.to_unit,
             "status": d.status,
-            "items_count": len(d.items),
+            "items_count": len(d.movements) if d.status != 'draft' else len(d.items),
         }
         for d in docs
     ]
