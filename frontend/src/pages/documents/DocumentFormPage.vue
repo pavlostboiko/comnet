@@ -376,7 +376,7 @@ onMounted(async () => {
   try {
     const [doc, ps, its, us] = await Promise.all([
       getDocument(docId.value),
-      http.get('/persons').then(r => r.data),
+      http.get('/settings/persons').then(r => r.data),
       http.get('/items').then(r => r.data),
       http.get('/settings/unit').then(r => r.data).catch(() => null),
     ])
