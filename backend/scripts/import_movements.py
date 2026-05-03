@@ -201,7 +201,6 @@ def main():
                 document_id       = doc_id_map.get(doc_key),
                 entry_date        = parse_date(col(row, 0)),    # A
                 item_name         = clean(col(row, 1)),          # B
-                item_card_num     = clean(col(row, 3)),          # D
                 unit_of_measure   = clean(col(row, 4)),          # E
                 category          = clean(col(row, 5)),          # F
                 qty_in            = parse_decimal(col(row, 6)),  # G
