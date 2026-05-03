@@ -80,8 +80,13 @@ def build_person_map(session):
     persons = session.query(Person).all()
     mapping = {}
     for p in persons:
-        if p.full_name:
-            mapping[p.full_name.strip().lower()] = p.id
+        # Excel format: "Ім'я Прізвище"
+        if p.first_name and p.last_name:
+            key = f"{p.first_name} {p.last_name}".strip().lower()
+            mapping[key] = p.id
+        # Also index by search_name (e.g. "Іваненко І.І.")
+        if p.search_name:
+            mapping[p.search_name.strip().lower()] = p.id
     return mapping
 
 
