@@ -76,21 +76,9 @@ def _sorted_items(doc: Document):
     return sorted(doc.items, key=lambda x: (x.sort_order or 0, x.id))
 
 
-def _doc_to_dict(doc: Document) -> dict:
-    extra = doc.extra_data or {}
-    return {
-        "id": doc.id,
-        "doc_type": doc.doc_type,
-        "doc_number": doc.doc_number,
-        "doc_date": doc.doc_date,
-        "from_unit": doc.from_unit,
-        "to_unit": doc.to_unit,
-        "basis": doc.basis,
-        "service": doc.service,
-        "status": doc.status,
-        "signed_at": doc.signed_at.isoformat() if doc.signed_at else None,
-        **{f: extra.get(f) for f in EXTRA_FIELDS},
-        "items": [
+def _items_for_display(doc: Document) -> list:
+    if doc.items:
+        return [
             {
                 "id": it.id,
                 "sort_order": it.sort_order,
@@ -105,7 +93,41 @@ def _doc_to_dict(doc: Document) -> dict:
                 "notes": it.notes,
             }
             for it in _sorted_items(doc)
-        ],
+        ]
+    # Fallback for imported documents: build from linked movements
+    return [
+        {
+            "id": None,
+            "sort_order": i,
+            "item_name": m.item_name,
+            "nomenclature_code": m.nomenclature_code,
+            "unit_of_measure": m.unit_of_measure,
+            "category": str(m.category) if m.category is not None else None,
+            "quantity": float(m.qty_in or m.qty_out or 0),
+            "qty_received": None,
+            "price": float(m.price) if m.price is not None else None,
+            "amount": float(m.price * (m.qty_in or m.qty_out or 0)) if m.price else None,
+            "notes": m.serial_number,
+        }
+        for i, m in enumerate(sorted(doc.movements, key=lambda x: x.id), 1)
+    ]
+
+
+def _doc_to_dict(doc: Document) -> dict:
+    extra = doc.extra_data or {}
+    return {
+        "id": doc.id,
+        "doc_type": doc.doc_type,
+        "doc_number": doc.doc_number,
+        "doc_date": doc.doc_date,
+        "from_unit": doc.from_unit,
+        "to_unit": doc.to_unit,
+        "basis": doc.basis,
+        "service": doc.service,
+        "status": doc.status,
+        "signed_at": doc.signed_at.isoformat() if doc.signed_at else None,
+        **{f: extra.get(f) for f in EXTRA_FIELDS},
+        "items": _items_for_display(doc),
     }
 
 
