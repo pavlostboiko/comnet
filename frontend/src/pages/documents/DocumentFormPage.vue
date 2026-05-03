@@ -1,14 +1,13 @@
 <template>
   <div class="page-wrap">
-    <!-- Top bar -->
-    <div class="top-bar">
-      <router-link to="/documents" class="back-link">← Документи</router-link>
-      <div class="doc-title">
-        <span class="type-badge" :class="typeClass(form.doc_type)">{{ typeLabel(form.doc_type) }}</span>
-        <span class="doc-num">{{ form.doc_number || 'без номера' }}</span>
-        <span class="status-badge" :class="form.status">{{ statusLabel(form.status) }}</span>
-      </div>
-      <div class="top-actions">
+    <TopBar>
+      <template #actions>
+        <router-link to="/documents" class="back-link">← Документи</router-link>
+        <div class="doc-title">
+          <span class="type-badge" :class="typeClass(form.doc_type)">{{ typeLabel(form.doc_type) }}</span>
+          <span class="doc-num">{{ form.doc_number || 'без номера' }}</span>
+          <span class="status-badge" :class="form.status">{{ statusLabel(form.status) }}</span>
+        </div>
         <template v-if="form.status === 'draft'">
           <button class="btn-outline" @click="save" :disabled="saving">
             {{ saving ? 'Збереження...' : 'Зберегти' }}
@@ -24,8 +23,8 @@
           </button>
           <button class="btn-unsign" @click="doUnsign" :disabled="signing">Зняти підпис</button>
         </template>
-      </div>
-    </div>
+      </template>
+    </TopBar>
 
     <div v-if="signErrors.length" class="error-block">
       <b>Для підписання заповніть:</b>
@@ -196,6 +195,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import TopBar from '../../components/TopBar.vue'
 import {
   getDocument, updateDocument, signDocument, unsignDocument, exportDocumentXlsx
 } from '../../api/documents'

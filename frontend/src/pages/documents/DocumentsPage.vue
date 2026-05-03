@@ -1,5 +1,6 @@
 <template>
   <div class="page-wrap">
+    <TopBar />
     <div class="tile">
       <div class="tile-header">
         <h2>Документи</h2>
@@ -59,6 +60,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { getDocuments, deleteDocument, createDocument } from '../../api/documents'
+import TopBar from '../../components/TopBar.vue'
 
 const router = useRouter()
 const docs = ref([])
