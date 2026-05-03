@@ -202,15 +202,20 @@
       </template>
     </div>
 
-    <!-- Print overlay -->
-    <div v-if="showPrint" class="print-overlay">
-      <div class="print-toolbar no-print">
-        <button @click="showPrint = false">✕ Закрити</button>
-        <button @click="window.print()">Друкувати</button>
-      </div>
-      <InvoicePrintView :invoice="form" :unit-settings="unitSettings" :persons="persons" />
-    </div>
   </div>
+
+  <!-- Print overlay teleported to body so @media print can target it separately from #app -->
+  <Teleport to="body">
+    <div v-if="showPrint" class="print-overlay">
+      <div class="print-toolbar">
+        <button class="ptb-btn" @click="showPrint = false">✕ Закрити</button>
+        <button class="ptb-btn ptb-primary" @click="printNow">Друкувати / Зберегти PDF</button>
+      </div>
+      <div class="print-body">
+        <InvoicePrintView :invoice="form" :unit-settings="unitSettings" :persons="persons" />
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
@@ -375,6 +380,7 @@ async function exportXlsx() {
 }
 
 function printDoc() { showPrint.value = true }
+function printNow() { window.print() }
 
 onMounted(async () => {
   loading.value = true
@@ -514,15 +520,39 @@ onMounted(async () => {
 
 .loading { text-align: center; padding: 60px; color: var(--text-light); font-size: 14px; }
 
-/* Print overlay */
-.print-overlay { position: fixed; inset: 0; background: var(--surface); z-index: 9999; overflow: auto; }
-.print-toolbar {
-  display: flex; gap: 8px; padding: 12px 16px; background: var(--bg);
-  border-bottom: 1px solid var(--border); position: sticky; top: 0;
-}
-.print-toolbar button {
-  padding: 6px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border);
-  cursor: pointer; font-size: 13px; background: var(--surface);
-}
 @media print { .no-print { display: none !important; } }
+</style>
+
+<!-- Global styles for the teleported print overlay -->
+<style>
+.print-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: #fff; overflow-y: auto;
+  display: flex; flex-direction: column;
+}
+.print-toolbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px; background: #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+  position: sticky; top: 0; z-index: 1;
+  flex-shrink: 0;
+}
+.ptb-btn {
+  padding: 7px 16px; border-radius: 6px; border: 1px solid #cbd5e1;
+  cursor: pointer; font-size: 13.5px; font-family: inherit;
+  background: #fff; color: #334155;
+}
+.ptb-btn:hover { background: #e2e8f0; }
+.ptb-primary {
+  background: #2563eb; color: #fff; border-color: #2563eb; font-weight: 600;
+}
+.ptb-primary:hover { background: #1d4ed8; }
+.print-body { flex: 1; overflow-y: auto; }
+
+@media print {
+  #app { display: none !important; }
+  .print-overlay { position: static !important; overflow: visible !important; }
+  .print-toolbar { display: none !important; }
+  .print-body { overflow: visible !important; }
+}
 </style>
