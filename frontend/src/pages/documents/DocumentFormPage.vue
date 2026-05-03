@@ -26,8 +26,8 @@
           </button>
         </template>
 
-        <!-- накладна_25 signed: Print + XLSX -->
-        <template v-if="form.doc_type === 'накладна_25' && form.status !== 'draft'">
+        <!-- накладна_25: Print + XLSX (always visible) -->
+        <template v-if="form.doc_type === 'накладна_25'">
           <button class="btn-outline" @click="printDoc">Друк / PDF</button>
           <button class="btn-outline" @click="exportXlsx" :disabled="exporting">
             {{ exporting ? '...' : 'XLSX' }}
