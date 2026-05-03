@@ -18,7 +18,6 @@
       <router-link class="nav-link" to="/documents">Документи</router-link>
       <router-link class="nav-link" to="/residues">Залишки</router-link>
       <router-link class="nav-link" to="/reports">Звіти</router-link>
-      <router-link class="nav-link" to="/documents">Документи</router-link>
       <router-link class="nav-link" to="/settings">Налаштування</router-link>
     </nav>
 
