@@ -8,27 +8,33 @@ Usage:
 --check prints first 5 rows with column values so you can verify the mapping.
 
 Excel format (header in row 2, data from row 3):
-    A  - Дата внесення       → entry_date
-    B  - Найменування        → item_name
-    D  - № картки            → item_card_num (FK check against items)
-    E  - Одиниця виміру      → unit_of_measure
-    F  - Категорія           → category
-    G  - Надійшло            → qty_in
-    H  - Вибуло              → qty_out
-    I  - Звідки              → from_unit
-    J  - Куди                → to_unit
-    K  - МВО звідки          → mvo_from_id (lookup by "Ім'я Прізвище")
-    L  - МВО куди            → mvo_to_id
-    M  - Підстава            → basis
-    N  - Дата документа      → doc_date
-    O  - № документа         → doc_number
-    Q  - Примітка            → serial_number
-    S  - Код номенклатури    → nomenclature_code
-    U  - Ціна                → price
-    V  - Служба              → service
-    Y  - Тип документа Excel → doc_type (Excel label, stored as-is)
-    Z  - Тип операції        → mapped to our doc_type for Document record
-    AB - Категорія отримувача→ recipient_category
+    A (0)  - Дата внесення       → entry_date
+    B (1)  - Найменування        → item_name
+    C (2)  - не працює           → SKIP
+    D (3)  - Одиниця виміру      → unit_of_measure
+    E (4)  - Категорія           → category
+    F (5)  - Надійшло            → qty_in
+    G (6)  - Вибуло              → qty_out
+    H (7)  - Звідки              → from_unit
+    I (8)  - Куди                → to_unit
+    J (9)  - МВО звідки          → mvo_from_id
+    K (10) - МВО куди            → mvo_to_id
+    L (11) - Підстава            → basis
+    M (12) - Дата документа      → doc_date
+    N (13) - № документа         → doc_number
+    O (14) - № без префіксу      → SKIP
+    P (15) - Примітка            → serial_number
+    Q (16) - Виконавець          → SKIP
+    R (17) - Код номенклатури    → nomenclature_code
+    S (18) - Термін дії накладної→ SKIP
+    T (19) - Ціна                → price
+    U (20) - Служба              → service
+    V (21) - Поле 10             → SKIP
+    W (22) - Поле 11             → SKIP
+    X (23) - Поле 12 (№ картки)  → item_card_num (FK check)
+    Y (24) - Тип документа       → doc_type (Excel label, stored as-is)
+    Z (25) - Тип операції        → mapped to our doc_type for Document
+    AA(26) - Категорія отримувача→ recipient_category
 """
 
 import sys
@@ -56,31 +62,30 @@ COL_LABELS = {
     0:  'A  entry_date',
     1:  'B  item_name',
     2:  'C  (не працює)',
-    3:  'D  item_card_num',
-    4:  'E  unit_of_measure',
-    5:  'F  category',
-    6:  'G  qty_in',
-    7:  'H  qty_out',
-    8:  'I  from_unit',
-    9:  'J  to_unit',
-    10: 'K  mvo_from',
-    11: 'L  mvo_to',
-    12: 'M  basis',
-    13: 'N  doc_date',
-    14: 'O  doc_number',
-    15: 'P  (№ без префіксу)',
-    16: 'Q  serial_number',
-    17: 'R  (виконавець)',
-    18: 'S  nomenclature_code',
-    19: 'T  (термін дії)',
-    20: 'U  price',
-    21: 'V  service',
-    22: 'W  (Поле 10)',
-    23: 'X  (Поле 11)',
+    3:  'D  unit_of_measure',
+    4:  'E  category',
+    5:  'F  qty_in',
+    6:  'G  qty_out',
+    7:  'H  from_unit',
+    8:  'I  to_unit',
+    9:  'J  mvo_from',
+    10: 'K  mvo_to',
+    11: 'L  basis',
+    12: 'M  doc_date',
+    13: 'N  doc_number',
+    14: 'O  (№ без префіксу)',
+    15: 'P  serial_number',
+    16: 'Q  (виконавець)',
+    17: 'R  nomenclature_code',
+    18: 'S  (термін дії)',
+    19: 'T  price',
+    20: 'U  service',
+    21: 'V  (Поле 10)',
+    22: 'W  (Поле 11)',
+    23: 'X  item_card_num',
     24: 'Y  doc_type_excel',
     25: 'Z  op_type',
-    26: 'AA (запасне)',
-    27: 'AB recipient_category',
+    26: 'AA recipient_category',
 }
 
 
@@ -177,7 +182,7 @@ def main():
         ).scalar()
 
         # ── Pass 1: collect document keys ─────────────────────────────────
-        doc_keys = {}  # (doc_number, doc_date, doc_type) → header fields
+        doc_keys = {}
         movement_rows = []
         skipped = 0
 
@@ -187,25 +192,25 @@ def main():
                 skipped += 1
                 continue
 
-            doc_number  = clean(col(row, 14))
-            doc_date    = parse_date(col(row, 13))
+            doc_number  = clean(col(row, 13))
+            doc_date    = parse_date(col(row, 12))
             op_type_raw = clean(col(row, 25))
             doc_type    = OP_TYPE_MAP.get((op_type_raw or '').lower(), op_type_raw or 'надходження')
             doc_key     = (doc_number, doc_date, doc_type)
 
             if doc_key not in doc_keys and (doc_number or doc_date):
                 doc_keys[doc_key] = {
-                    'from_unit': clean(col(row, 8)),
-                    'to_unit':   clean(col(row, 9)),
-                    'basis':     clean(col(row, 12)),
-                    'service':   clean(col(row, 21)),
+                    'from_unit': clean(col(row, 7)),
+                    'to_unit':   clean(col(row, 8)),
+                    'basis':     clean(col(row, 11)),
+                    'service':   clean(col(row, 20)),
                 }
             movement_rows.append((i, row, doc_key))
 
         print(f"Found {len(doc_keys)} unique documents in file")
 
         # ── Pass 2: get or create Document records ─────────────────────────
-        doc_id_map = {}
+        doc_id_map   = {}
         created_docs = 0
         reused_docs  = 0
 
@@ -249,8 +254,8 @@ def main():
         unmatched_persons = set()
 
         for i, row, doc_key in movement_rows:
-            mvo_from_name = clean(col(row, 10))
-            mvo_to_name   = clean(col(row, 11))
+            mvo_from_name = clean(col(row, 9))
+            mvo_to_name   = clean(col(row, 10))
             mvo_from_id = person_map.get(mvo_from_name.lower()) if mvo_from_name else None
             mvo_to_id   = person_map.get(mvo_to_name.lower())   if mvo_to_name   else None
 
@@ -259,33 +264,31 @@ def main():
             if mvo_to_name and not mvo_to_id:
                 unmatched_persons.add(mvo_to_name)
 
-            raw_card = clean(col(row, 3))
+            raw_card      = clean(col(row, 23))
             item_card_num = raw_card if raw_card in item_card_set else None
-            if raw_card and not item_card_num:
-                pass  # silently skip invalid FK, don't spam output
 
             m = Movement(
                 document_id       = doc_id_map.get(doc_key),
                 entry_date        = parse_date(col(row, 0)),
                 item_name         = clean(col(row, 1)),
                 item_card_num     = item_card_num,
-                unit_of_measure   = clean(col(row, 4)),
-                category          = clean(col(row, 5)),
-                qty_in            = parse_decimal(col(row, 6)),
-                qty_out           = parse_decimal(col(row, 7)),
-                from_unit         = clean(col(row, 8)),
-                to_unit           = clean(col(row, 9)),
+                unit_of_measure   = clean(col(row, 3)),
+                category          = clean(col(row, 4)),
+                qty_in            = parse_decimal(col(row, 5)),
+                qty_out           = parse_decimal(col(row, 6)),
+                from_unit         = clean(col(row, 7)),
+                to_unit           = clean(col(row, 8)),
                 mvo_from_id       = mvo_from_id,
                 mvo_to_id         = mvo_to_id,
-                basis             = clean(col(row, 12)),
-                doc_date          = parse_date(col(row, 13)),
-                doc_number        = clean(col(row, 14)),
-                serial_number     = clean(col(row, 16)),
-                nomenclature_code = clean(col(row, 18)),
-                price             = parse_decimal(col(row, 20)),
-                service           = clean(col(row, 21)),
+                basis             = clean(col(row, 11)),
+                doc_date          = parse_date(col(row, 12)),
+                doc_number        = clean(col(row, 13)),
+                serial_number     = clean(col(row, 15)),
+                nomenclature_code = clean(col(row, 17)),
+                price             = parse_decimal(col(row, 19)),
+                service           = clean(col(row, 20)),
                 doc_type          = clean(col(row, 24)),
-                recipient_category= clean(col(row, 27)),
+                recipient_category= clean(col(row, 26)),
                 created_by        = admin_id,
             )
             session.add(m)
@@ -298,7 +301,8 @@ def main():
             for name in sorted(unmatched_persons):
                 print(f"  - {name}")
 
-        print(f"\nDone: {imported} movements, {skipped} skipped empty rows")
+        print(f"\nDone: {imported} movements, {skipped} skipped, "
+              f"{created_docs} docs created, {reused_docs} reused")
 
 
 if __name__ == '__main__':
