@@ -65,7 +65,22 @@
                 <td class="td-center">{{ doc.items_count }}</td>
                 <td><span class="status-badge" :class="doc.status">{{ statusLabel(doc.status) }}</span></td>
                 <td class="td-acts" @click.stop>
-                  <button class="act-del" @click="remove(doc)" :disabled="doc.status !== 'draft'">Видалити</button>
+                  <div class="acts">
+                    <button class="act e" title="Відкрити" @click="open(doc)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                        <path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                      </svg>
+                    </button>
+                    <button class="act d" title="Видалити" @click="remove(doc)" :disabled="doc.status !== 'draft'">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/>
+                      </svg>
+                    </button>
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -180,7 +195,14 @@ td:last-child { padding-right:20px; }
 .td-mono  { font-family:'DM Mono',monospace; font-size:13px; }
 .td-unit  { max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
 .td-center { text-align:center; font-family:'DM Mono',monospace; font-size:13px; }
-.td-acts  { white-space:nowrap; }
+.td-acts  { white-space:nowrap; width:64px; }
+.acts { display:flex; gap:2px; opacity:0; transition:opacity 0.12s; justify-content:flex-end; }
+tbody tr:hover .acts { opacity:1; }
+.act { width:28px; height:28px; border-radius:var(--radius-sm); border:none; background:transparent; cursor:pointer; color:var(--text-light); display:flex; align-items:center; justify-content:center; transition:all 0.12s; }
+.act svg { width:14px; height:14px; }
+.act.e:hover { background:var(--accent-light); color:var(--accent); }
+.act.d:hover:not(:disabled) { background:var(--red-bg); color:var(--red); }
+.act:disabled { opacity:0.3; cursor:default; }
 
 /* Badges */
 .type-badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-sm); font-size:12px; font-weight:600; }
@@ -193,10 +215,6 @@ td:last-child { padding-right:20px; }
 .status-badge.signed          { background:#d1fae5; color:#065f46; font-weight:600; }
 .status-badge.receiver_signed { background:#ede9fe; color:#5b21b6; font-weight:600; }
 
-/* Delete button */
-.act-del { padding:4px 10px; border-radius:var(--radius-sm); font-size:12.5px; cursor:pointer; border:1px solid var(--border); color:var(--text-light); background:transparent; font-family:inherit; transition:all 0.12s; }
-.act-del:hover:not(:disabled) { border-color:var(--red); color:var(--red); background:var(--red-bg); }
-.act-del:disabled { opacity:0.35; cursor:default; }
 
 .empty-state { color:var(--text-light); padding:48px; text-align:center; font-size:14px; }
 .t-foot { padding:9px 20px; border-top:1px solid var(--border-light); font-size:13px; color:var(--text-light); background:var(--bg); }
