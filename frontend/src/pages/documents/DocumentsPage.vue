@@ -57,7 +57,10 @@
             </thead>
             <tbody>
               <tr v-for="doc in filtered" :key="doc.id" @click="open(doc)">
-                <td><span class="type-badge" :class="typeClass(doc.doc_type)">{{ typeLabel(doc.doc_type) }}</span></td>
+                <td>
+                  <span class="type-badge" :class="typeClass(doc.doc_type)">{{ typeLabel(doc.doc_type) }}</span>
+                  <div v-if="doc.doc_type_label && doc.doc_type_label !== doc.doc_type" class="doc-type-label">{{ doc.doc_type_label }}</div>
+                </td>
                 <td class="td-mono">{{ doc.doc_number || '—' }}</td>
                 <td class="td-mono">{{ doc.doc_date || '—' }}</td>
                 <td class="td-unit">{{ doc.from_unit || '—' }}</td>
@@ -216,6 +219,7 @@ tbody tr:hover .acts { opacity:1; }
 .type-badge.incoming { background:#d1fae5; color:#065f46; }
 .type-badge.transfer { background:#dbeafe; color:#1e40af; }
 .type-badge.invoice  { background:#fef3c7; color:#92400e; }
+.doc-type-label { font-size:11.5px; color:var(--text-light); margin-top:2px; }
 
 .status-badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-sm); font-size:12px; font-weight:500; }
 .status-badge.draft           { background:var(--bg); color:var(--text-light); border:1px solid var(--border); }

@@ -8,7 +8,9 @@
           <span class="doc-num">{{ form.doc_number || 'без номера' }}</span>
           <span class="status-badge" :class="form.status">{{ statusLabel(form.status) }}</span>
         </div>
-        <template v-if="form.status === 'draft'">
+
+        <!-- накладна_25 draft: Save + Sign -->
+        <template v-if="form.doc_type === 'накладна_25' && form.status === 'draft'">
           <button class="btn-outline" @click="save" :disabled="saving">
             {{ saving ? 'Збереження...' : 'Зберегти' }}
           </button>
@@ -16,9 +18,18 @@
             {{ signing ? '...' : 'Підписати' }}
           </button>
         </template>
-        <template v-else>
+
+        <!-- other types draft: Save only -->
+        <template v-else-if="form.status === 'draft'">
+          <button class="btn-outline" @click="save" :disabled="saving">
+            {{ saving ? 'Збереження...' : 'Зберегти' }}
+          </button>
+        </template>
+
+        <!-- накладна_25 signed: Print + XLSX + Unsign -->
+        <template v-if="form.doc_type === 'накладна_25' && form.status !== 'draft'">
           <button class="btn-outline" @click="printDoc">Друк / PDF</button>
-          <button class="btn-outline" @click="exportXlsx" v-if="form.doc_type === 'накладна_25'" :disabled="exporting">
+          <button class="btn-outline" @click="exportXlsx" :disabled="exporting">
             {{ exporting ? '...' : 'XLSX' }}
           </button>
           <button class="btn-unsign" @click="doUnsign" :disabled="signing">Зняти підпис</button>
@@ -26,160 +37,160 @@
       </template>
     </TopBar>
 
-    <div v-if="signErrors.length" class="error-block">
-      <b>Для підписання заповніть:</b>
-      <ul><li v-for="e in signErrors" :key="e">{{ fieldLabel(e) }}</li></ul>
-    </div>
+    <div class="content-scroll">
+      <div v-if="signErrors.length" class="error-block">
+        <b>Для підписання заповніть:</b>
+        <ul><li v-for="e in signErrors" :key="e">{{ fieldLabel(e) }}</li></ul>
+      </div>
 
-    <div v-if="loading" class="loading">Завантаження...</div>
-    <template v-else>
-      <!-- Header fields -->
-      <div class="tile">
-        <div class="form-grid">
-          <div class="form-row">
-            <label>Тип документа</label>
-            <select v-model="form.doc_type" :disabled="isReadonly">
-              <option value="надходження">Надходження</option>
-              <option value="переміщення">Переміщення</option>
-              <option value="накладна_25">Накладна (Дод. 25)</option>
-            </select>
-          </div>
-          <div class="form-row">
-            <label>№ документа <span class="req">*</span></label>
-            <input v-model="form.doc_number" :readonly="isReadonly" :class="{ missing: signErrors.includes('doc_number') }" />
-          </div>
-          <div class="form-row">
-            <label>Дата <span class="req">*</span></label>
-            <input v-model="form.doc_date" type="date" :readonly="isReadonly" :class="{ missing: signErrors.includes('doc_date') }" />
-          </div>
-          <div class="form-row" v-if="form.doc_type !== 'надходження'">
-            <label>Звідки <span class="req">*</span></label>
-            <input v-model="form.from_unit" :readonly="isReadonly" :class="{ missing: signErrors.includes('from_unit') }" />
-          </div>
-          <div class="form-row">
-            <label>Куди <span class="req">*</span></label>
-            <input v-model="form.to_unit" :readonly="isReadonly" :class="{ missing: signErrors.includes('to_unit') }" />
-          </div>
-          <div class="form-row">
-            <label>Підстава</label>
-            <input v-model="form.basis" :readonly="isReadonly" />
-          </div>
-          <div class="form-row">
-            <label>Служба</label>
-            <input v-model="form.service" :readonly="isReadonly" />
-          </div>
-        </div>
-
-        <!-- Extra fields for накладна_25 -->
-        <template v-if="form.doc_type === 'накладна_25'">
-          <div class="section-divider">Реквізити накладної</div>
+      <div v-if="loading" class="loading">Завантаження...</div>
+      <template v-else>
+        <!-- Header fields -->
+        <div class="tile">
           <div class="form-grid">
             <div class="form-row">
-              <label>Термін дії</label>
-              <input v-model="form.validity_date" :readonly="isReadonly" />
-            </div>
-            <div class="form-row">
-              <label>Дата складання</label>
-              <input v-model="form.composed_date" type="date" :readonly="isReadonly" />
-            </div>
-            <div class="form-row">
-              <label>Місце складання</label>
-              <input v-model="form.composed_location" :readonly="isReadonly" :placeholder="unitSettings?.location" />
-            </div>
-            <div class="form-row">
-              <label>Дата операції</label>
-              <input v-model="form.operation_date" type="date" :readonly="isReadonly" />
-            </div>
-            <div class="form-row">
-              <label>Вид операції</label>
-              <input v-model="form.op_type_text" :readonly="isReadonly" />
-            </div>
-            <div class="form-row">
-              <label>Відп. отримувач</label>
-              <input v-model="form.responsible_recipient" :readonly="isReadonly" />
-            </div>
-          </div>
-          <div class="persons-grid">
-            <div class="person-field" v-for="pf in personFields" :key="pf.key">
-              <label>{{ pf.label }}</label>
-              <select v-model="form[pf.key]" :disabled="isReadonly" class="person-select">
-                <option :value="null">— не вказано —</option>
-                <option v-for="p in persons" :key="p.id" :value="p.id">{{ personLabel(p) }}</option>
+              <label>Тип документа</label>
+              <select v-model="form.doc_type" :disabled="isReadonly">
+                <option value="надходження">Надходження</option>
+                <option value="переміщення">Переміщення</option>
+                <option value="накладна_25">Накладна (Дод. 25)</option>
               </select>
             </div>
-          </div>
-          <div class="form-grid" style="margin-top:12px">
             <div class="form-row">
-              <label>Кількість (прописом)</label>
-              <input v-model="form.total_qty_words" :readonly="isReadonly" />
+              <label>№ документа <span class="req">*</span></label>
+              <input v-model="form.doc_number" :readonly="isReadonly" :class="{ missing: signErrors.includes('doc_number') }" />
             </div>
             <div class="form-row">
-              <label>Сума (прописом)</label>
-              <input v-model="form.total_amount_words" :readonly="isReadonly" />
+              <label>Дата <span class="req">*</span></label>
+              <input v-model="form.doc_date" type="date" :readonly="isReadonly" :class="{ missing: signErrors.includes('doc_date') }" />
+            </div>
+            <div class="form-row" v-if="form.doc_type !== 'надходження'">
+              <label>Звідки <span class="req">*</span></label>
+              <input v-model="form.from_unit" :readonly="isReadonly" :class="{ missing: signErrors.includes('from_unit') }" />
+            </div>
+            <div class="form-row">
+              <label>Куди <span class="req">*</span></label>
+              <input v-model="form.to_unit" :readonly="isReadonly" :class="{ missing: signErrors.includes('to_unit') }" />
+            </div>
+            <div class="form-row">
+              <label>Підстава</label>
+              <input v-model="form.basis" :readonly="isReadonly" />
+            </div>
+            <div class="form-row">
+              <label>Служба</label>
+              <input v-model="form.service" :readonly="isReadonly" />
             </div>
           </div>
-        </template>
-      </div>
 
-      <!-- Items -->
-      <div class="tile">
-        <div class="tile-header">
-          <h3>Позиції <span class="items-count">({{ form.items.length }})</span></h3>
-          <button v-if="!isReadonly" class="btn-outline-sm" @click="addItem">+ Рядок</button>
+          <!-- Extra fields only for накладна_25 -->
+          <template v-if="form.doc_type === 'накладна_25'">
+            <div class="section-divider">Реквізити накладної</div>
+            <div class="form-grid">
+              <div class="form-row">
+                <label>Термін дії</label>
+                <input v-model="form.validity_date" :readonly="isReadonly" />
+              </div>
+              <div class="form-row">
+                <label>Дата складання</label>
+                <input v-model="form.composed_date" type="date" :readonly="isReadonly" />
+              </div>
+              <div class="form-row">
+                <label>Місце складання</label>
+                <input v-model="form.composed_location" :readonly="isReadonly" :placeholder="unitSettings?.location" />
+              </div>
+              <div class="form-row">
+                <label>Дата операції</label>
+                <input v-model="form.operation_date" type="date" :readonly="isReadonly" />
+              </div>
+              <div class="form-row">
+                <label>Вид операції</label>
+                <input v-model="form.op_type_text" :readonly="isReadonly" />
+              </div>
+            </div>
+            <div class="section-divider">Підписанти</div>
+            <div class="persons-grid">
+              <div class="person-field" v-for="pf in personFields" :key="pf.key">
+                <label>{{ pf.label }}</label>
+                <select v-model="form[pf.key]" :disabled="isReadonly" class="person-select">
+                  <option :value="null">— не вказано —</option>
+                  <option v-for="p in persons" :key="p.id" :value="p.id">{{ personLabel(p) }}</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-grid" style="margin-top:12px">
+              <div class="form-row">
+                <label>Кількість (прописом)</label>
+                <input v-model="form.total_qty_words" :readonly="isReadonly" />
+              </div>
+              <div class="form-row">
+                <label>Сума (прописом)</label>
+                <input v-model="form.total_amount_words" :readonly="isReadonly" />
+              </div>
+            </div>
+          </template>
         </div>
-        <div class="table-scroll">
-          <table class="items-table">
-            <thead>
-              <tr>
-                <th style="width:36px">№</th>
-                <th>Назва майна</th>
-                <th style="width:120px">Код номенкл.</th>
-                <th style="width:76px">Од.вим.</th>
-                <th style="width:90px">Категорія</th>
-                <th style="width:100px">Ціна</th>
-                <th style="width:90px">К-сть відпр.</th>
-                <th style="width:90px">К-сть прийн.</th>
-                <th style="width:100px">Сума</th>
-                <th style="width:130px">Примітка</th>
-                <th v-if="!isReadonly" style="width:28px"></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(it, idx) in form.items" :key="idx">
-                <td class="center">{{ idx + 1 }}</td>
-                <td>
-                  <div v-if="isReadonly" class="cell-text">{{ it.item_name }}</div>
-                  <ItemAutocomplete v-else v-model="it.item_name" :items="items" @select="onItemSelect(idx, $event)" />
-                </td>
-                <td><CellInput v-model="it.nomenclature_code" :readonly="isReadonly" /></td>
-                <td><CellInput v-model="it.unit_of_measure" :readonly="isReadonly" /></td>
-                <td><CellInput v-model="it.category" :readonly="isReadonly" /></td>
-                <td><CellInput v-model.number="it.price" type="number" :readonly="isReadonly" @change="recalc(idx)" /></td>
-                <td><CellInput v-model.number="it.quantity" type="number" :readonly="isReadonly" @change="recalc(idx)" /></td>
-                <td><CellInput v-model.number="it.qty_received" type="number" :readonly="isReadonly" /></td>
-                <td class="center amount">{{ fmt(it.amount) }}</td>
-                <td><CellInput v-model="it.notes" :readonly="isReadonly" /></td>
-                <td v-if="!isReadonly" class="center">
-                  <button class="del-btn" @click="removeItem(idx)">×</button>
-                </td>
-              </tr>
-              <tr v-if="!form.items.length">
-                <td :colspan="isReadonly ? 10 : 11" class="empty-items">Позицій немає</td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr>
-                <td :colspan="isReadonly ? 6 : 6" class="totals-label">Разом:</td>
-                <td class="center total-val">{{ totalQty }}</td>
-                <td></td>
-                <td class="center total-val">{{ fmt(totalAmount) }}</td>
-                <td :colspan="isReadonly ? 1 : 2"></td>
-              </tr>
-            </tfoot>
-          </table>
+
+        <!-- Items -->
+        <div class="tile">
+          <div class="tile-header">
+            <span class="tile-title">Позиції</span>
+            <span class="tile-count">{{ form.items.length }}</span>
+            <button v-if="!isReadonly" class="btn-outline-sm" @click="addItem">+ Рядок</button>
+          </div>
+          <div class="table-scroll">
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th style="width:36px">№</th>
+                  <th>Назва майна</th>
+                  <th style="width:120px">Код номенкл.</th>
+                  <th style="width:76px">Од.вим.</th>
+                  <th style="width:90px">Категорія</th>
+                  <th style="width:100px">Ціна</th>
+                  <th style="width:90px">К-сть відпр.</th>
+                  <th style="width:90px">К-сть прийн.</th>
+                  <th style="width:100px">Сума</th>
+                  <th style="width:130px">Примітка</th>
+                  <th v-if="!isReadonly" style="width:28px"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(it, idx) in form.items" :key="idx">
+                  <td class="td-center">{{ idx + 1 }}</td>
+                  <td>
+                    <div v-if="isReadonly" class="cell-text">{{ it.item_name }}</div>
+                    <ItemAutocomplete v-else v-model="it.item_name" :items="items" @select="onItemSelect(idx, $event)" />
+                  </td>
+                  <td><CellInput v-model="it.nomenclature_code" :readonly="isReadonly" /></td>
+                  <td><CellInput v-model="it.unit_of_measure" :readonly="isReadonly" /></td>
+                  <td><CellInput v-model="it.category" :readonly="isReadonly" /></td>
+                  <td><CellInput v-model.number="it.price" type="number" :readonly="isReadonly" @change="recalc(idx)" /></td>
+                  <td><CellInput v-model.number="it.quantity" type="number" :readonly="isReadonly" @change="recalc(idx)" /></td>
+                  <td><CellInput v-model.number="it.qty_received" type="number" :readonly="isReadonly" /></td>
+                  <td class="td-center td-amount">{{ fmt(it.amount) }}</td>
+                  <td><CellInput v-model="it.notes" :readonly="isReadonly" /></td>
+                  <td v-if="!isReadonly" class="td-center">
+                    <button class="del-btn" @click="removeItem(idx)">×</button>
+                  </td>
+                </tr>
+                <tr v-if="!form.items.length">
+                  <td :colspan="isReadonly ? 10 : 11" class="empty-items">Позицій немає</td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="6" class="totals-label">Разом:</td>
+                  <td class="td-center total-val">{{ totalQty }}</td>
+                  <td></td>
+                  <td class="td-center total-val">{{ fmt(totalAmount) }}</td>
+                  <td :colspan="isReadonly ? 1 : 2"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
-      </div>
-    </template>
+      </template>
+    </div>
 
     <!-- Print overlay -->
     <div v-if="showPrint" class="print-overlay">
@@ -203,7 +214,6 @@ import http from '../../api/http'
 import ItemAutocomplete from '../invoices/components/ItemAutocomplete.vue'
 import InvoicePrintView from '../invoices/components/InvoicePrintView.vue'
 
-// simple inline cell input
 const CellInput = {
   props: ['modelValue', 'readonly', 'type'],
   emits: ['update:modelValue', 'change'],
@@ -224,15 +234,15 @@ const route = useRoute()
 const router = useRouter()
 const docId = computed(() => Number(route.params.id))
 
-const loading = ref(false)
-const saving = ref(false)
-const signing = ref(false)
+const loading   = ref(false)
+const saving    = ref(false)
+const signing   = ref(false)
 const exporting = ref(false)
 const showPrint = ref(false)
 const signErrors = ref([])
 
-const persons = ref([])
-const items = ref([])
+const persons     = ref([])
+const items       = ref([])
 const unitSettings = ref(null)
 
 const emptyForm = () => ({
@@ -240,7 +250,7 @@ const emptyForm = () => ({
   doc_number: '', doc_date: '', from_unit: '', to_unit: '',
   basis: '', service: '',
   validity_date: '', composed_date: '', composed_location: '',
-  operation_date: '', op_type_text: '', responsible_recipient: '',
+  operation_date: '', op_type_text: '',
   sender_id: null, receiver_id: null, commander_id: null,
   mvo_from_id: null, mvo_to_id: null,
   total_qty_words: '', total_amount_words: '',
@@ -252,11 +262,11 @@ const form = ref(emptyForm())
 const isReadonly = computed(() => form.value.status !== 'draft')
 
 const personFields = [
-  { key: 'sender_id',   label: 'Передає' },
-  { key: 'receiver_id', label: 'Приймає' },
+  { key: 'sender_id',    label: 'Передає' },
+  { key: 'receiver_id',  label: 'Приймає' },
   { key: 'commander_id', label: 'Керівник' },
-  { key: 'mvo_from_id', label: 'МВО здав' },
-  { key: 'mvo_to_id',   label: 'МВО прийняв' },
+  { key: 'mvo_from_id',  label: 'МВО здав' },
+  { key: 'mvo_to_id',    label: 'МВО прийняв' },
 ]
 
 function typeLabel(t) {
@@ -279,7 +289,7 @@ function fieldLabel(f) {
 function personLabel(p) {
   const parts = []
   if (p.rank) parts.push(p.rank)
-  parts.push([p.last_name, p.first_name?.[0]+'.', p.patronymic?.[0]+'.'].filter(Boolean).join(' '))
+  parts.push([p.last_name, p.first_name?.[0] + '.', p.patronymic?.[0] + '.'].filter(Boolean).join(' '))
   return parts.join(' ')
 }
 
@@ -310,7 +320,7 @@ function onItemSelect(idx, item) {
   recalc(idx)
 }
 
-const totalQty = computed(() => form.value.items.reduce((s, it) => s + (Number(it.quantity) || 0), 0))
+const totalQty    = computed(() => form.value.items.reduce((s, it) => s + (Number(it.quantity) || 0), 0))
 const totalAmount = computed(() => form.value.items.reduce((s, it) => s + (Number(it.amount) || 0), 0))
 function fmt(v) {
   if (v == null || v === '') return '—'
@@ -328,7 +338,8 @@ async function save() {
     const updated = await updateDocument(docId.value, form.value)
     applyDoc(updated)
   } finally {
-    saving.value = false }
+    saving.value = false
+  }
 }
 
 async function doSign() {
@@ -389,120 +400,135 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.page-wrap { padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+.page-wrap { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+.content-scroll { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+.content-scroll::-webkit-scrollbar { width: 6px; }
+.content-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-.top-bar {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-}
-.back-link { color: #2563eb; text-decoration: none; font-size: 14px; white-space: nowrap; }
+/* TopBar slot */
+.back-link { color: var(--accent); text-decoration: none; font-size: 13.5px; font-weight: 500; white-space: nowrap; }
 .doc-title { display: flex; align-items: center; gap: 8px; flex: 1; }
-.doc-num { font-size: 16px; font-weight: 600; color: #0f172a; }
-.top-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.doc-num { font-size: 15px; font-weight: 600; color: var(--text); }
 
-.type-badge {
-  display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500;
-}
-.type-badge.incoming { background: #d1fae5; color: #065f46; }
-.type-badge.transfer { background: #dbeafe; color: #1e40af; }
-.type-badge.invoice  { background: #fef3c7; color: #92400e; }
-.status-badge {
-  display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px;
-}
-.status-badge.draft  { background: #f1f5f9; color: #475569; }
-.status-badge.signed { background: #d1fae5; color: #065f46; font-weight: 600; }
-
-.tile { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
-.tile-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-.tile-header h3 { margin: 0; font-size: 15px; }
-.items-count { color: #64748b; font-weight: 400; font-size: 13px; }
-.section-divider { font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: .05em; margin: 16px 0 10px; }
-
-.form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 18px; }
-.form-row { display: flex; flex-direction: column; gap: 3px; }
-.form-row label { font-size: 12px; color: #64748b; font-weight: 500; }
-.form-row input, .form-row select {
-  border: 1px solid #e2e8f0; border-radius: 6px; padding: 7px 10px;
-  font-size: 14px; outline: none; background: #fff;
-}
-.form-row input:focus, .form-row select:focus { border-color: #2563eb; }
-.form-row input[readonly] { background: #f8fafc; color: #475569; }
-.form-row input.missing { border-color: #f87171; background: #fff1f2; }
-.req { color: #ef4444; }
-
-.persons-grid { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 12px; }
-.person-field { display: flex; flex-direction: column; gap: 3px; min-width: 180px; flex: 1; }
-.person-field label { font-size: 12px; color: #64748b; font-weight: 500; }
-.person-select {
-  border: 1px solid #e2e8f0; border-radius: 6px; padding: 7px 10px;
-  font-size: 13px; outline: none; width: 100%;
-}
-.person-select:disabled { background: #f8fafc; color: #475569; }
-
-.table-scroll { overflow-x: auto; }
-.items-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.items-table th {
-  background: #f8fafc; padding: 8px 5px; text-align: center;
-  border: 1px solid #e2e8f0; font-size: 11px; white-space: nowrap;
-}
-.items-table td { padding: 3px 4px; border: 1px solid #e2e8f0; }
-.center { text-align: center; }
-.amount { color: #0f172a; }
-:deep(.cell-input) {
-  width: 100%; border: none; background: transparent; padding: 4px;
-  font-size: 13px; outline: none;
-}
-:deep(.cell-input:focus) { background: #eff6ff; border-radius: 3px; }
-:deep(.cell-readonly) { color: #475569; cursor: default; }
-.cell-text { padding: 4px; font-size: 13px; color: #0f172a; }
-.del-btn { background: none; border: none; cursor: pointer; color: #dc2626; font-size: 16px; padding: 0 4px; }
-.empty-items { text-align: center; color: #94a3b8; padding: 16px; }
-.items-table tfoot td { padding: 8px 5px; font-weight: 600; background: #f8fafc; }
-.totals-label { text-align: right; padding-right: 10px; }
-.total-val { text-align: center; }
-
-.btn-primary {
-  background: #2563eb; color: #fff; border: none; border-radius: 6px;
-  padding: 8px 16px; cursor: pointer; font-size: 14px;
-}
 .btn-outline {
-  background: #fff; color: #334155; border: 1px solid #cbd5e1; border-radius: 6px;
-  padding: 8px 14px; cursor: pointer; font-size: 14px;
+  background: var(--surface); color: var(--text-mid); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 7px 14px; cursor: pointer;
+  font-family: inherit; font-size: 13.5px; font-weight: 500; white-space: nowrap;
 }
-.btn-outline:hover:not(:disabled) { background: #f1f5f9; }
-.btn-outline-sm {
-  background: #fff; color: #334155; border: 1px solid #cbd5e1; border-radius: 6px;
-  padding: 5px 12px; cursor: pointer; font-size: 13px;
-}
-.btn-outline-sm:hover { background: #f1f5f9; }
+.btn-outline:hover:not(:disabled) { background: var(--bg); color: var(--text); }
+.btn-outline:disabled { opacity: 0.5; cursor: default; }
+
 .btn-sign {
-  background: #16a34a; color: #fff; border: none; border-radius: 6px;
-  padding: 8px 18px; cursor: pointer; font-size: 14px; font-weight: 600;
+  background: #16a34a; color: #fff; border: none; border-radius: var(--radius-sm);
+  padding: 7px 18px; cursor: pointer; font-family: inherit; font-size: 13.5px; font-weight: 600;
 }
 .btn-sign:hover:not(:disabled) { background: #15803d; }
 .btn-sign:disabled { opacity: 0.6; cursor: default; }
+
 .btn-unsign {
-  background: #fff; color: #dc2626; border: 1px solid #fca5a5; border-radius: 6px;
-  padding: 8px 14px; cursor: pointer; font-size: 14px;
+  background: var(--surface); color: var(--red, #dc2626); border: 1px solid #fca5a5;
+  border-radius: var(--radius-sm); padding: 7px 14px; cursor: pointer;
+  font-family: inherit; font-size: 13.5px;
 }
 .btn-unsign:hover:not(:disabled) { background: #fef2f2; }
 .btn-unsign:disabled { opacity: 0.6; cursor: default; }
 
+/* Badges */
+.type-badge { display: inline-block; padding: 2px 8px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; }
+.type-badge.incoming { background: #d1fae5; color: #065f46; }
+.type-badge.transfer { background: #dbeafe; color: #1e40af; }
+.type-badge.invoice  { background: #fef3c7; color: #92400e; }
+
+.status-badge { display: inline-block; padding: 2px 8px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 500; }
+.status-badge.draft           { background: var(--bg); color: var(--text-light); border: 1px solid var(--border); }
+.status-badge.signed          { background: #d1fae5; color: #065f46; font-weight: 600; }
+.status-badge.receiver_signed { background: #ede9fe; color: #5b21b6; font-weight: 600; }
+
+/* Tile */
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; padding: 20px; }
+.tile-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.tile-title { font-size: 15px; font-weight: 700; color: var(--text); }
+.tile-count { font-family: 'DM Mono', monospace; font-size: 11.5px; font-weight: 500; background: var(--accent-light); color: var(--accent); padding: 2px 8px; border-radius: var(--radius-sm); }
+
+.section-divider {
+  font-size: 11px; font-weight: 600; color: var(--text-light);
+  text-transform: uppercase; letter-spacing: .07em;
+  margin: 18px 0 10px; border-top: 1px solid var(--border-light); padding-top: 14px;
+}
+
+/* Form */
+.form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 18px; }
+.form-row { display: flex; flex-direction: column; gap: 3px; }
+.form-row label { font-size: 11.5px; color: var(--text-light); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.form-row input, .form-row select {
+  border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 10px;
+  font-size: 13.5px; font-family: inherit; outline: none; background: var(--surface); color: var(--text);
+}
+.form-row input:focus, .form-row select:focus { border-color: var(--accent); }
+.form-row input[readonly] { background: var(--bg); color: var(--text-mid); cursor: default; }
+.form-row input.missing { border-color: #f87171; background: #fff1f2; }
+.req { color: #ef4444; }
+
+.persons-grid { display: flex; flex-wrap: wrap; gap: 10px 18px; }
+.person-field { display: flex; flex-direction: column; gap: 3px; min-width: 180px; flex: 1; }
+.person-field label { font-size: 11.5px; color: var(--text-light); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.person-select {
+  border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 10px;
+  font-size: 13px; font-family: inherit; outline: none; width: 100%;
+  background: var(--surface); color: var(--text);
+}
+.person-select:focus { border-color: var(--accent); }
+.person-select:disabled { background: var(--bg); color: var(--text-mid); }
+
+/* Items table */
+.table-scroll { overflow-x: auto; margin: 0 -20px; padding: 0 20px; }
+.items-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.items-table th {
+  background: var(--bg); padding: 8px 6px; text-align: center;
+  border: 1px solid var(--border); font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .05em; color: var(--text-light); white-space: nowrap;
+}
+.items-table td { padding: 3px 4px; border: 1px solid var(--border); color: var(--text-mid); }
+.td-center { text-align: center; }
+.td-amount { color: var(--text); }
+:deep(.cell-input) {
+  width: 100%; border: none; background: transparent; padding: 4px;
+  font-size: 13px; font-family: inherit; outline: none; color: var(--text-mid);
+}
+:deep(.cell-input:focus) { background: var(--accent-light); border-radius: 3px; }
+:deep(.cell-readonly) { cursor: default; }
+.cell-text { padding: 4px; font-size: 13px; color: var(--text-mid); }
+.del-btn { background: none; border: none; cursor: pointer; color: #dc2626; font-size: 16px; padding: 0 4px; }
+.empty-items { text-align: center; color: var(--text-light); padding: 24px; }
+.items-table tfoot td { padding: 8px 6px; font-weight: 600; background: var(--bg); border: 1px solid var(--border); }
+.totals-label { text-align: right; padding-right: 10px; color: var(--text-mid); }
+.total-val { text-align: center; }
+
+.btn-outline-sm {
+  background: var(--surface); color: var(--text-mid); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 5px 12px; cursor: pointer;
+  font-family: inherit; font-size: 13px; margin-left: auto;
+}
+.btn-outline-sm:hover { background: var(--bg); color: var(--text); }
+
+/* Error block */
 .error-block {
-  background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px;
+  background: #fef2f2; border: 1px solid #fca5a5; border-radius: var(--radius);
   padding: 12px 16px; font-size: 14px; color: #dc2626;
 }
 .error-block ul { margin: 6px 0 0 18px; }
 
-.loading { text-align: center; padding: 60px; color: #94a3b8; }
+.loading { text-align: center; padding: 60px; color: var(--text-light); font-size: 14px; }
 
-.print-overlay { position: fixed; inset: 0; background: #fff; z-index: 9999; overflow: auto; }
+/* Print overlay */
+.print-overlay { position: fixed; inset: 0; background: var(--surface); z-index: 9999; overflow: auto; }
 .print-toolbar {
-  display: flex; gap: 8px; padding: 12px 16px; background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0; position: sticky; top: 0;
+  display: flex; gap: 8px; padding: 12px 16px; background: var(--bg);
+  border-bottom: 1px solid var(--border); position: sticky; top: 0;
 }
 .print-toolbar button {
-  padding: 6px 14px; border-radius: 6px; border: 1px solid #cbd5e1;
-  cursor: pointer; font-size: 13px; background: #fff;
+  padding: 6px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border);
+  cursor: pointer; font-size: 13px; background: var(--surface);
 }
 @media print { .no-print { display: none !important; } }
 </style>

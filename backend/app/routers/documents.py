@@ -174,6 +174,7 @@ def list_documents(
         {
             "id": d.id,
             "doc_type": d.doc_type,
+            "doc_type_label": d.movements[0].doc_type if d.movements else None,
             "doc_number": d.doc_number,
             "doc_date": d.doc_date,
             "from_unit": d.from_unit,
