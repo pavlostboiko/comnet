@@ -26,14 +26,17 @@
           </button>
         </template>
 
-        <!-- накладна_25 signed: Print + XLSX + Unsign -->
+        <!-- накладна_25 signed: Print + XLSX -->
         <template v-if="form.doc_type === 'накладна_25' && form.status !== 'draft'">
           <button class="btn-outline" @click="printDoc">Друк / PDF</button>
           <button class="btn-outline" @click="exportXlsx" :disabled="exporting">
             {{ exporting ? '...' : 'XLSX' }}
           </button>
-          <button class="btn-unsign" @click="doUnsign" :disabled="signing">Зняти підпис</button>
         </template>
+        <!-- All signed docs: Unsign -->
+        <button v-if="form.status !== 'draft'" class="btn-unsign" @click="doUnsign" :disabled="signing">
+          Зняти підпис
+        </button>
       </template>
     </TopBar>
 
@@ -161,14 +164,21 @@
                     <div v-if="isReadonly" class="cell-text">{{ it.item_name }}</div>
                     <ItemAutocomplete v-else v-model="it.item_name" :items="items" @select="onItemSelect(idx, $event)" />
                   </td>
-                  <td><CellInput v-model="it.nomenclature_code" :readonly="isReadonly" /></td>
-                  <td><CellInput v-model="it.unit_of_measure" :readonly="isReadonly" /></td>
-                  <td><CellInput v-model="it.category" :readonly="isReadonly" /></td>
-                  <td><CellInput v-model.number="it.price" type="number" :readonly="isReadonly" @change="recalc(idx)" /></td>
-                  <td><CellInput v-model.number="it.quantity" type="number" :readonly="isReadonly" @change="recalc(idx)" /></td>
-                  <td><CellInput v-model.number="it.qty_received" type="number" :readonly="isReadonly" /></td>
+                  <td v-if="isReadonly" class="cell-text">{{ it.nomenclature_code }}</td>
+                  <td v-else><input v-model="it.nomenclature_code" class="cell-input" /></td>
+                  <td v-if="isReadonly" class="cell-text">{{ it.unit_of_measure }}</td>
+                  <td v-else><input v-model="it.unit_of_measure" class="cell-input" /></td>
+                  <td v-if="isReadonly" class="cell-text">{{ it.category }}</td>
+                  <td v-else><input v-model="it.category" class="cell-input" /></td>
+                  <td v-if="isReadonly" class="cell-text td-right">{{ it.price != null ? fmt(it.price) : '' }}</td>
+                  <td v-else><input v-model.number="it.price" type="number" class="cell-input" @change="recalc(idx)" /></td>
+                  <td v-if="isReadonly" class="cell-text td-right">{{ it.quantity != null ? it.quantity : '' }}</td>
+                  <td v-else><input v-model.number="it.quantity" type="number" class="cell-input" @change="recalc(idx)" /></td>
+                  <td v-if="isReadonly" class="cell-text td-right">{{ it.qty_received != null ? it.qty_received : '' }}</td>
+                  <td v-else><input v-model.number="it.qty_received" type="number" class="cell-input" /></td>
                   <td class="td-center td-amount">{{ fmt(it.amount) }}</td>
-                  <td><CellInput v-model="it.notes" :readonly="isReadonly" /></td>
+                  <td v-if="isReadonly" class="cell-text">{{ it.notes }}</td>
+                  <td v-else><input v-model="it.notes" class="cell-input" /></td>
                   <td v-if="!isReadonly" class="td-center">
                     <button class="del-btn" @click="removeItem(idx)">×</button>
                   </td>
@@ -213,22 +223,6 @@ import {
 import http from '../../api/http'
 import ItemAutocomplete from '../invoices/components/ItemAutocomplete.vue'
 import InvoicePrintView from '../invoices/components/InvoicePrintView.vue'
-
-const CellInput = {
-  props: ['modelValue', 'readonly', 'type'],
-  emits: ['update:modelValue', 'change'],
-  template: `
-    <input
-      :value="modelValue"
-      :type="type || 'text'"
-      :readonly="readonly"
-      class="cell-input"
-      :class="{ 'cell-readonly': readonly }"
-      @input="$emit('update:modelValue', $event.target.value)"
-      @change="$emit('change')"
-    />
-  `,
-}
 
 const route = useRoute()
 const router = useRouter()
@@ -490,13 +484,13 @@ onMounted(async () => {
 }
 .items-table td { padding: 3px 4px; border: 1px solid var(--border); color: var(--text-mid); }
 .td-center { text-align: center; }
+.td-right  { text-align: right; }
 .td-amount { color: var(--text); }
-:deep(.cell-input) {
+.cell-input {
   width: 100%; border: none; background: transparent; padding: 4px;
   font-size: 13px; font-family: inherit; outline: none; color: var(--text-mid);
 }
-:deep(.cell-input:focus) { background: var(--accent-light); border-radius: 3px; }
-:deep(.cell-readonly) { cursor: default; }
+.cell-input:focus { background: var(--accent-light); border-radius: 3px; }
 .cell-text { padding: 4px; font-size: 13px; color: var(--text-mid); }
 .del-btn { background: none; border: none; cursor: pointer; color: #dc2626; font-size: 16px; padding: 0 4px; }
 .empty-items { text-align: center; color: var(--text-light); padding: 24px; }
