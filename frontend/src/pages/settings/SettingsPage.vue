@@ -324,7 +324,7 @@
         </div>
         <div class="modal-foot">
           <button class="btn-cancel" @click="personModalOpen = false">Скасувати</button>
-          <button class="btn-primary" @click="savePerson">Зберегти</button>
+          <button class="btn-primary" @click="savePerson" :disabled="saving">{{ saving ? 'Збереження…' : 'Зберегти' }}</button>
         </div>
       </div>
     </div>
@@ -384,6 +384,9 @@ const searchFocused = ref(false)
 // Op Types
 const opTypes = ref([])
 const openOpTypes = ref(new Set())
+
+// Saving state
+const saving = ref(false)
 
 // Toast
 const toastMsg = ref('')
@@ -486,16 +489,22 @@ function updateSearchName() {
 }
 
 async function savePerson() {
-  const payload = { ...pForm }
-  if (editingPerson.value) {
-    await updatePerson(editingPerson.value.id, payload)
-    showToast('Особу збережено')
-  } else {
-    await createPerson(payload)
-    showToast('Особу додано')
+  if (saving.value) return
+  saving.value = true
+  try {
+    const payload = { ...pForm }
+    if (editingPerson.value) {
+      await updatePerson(editingPerson.value.id, payload)
+      showToast('Особу збережено')
+    } else {
+      await createPerson(payload)
+      showToast('Особу додано')
+    }
+    personModalOpen.value = false
+    await loadPersons()
+  } finally {
+    saving.value = false
   }
-  personModalOpen.value = false
-  await loadPersons()
 }
 
 async function confirmDeletePerson(p) {
