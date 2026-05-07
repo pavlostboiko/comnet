@@ -367,6 +367,10 @@ def export_xlsx(doc_id: int, db: Session = Depends(get_db), _=Depends(get_curren
     c_aln   = Alignment(horizontal="center", vertical="center", wrap_text=True)
     l_aln   = Alignment(horizontal="left",   vertical="center", wrap_text=True)
     r_aln   = Alignment(horizontal="right",  vertical="center", wrap_text=True)
+    # no-wrap variants — allow text to overflow into adjacent empty cells
+    c_nw    = Alignment(horizontal="center", vertical="center", wrap_text=False)
+    l_nw    = Alignment(horizontal="left",   vertical="center", wrap_text=False)
+    r_nw    = Alignment(horizontal="right",  vertical="center", wrap_text=False)
     bold    = Font(bold=True)
 
     wb = Workbook()
@@ -399,59 +403,65 @@ def export_xlsx(doc_id: int, db: Session = Depends(get_db), _=Depends(get_curren
 
     # ── Rows 1–15: Header block ───────────────────────────────────────────────
 
-    # B1:D2 merged — unit name (spans 2 rows)
-    mcel(1, 2, 2, 4, unit_name, aln=l_aln)
-    v(1, 8, "Додаток 25", aln=r_aln)
+    # Row 1: empty B:D; right side "Додаток 25" (no wrap — overflows into I, J)
+    v(1, 8, "Додаток 25", aln=r_nw)
     ws.row_dimensions[1].height = 14.45
 
-    v(2, 8, "до Інструкції з обліку військового майна", aln=r_aln)
+    # Row 2: B2:D2 — unit name (bold, no wrap)
+    mcel(2, 2, 2, 4, unit_name, fnt=bold, aln=c_nw)
+    v(2, 8, "до Інструкції з обліку військового майна", aln=r_nw)
     ws.row_dimensions[2].height = 14.25
 
-    mcel(3, 2, 3, 4, "(найменування юридичної особи)", aln=c_aln)
-    v(3, 8, "у Збройних Силах України", aln=r_aln)
+    # Row 3: B3:D3 — label under unit name
+    mcel(3, 2, 3, 4, "(найменування юридичної особи)", aln=c_nw)
+    v(3, 8, "у Збройних Силах України", aln=r_nw)
 
-    v(4, 1, "Код згідно з\xa0ЄДРПОУ", aln=l_aln)
-    mcel(4, 4, 4, 5, edrpou, aln=c_aln)
-    v(4, 8, "(пункт 24 розділу ІV)", aln=l_aln)
+    # Row 4: ЄДРПОУ (label overflows from A into B:C)
+    v(4, 1, "Код згідно з\xa0ЄДРПОУ", aln=l_nw)
+    mcel(4, 4, 4, 5, edrpou, aln=c_nw, brd=all_bdr)
+    v(4, 8, "(пункт 24 розділу ІV)", aln=l_nw)
     ws.row_dimensions[4].height = 15.4
 
     ws.row_dimensions[5].height = 10  # spacer
 
     validity = extra.get("validity_date") or ""
-    v(6, 2, f'Дійсна до "{validity}"', aln=l_aln)
+    v(6, 2, f'Дійсна до "{validity}"', aln=l_nw)
     ws.row_dimensions[6].height = 14.25
 
-    v(7, 3, "Накладна (вимога)", fnt=Font(bold=True, size=11), aln=c_aln)
-    v(7, 4, "№",                  fnt=Font(bold=True, size=11), aln=c_aln)
-    v(7, 5, doc.doc_number or "", fnt=Font(bold=True, size=11), aln=l_aln)
+    # Row 7: "Накладна (вимога)  №  [number]"
+    # C7 is center-aligned → overflows left into empty B7
+    v(7, 3, "Накладна (вимога)", fnt=Font(bold=True, size=11), aln=c_nw)
+    v(7, 4, "№",                  fnt=Font(bold=True, size=11), aln=c_nw)
+    v(7, 5, doc.doc_number or "", fnt=Font(bold=True, size=11), aln=l_nw)
     ws.row_dimensions[7].height = 21.6
 
     # Rows 8–11: location and signing date (right side, columns I:J)
-    mcel(8,  9, 8,  10, location,              aln=c_aln)
-    mcel(9,  9, 9,  10, "(місце складання)",   aln=c_aln)
-    mcel(10, 9, 10, 10, extra.get("composed_date") or doc.doc_date or "", aln=c_aln)
-    mcel(11, 9, 11, 10, "(дата складання)",    aln=c_aln)
+    mcel(8,  9, 8,  10, location,              aln=c_nw)
+    mcel(9,  9, 9,  10, "(місце складання)",   aln=c_nw)
+    mcel(10, 9, 10, 10, extra.get("composed_date") or doc.doc_date or "", aln=c_nw)
+    mcel(11, 9, 11, 10, "(дата складання)",    aln=c_nw)
     ws.row_dimensions[8].height = 14.45
 
-    v(12, 1, "Дата операції", aln=l_aln)
-    v(12, 3, extra.get("operation_date") or "", aln=l_aln)
-    v(12, 5, "Служба забезпечення", aln=l_aln)
-    v(12, 9, doc.service or "", aln=l_aln)
+    # Rows 12–15: operation info (labels overflow from narrow A and E columns)
+    v(12, 1, "Дата операції", aln=l_nw)
+    v(12, 3, extra.get("operation_date") or "", aln=l_nw)
+    v(12, 5, "Служба забезпечення", aln=l_nw)
+    v(12, 9, doc.service or "", aln=l_nw)
     ws.row_dimensions[12].height = 15.4
 
-    v(13, 1, "Вид операції", aln=l_aln)
+    v(13, 1, "Вид операції", aln=l_nw)
     mcel(13, 3, 13, 4, extra.get("op_type_text") or "", aln=l_aln)
-    v(13, 5, "Підстава (мета) ", aln=l_aln)
+    v(13, 5, "Підстава (мета) ", aln=l_nw)
     mcel(13, 9, 13, 10, doc.basis or "", aln=l_aln)
     ws.row_dimensions[13].height = 26.0
 
-    v(14, 1, "Відповідальний одержувач ", aln=l_aln)
+    v(14, 1, "Відповідальний одержувач ", aln=l_nw)
     mcel(14, 3, 14, 10, extra.get("responsible_recipient") or "", aln=l_aln)
     ws.row_dimensions[14].height = 15.6
 
-    v(15, 1, "Передає", aln=l_aln)
+    v(15, 1, "Передає", aln=l_nw)
     mcel(15, 3, 15, 4, doc.from_unit or "", aln=l_aln)
-    v(15, 5, "Приймає", aln=l_aln)
+    v(15, 5, "Приймає", aln=l_nw)
     mcel(15, 9, 15, 10, doc.to_unit or "", aln=l_aln)
     ws.row_dimensions[15].height = 15.4
 
