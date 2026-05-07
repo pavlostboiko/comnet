@@ -661,9 +661,11 @@ def export_xlsx(doc_id: int, db: Session = Depends(get_db), _=Depends(get_curren
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
-    filename = f"накладна_{doc.doc_number or doc.id}.xlsx"
+    from urllib.parse import quote
+    display_name = f"накладна_{doc.doc_number or doc.id}.xlsx"
+    encoded = quote(display_name.encode("utf-8"))
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f"attachment; filename=\"nakladna.xlsx\"; filename*=UTF-8''{encoded}"},
     )
