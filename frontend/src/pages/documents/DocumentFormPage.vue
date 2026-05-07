@@ -388,9 +388,14 @@ async function exportXlsx() {
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
   } catch (e) {
-    const detail = e.response?.data?.detail || e.response?.data || e.message
+    let detail = e.message
+    if (e.response?.data instanceof Blob) {
+      detail = await e.response.data.text()
+    } else if (e.response?.data?.detail) {
+      detail = e.response.data.detail
+    }
     console.error('XLSX export error:', detail)
-    alert('Помилка експорту:\n' + JSON.stringify(detail, null, 2).slice(0, 500))
+    alert('Помилка експорту:\n' + String(detail).slice(0, 1000))
   } finally {
     exporting.value = false
   }
