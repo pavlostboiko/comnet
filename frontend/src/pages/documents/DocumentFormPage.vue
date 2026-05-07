@@ -383,9 +383,15 @@ async function exportXlsx() {
     const a = document.createElement('a')
     a.href = url
     a.download = `накладна_${form.value.doc_number || docId.value}.xlsx`
+    document.body.appendChild(a)
     a.click()
+    document.body.removeChild(a)
     URL.revokeObjectURL(url)
-  } finally { exporting.value = false }
+  } catch (e) {
+    alert('Помилка експорту: ' + (e.response?.status || e.message))
+  } finally {
+    exporting.value = false
+  }
 }
 
 function printDoc() { showPrint.value = true }
