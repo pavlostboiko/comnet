@@ -253,6 +253,7 @@ const emptyForm = () => ({
   operation_date: '', op_type_text: '',
   sender_id: null, receiver_id: null, commander_id: null,
   mvo_from_id: null, mvo_to_id: null,
+  accountant_id: null, fin_chief_id: null,
   total_qty_words: '', total_amount_words: '',
   status: 'draft',
   items: [],
@@ -267,11 +268,13 @@ const isNakl = computed(() =>
 )
 
 const personFields = [
-  { key: 'sender_id',    label: 'Передає' },
-  { key: 'receiver_id',  label: 'Приймає' },
-  { key: 'commander_id', label: 'Керівник' },
-  { key: 'mvo_from_id',  label: 'МВО здав' },
-  { key: 'mvo_to_id',    label: 'МВО прийняв' },
+  { key: 'sender_id',      label: 'Передає' },
+  { key: 'receiver_id',    label: 'Приймає' },
+  { key: 'commander_id',   label: 'Керівник' },
+  { key: 'mvo_from_id',    label: 'МВО здав' },
+  { key: 'mvo_to_id',      label: 'МВО прийняв' },
+  { key: 'accountant_id',  label: 'Гол. бухгалтер' },
+  { key: 'fin_chief_id',   label: 'Нач. фінслужби' },
 ]
 
 function typeLabel(t) {

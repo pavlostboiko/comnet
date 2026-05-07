@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import Document, DocumentItem, Movement, Person, UnitSettings
+from app.models import Document, DocumentItem, Movement, Person, UnitSettings, User
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -26,6 +26,7 @@ EXTRA_FIELDS = [
     "validity_date", "composed_date", "composed_location", "operation_date",
     "op_type_text", "responsible_recipient",
     "sender_id", "receiver_id", "commander_id", "mvo_from_id", "mvo_to_id",
+    "accountant_id", "fin_chief_id",
     "total_qty_words", "total_amount_words",
 ]
 
@@ -65,6 +66,8 @@ class DocIn(BaseModel):
     commander_id: Optional[int] = None
     mvo_from_id: Optional[int] = None
     mvo_to_id: Optional[int] = None
+    accountant_id: Optional[int] = None
+    fin_chief_id: Optional[int] = None
     total_qty_words: Optional[str] = None
     total_amount_words: Optional[str] = None
     items: List[DocItemIn] = []
@@ -330,136 +333,335 @@ def export_xlsx(doc_id: int, db: Session = Depends(get_db), _=Depends(get_curren
     except ImportError:
         raise HTTPException(500, "openpyxl not installed")
 
-    extra = doc.extra_data or {}
+    extra    = doc.extra_data or {}
     settings = db.query(UnitSettings).first()
 
-    def person_str(pid):
+    # ── Helpers ───────────────────────────────────────────────────────────────
+
+    def _person(pid):
         if not pid:
-            return ""
-        p = db.query(Person).filter(Person.id == int(pid)).first()
+            return None
+        return db.query(Person).filter(Person.id == int(pid)).first()
+
+    def person_name(pid):
+        """Returns 'Ім'я ПРІЗВИЩЕ' (first_name + LAST_NAME uppercase)."""
+        p = _person(pid)
         if not p:
             return ""
-        parts = []
-        if p.rank:
-            parts.append(p.rank)
-        name = " ".join(filter(None, [
-            p.last_name or "",
-            (p.first_name[0] + ".") if p.first_name else "",
-            (p.patronymic[0] + ".") if p.patronymic else "",
-        ]))
-        parts.append(name.strip())
-        return " ".join(parts).strip()
+        return " ".join(filter(None, [p.first_name or "", (p.last_name or "").upper()])).strip()
 
     def person_pos(pid):
-        if not pid:
-            return ""
-        p = db.query(Person).filter(Person.id == int(pid)).first()
+        p = _person(pid)
         return (p.position or "") if p else ""
 
-    thin = Side(style="thin")
-    border = Border(left=thin, right=thin, top=thin, bottom=thin)
-    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    left   = Alignment(horizontal="left",   vertical="center", wrap_text=True)
-    bold   = Font(bold=True)
+    executor_name = ""
+    if doc.created_by:
+        u = db.query(User).filter(User.id == doc.created_by).first()
+        if u:
+            executor_name = u.username
+
+    # ── Styles ────────────────────────────────────────────────────────────────
+    thin    = Side(style="thin")
+    all_bdr = Border(left=thin, right=thin, top=thin, bottom=thin)
+    bot_bdr = Border(bottom=thin)
+    c_aln   = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    l_aln   = Alignment(horizontal="left",   vertical="center", wrap_text=True)
+    r_aln   = Alignment(horizontal="right",  vertical="center", wrap_text=True)
+    bold    = Font(bold=True)
 
     wb = Workbook()
     ws = wb.active
     ws.title = "Накладна"
 
-    col_widths = [4, 28, 16, 9, 9, 13, 11, 11, 13, 20]
-    for i, w in enumerate(col_widths, 1):
+    # Column widths A–J matching nakladna.xlsx reference
+    for i, w in enumerate([4.33, 21.86, 12.13, 4.13, 4.86, 10.66, 4.66, 6.66, 12.66, 11.66], 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
-    def mc(r1, c1, r2, c2, val="", fnt=None, aln=None):
-        ws.merge_cells(start_row=r1, start_column=c1, end_row=r2, end_column=c2)
+    def v(row, col, val="", fnt=None, aln=None, brd=None):
+        c = ws.cell(row=row, column=col, value=val)
+        if fnt: c.font = fnt
+        if aln: c.alignment = aln
+        if brd: c.border = brd
+        return c
+
+    def mcel(r1, c1, r2, c2, val="", fnt=None, aln=None, brd=None):
+        if r1 != r2 or c1 != c2:
+            ws.merge_cells(start_row=r1, start_column=c1, end_row=r2, end_column=c2)
         c = ws.cell(row=r1, column=c1, value=val)
         if fnt: c.font = fnt
         if aln: c.alignment = aln
+        if brd: c.border = brd
         return c
 
-    r = 1
-    unit_name = settings.name if settings else ""
-    edrpou    = settings.edrpou if settings else ""
-    mc(r, 1, r+1, 6, unit_name, fnt=bold, aln=left)
-    mc(r, 7, r, 10, f"Термін дії: {extra.get('validity_date','')}", aln=left)
-    r += 1
-    mc(r, 7, r, 10, f"ЄДРПОУ: {edrpou}", aln=left); r += 1
+    unit_name = (settings.name  or "") if settings else ""
+    edrpou    = (settings.edrpou or "") if settings else ""
+    location  = extra.get("composed_location") or ((settings.location or "") if settings else "")
 
-    mc(r, 1, r, 10, f"НАКЛАДНА (ВИМОГА) № {doc.doc_number or ''}",
-       fnt=Font(bold=True, size=13), aln=center)
-    ws.row_dimensions[r].height = 22; r += 1
+    # ── Rows 1–15: Header block ───────────────────────────────────────────────
 
-    location = extra.get("composed_location") or (settings.location if settings else "") or ""
-    mc(r, 1, r, 5, f"Місце: {location}", aln=left)
-    mc(r, 6, r, 10, f"Дата: {doc.doc_date or ''}", aln=left); r += 1
+    # B1:D2 merged — unit name (spans 2 rows)
+    mcel(1, 2, 2, 4, unit_name, aln=l_aln)
+    v(1, 8, "Додаток 25", aln=r_aln)
+    ws.row_dimensions[1].height = 14.45
 
-    mc(r, 1, r, 5, f"Служба: {doc.service or ''}", aln=left)
-    mc(r, 6, r, 10, f"Вид операції: {extra.get('op_type_text','')}", aln=left); r += 1
+    v(2, 8, "до Інструкції з обліку військового майна", aln=r_aln)
+    ws.row_dimensions[2].height = 14.25
 
-    mc(r, 1, r, 10, f"Підстава: {doc.basis or ''}", aln=left); r += 1
-    mc(r, 1, r, 5, f"Звідки: {doc.from_unit or ''}", aln=left)
-    mc(r, 6, r, 10, f"Куди: {doc.to_unit or ''}", aln=left); r += 1
-    mc(r, 1, r, 5, f"Передає: {person_pos(extra.get('sender_id'))} {person_str(extra.get('sender_id'))}", aln=left)
-    mc(r, 6, r, 10, f"Приймає: {person_pos(extra.get('receiver_id'))} {person_str(extra.get('receiver_id'))}", aln=left); r += 1
+    mcel(3, 2, 3, 4, "(найменування юридичної особи)", aln=c_aln)
+    v(3, 8, "у Збройних Силах України", aln=r_aln)
 
-    headers = [
-        "№\nз/п", "Назва майна або однорідна група",
-        "Код номен-клатури", "Од.\nвиміру", "Кате-горія",
-        "Вартість за од.", "К-сть\nвідпр.", "К-сть\nприйн.", "Сума", "Примітка",
-    ]
-    for col, h in enumerate(headers, 1):
-        c = ws.cell(row=r, column=col, value=h)
-        c.font = bold; c.alignment = center; c.border = border
-    ws.row_dimensions[r].height = 36; r += 1
+    v(4, 1, "Код згідно з\xa0ЄДРПОУ", aln=l_aln)
+    mcel(4, 4, 4, 5, edrpou, aln=c_aln)
+    v(4, 8, "(пункт 24 розділу ІV)", aln=l_aln)
+    ws.row_dimensions[4].height = 15.4
 
+    ws.row_dimensions[5].height = 10  # spacer
+
+    validity = extra.get("validity_date") or ""
+    v(6, 2, f'Дійсна до "{validity}"', aln=l_aln)
+    ws.row_dimensions[6].height = 14.25
+
+    v(7, 3, "Накладна (вимога)", fnt=Font(bold=True, size=11), aln=c_aln)
+    v(7, 4, "№",                  fnt=Font(bold=True, size=11), aln=c_aln)
+    v(7, 5, doc.doc_number or "", fnt=Font(bold=True, size=11), aln=l_aln)
+    ws.row_dimensions[7].height = 21.6
+
+    # Rows 8–11: location and signing date (right side, columns I:J)
+    mcel(8,  9, 8,  10, location,              aln=c_aln)
+    mcel(9,  9, 9,  10, "(місце складання)",   aln=c_aln)
+    mcel(10, 9, 10, 10, extra.get("composed_date") or doc.doc_date or "", aln=c_aln)
+    mcel(11, 9, 11, 10, "(дата складання)",    aln=c_aln)
+    ws.row_dimensions[8].height = 14.45
+
+    v(12, 1, "Дата операції", aln=l_aln)
+    v(12, 3, extra.get("operation_date") or "", aln=l_aln)
+    v(12, 5, "Служба забезпечення", aln=l_aln)
+    v(12, 9, doc.service or "", aln=l_aln)
+    ws.row_dimensions[12].height = 15.4
+
+    v(13, 1, "Вид операції", aln=l_aln)
+    mcel(13, 3, 13, 4, extra.get("op_type_text") or "", aln=l_aln)
+    v(13, 5, "Підстава (мета) ", aln=l_aln)
+    mcel(13, 9, 13, 10, doc.basis or "", aln=l_aln)
+    ws.row_dimensions[13].height = 26.0
+
+    v(14, 1, "Відповідальний одержувач ", aln=l_aln)
+    mcel(14, 3, 14, 10, extra.get("responsible_recipient") or "", aln=l_aln)
+    ws.row_dimensions[14].height = 15.6
+
+    v(15, 1, "Передає", aln=l_aln)
+    mcel(15, 3, 15, 4, doc.from_unit or "", aln=l_aln)
+    v(15, 5, "Приймає", aln=l_aln)
+    mcel(15, 9, 15, 10, doc.to_unit or "", aln=l_aln)
+    ws.row_dimensions[15].height = 15.4
+
+    ws.row_dimensions[16].height = 9.6  # spacer before table
+
+    # ── Rows 17–19: Table header ──────────────────────────────────────────────
+
+    # Columns that span both rows 17 and 18
+    for col, label in [
+        (1,  "№ з/п"),
+        (2,  "Назва військового майна або однорідна група (вид)"),
+        (3,  "Код номенклатури"),
+        (4,  "одиниця виміру"),
+        (5,  "категорія (сорт)"),
+        (6,  "Вартість за\xa0одиницю"),
+        (9,  "Сума"),
+        (10, "Примітка"),
+    ]:
+        mcel(17, col, 18, col, label, fnt=bold, aln=c_aln, brd=all_bdr)
+
+    # G17:H17 — "Кількість" spans both qty columns horizontally in row 17
+    mcel(17, 7, 17, 8, "Кількість", fnt=bold, aln=c_aln, brd=all_bdr)
+    ws.row_dimensions[17].height = 14.45
+
+    # Row 18: split sub-headers under "Кількість"
+    v(18, 7, "відправлено\n(вимагається)", fnt=bold, aln=c_aln, brd=all_bdr)
+    v(18, 8, "прийнято\n(відпущено)",      fnt=bold, aln=c_aln, brd=all_bdr)
+    ws.row_dimensions[18].height = 82.25
+
+    # Row 19: column numbers 1–10
+    for i in range(1, 11):
+        v(19, i, str(i), aln=c_aln, brd=all_bdr)
+
+    # ── Data rows ─────────────────────────────────────────────────────────────
+    items_list = _items_for_display(doc)
+    r = 20
     total_qty = Decimal(0)
     total_amt = Decimal(0)
-    for idx, it in enumerate(_sorted_items(doc), 1):
-        row_vals = [
-            idx, it.item_name or "", it.nomenclature_code or "",
-            it.unit_of_measure or "", it.category or "",
-            float(it.price) if it.price else "",
-            float(it.quantity) if it.quantity else "",
-            float(it.qty_received) if it.qty_received else "",
-            float(it.amount) if it.amount else "",
-            it.notes or "",
+
+    for idx, it in enumerate(items_list, 1):
+        qty = Decimal(str(it["quantity"])) if it["quantity"] is not None else Decimal(0)
+        amt = Decimal(str(it["amount"]))   if it["amount"]   is not None else Decimal(0)
+        row_data = [
+            (1,  idx),
+            (2,  it["item_name"] or ""),
+            (3,  it["nomenclature_code"] or ""),
+            (4,  it["unit_of_measure"] or ""),
+            (5,  it["category"] or ""),
+            (6,  float(it["price"])        if it["price"]        is not None else ""),
+            (7,  float(qty) if qty else ""),
+            (8,  float(it["qty_received"]) if it["qty_received"] is not None else ""),
+            (9,  float(amt) if amt else ""),
+            (10, it["notes"] or ""),
         ]
-        for col, val in enumerate(row_vals, 1):
+        for col, val in row_data:
             c = ws.cell(row=r, column=col, value=val)
-            c.border = border
-            c.alignment = center if col != 2 else left
-        ws.row_dimensions[r].height = 18; r += 1
-        if it.quantity: total_qty += Decimal(str(it.quantity))
-        if it.amount:   total_amt += Decimal(str(it.amount))
+            c.border    = all_bdr
+            c.alignment = l_aln if col == 2 else c_aln
+        ws.row_dimensions[r].height = 26
+        r += 1
+        total_qty += qty
+        total_amt += amt
 
-    mc(r, 1, r, 6, "Разом:", fnt=bold, aln=Alignment(horizontal="right"))
-    ws.cell(row=r, column=7, value=float(total_qty)).border = border
-    ws.cell(row=r, column=9, value=float(total_amt)).border = border
-    for col in [1,2,3,4,5,6,8,10]:
-        ws.cell(row=r, column=col).border = border
-    ws.row_dimensions[r].height = 16; r += 2
+    # Minimum 8 filler rows
+    for _ in range(max(0, 8 - len(items_list))):
+        for col in range(1, 11):
+            ws.cell(row=r, column=col).border = all_bdr
+        ws.row_dimensions[r].height = 26
+        r += 1
 
-    mc(r, 1, r, 4, f"Керівник: {person_pos(extra.get('commander_id'))}", aln=left)
-    mc(r, 5, r, 7, "підпис ____________", aln=left)
-    mc(r, 8, r, 10, person_str(extra.get('commander_id')), aln=left); r += 2
+    # Totals row "Всього"
+    mcel(r, 1, r, 6, "Всього", fnt=bold, aln=r_aln, brd=all_bdr)
+    v(r, 7, float(total_qty) if total_qty else "", brd=all_bdr, aln=c_aln)
+    v(r, 8, "",                                    brd=all_bdr, aln=c_aln)
+    v(r, 9, float(total_amt) if total_amt else "", brd=all_bdr, aln=c_aln)
+    v(r, 10, "",                                   brd=all_bdr, aln=c_aln)
+    r += 2
 
-    mc(r, 1, r, 10,
-       f"Всього передано: {extra.get('total_qty_words','')} одиниць, "
-       f"на суму {extra.get('total_amount_words','')} гривень.", aln=left); r += 3
+    # ── Commander block ───────────────────────────────────────────────────────
+    cmd_id = extra.get("commander_id")
+    v(r, 1,  person_pos(cmd_id),  aln=l_aln)
+    v(r, 10, person_name(cmd_id), aln=l_aln)
+    ws.row_dimensions[r].height = 15.4
+    r += 1
 
-    mc(r, 1, r, 10, "ЗВОРОТНІЙ БІК", fnt=bold, aln=center); r += 2
-    mc(r, 1, r, 4, f"МВО здав: {person_pos(extra.get('mvo_from_id'))}", aln=left)
-    mc(r, 5, r, 7, "підпис ____________", aln=left)
-    mc(r, 8, r, 10, person_str(extra.get('mvo_from_id')), aln=left); r += 3
+    mcel(r, 6, r, 7, "(підпис)",                   aln=c_aln)
+    mcel(r, 9, r, 10, "(власне ім'я та прізвище)", aln=c_aln)
+    r += 1
 
-    mc(r, 1, r, 4, f"МВО прийняв: {person_pos(extra.get('mvo_to_id'))}", aln=left)
-    mc(r, 5, r, 7, "підпис ____________", aln=left)
-    mc(r, 8, r, 10, person_str(extra.get('mvo_to_id')), aln=left)
+    v(r, 1, "Всього передано ", aln=l_aln)
+    mcel(r, 3, r, 9, extra.get("total_qty_words") or "", aln=c_aln)
+    v(r, 10, "одиниць,", aln=l_aln)
+    ws.row_dimensions[r].height = 15.4
+    r += 1
 
+    v(r, 7, "(кількість прописом)", aln=c_aln)
+    r += 1
+
+    amt_words = extra.get("total_amount_words") or ""
+    mcel(r, 1, r, 10, f"на\xa0суму {amt_words}", aln=l_aln)
+    ws.row_dimensions[r].height = 13.9
+    r += 1
+
+    v(r, 7, "(сума прописом)", aln=c_aln)
+    r += 1
+
+    if executor_name:
+        v(r, 1, "Виконавець:", aln=l_aln)
+        v(r, 3, executor_name,  aln=l_aln)
+        r += 1
+    r += 1  # blank before МВО
+
+    # ── МВО section ───────────────────────────────────────────────────────────
+    v(r, 1, "Матеріально відповідальні особи:", aln=l_aln)
+    ws.row_dimensions[r].height = 15.4
+    r += 1
+
+    v(r, 1, "здав:", aln=l_aln)
+    ws.row_dimensions[r].height = 15.4
+    r += 1
+
+    mvo_from = extra.get("mvo_from_id") or extra.get("sender_id")
+    v(r, 1,  person_pos(mvo_from),  aln=l_aln)
+    v(r, 10, person_name(mvo_from), aln=l_aln)
+    ws.row_dimensions[r].height = 15.4
+    r += 1
+
+    v(r, 3, "(посада)", aln=c_aln, brd=bot_bdr)
+    v(r, 7, "(підпис)", aln=c_aln, brd=bot_bdr)
+    mcel(r, 9, r, 10, "(власне ім'я та прізвище)", aln=c_aln, brd=bot_bdr)
+    r += 1
+
+    v(r, 1, "прийняв:", aln=l_aln)
+    ws.row_dimensions[r].height = 15.4
+    r += 1
+
+    mvo_to = extra.get("mvo_to_id") or extra.get("receiver_id")
+    v(r, 1,  person_pos(mvo_to),  aln=l_aln)
+    v(r, 10, person_name(mvo_to), aln=l_aln)
+    ws.row_dimensions[r].height = 15.4
+    r += 1
+
+    v(r, 3, "(посада)", aln=c_aln, brd=bot_bdr)
+    v(r, 7, "(підпис)", aln=c_aln, brd=bot_bdr)
+    mcel(r, 9, r, 10, "(власне ім'я та прізвище)", aln=c_aln, brd=bot_bdr)
+    r += 1
+
+    # ── Financial section ─────────────────────────────────────────────────────
+    mcel(r, 1, r, 10,
+         "Відмітка фінансово-економічного органу про\xa0відображення у\xa0регістрах бухгалтерського обліку:",
+         aln=l_aln)
+    ws.row_dimensions[r].height = 19.25
+    r += 1
+
+    # Financial table header
+    mcel(r, 1, r, 2, "Найменування\nоблікового регістру",
+         fnt=bold, aln=c_aln, brd=all_bdr)
+    mcel(r, 3, r, 5, "За дебетом рахунку (субрахунку, коду аналітичного обліку)",
+         fnt=bold, aln=c_aln, brd=all_bdr)
+    mcel(r, 6, r, 8, "За кредитом рахунку (субрахунку, коду аналітичного обліку)",
+         fnt=bold, aln=c_aln, brd=all_bdr)
+    mcel(r, 9, r, 10, "Сума", fnt=bold, aln=c_aln, brd=all_bdr)
+    r += 1
+
+    for _ in range(3):
+        mcel(r, 1, r, 2,  brd=all_bdr)
+        mcel(r, 3, r, 5,  brd=all_bdr)
+        mcel(r, 6, r, 8,  brd=all_bdr)
+        mcel(r, 9, r, 10, brd=all_bdr)
+        ws.row_dimensions[r].height = 15
+        r += 1
+
+    mcel(r, 1, r, 10,
+         "Особа, яка відобразила господарську операцію в\xa0бухгалтерському обліку ",
+         aln=l_aln)
+    ws.row_dimensions[r].height = 13.9
+    r += 1
+
+    acc_id = extra.get("accountant_id")
+    v(r, 1,  person_pos(acc_id) or "головний бухгалтер", aln=l_aln)
+    v(r, 10, person_name(acc_id), aln=l_aln)
+    ws.row_dimensions[r].height = 15.4
+    r += 1
+
+    v(r, 2, "(посада)", aln=c_aln, brd=bot_bdr)
+    v(r, 7, "(підпис)", aln=c_aln, brd=bot_bdr)
+    mcel(r, 9, r, 10, "(власне ім'я та прізвище)", aln=c_aln, brd=bot_bdr)
+    ws.row_dimensions[r].height = 15.4
+    r += 1
+
+    v(r, 3, f"{doc.doc_date or ''} року", aln=l_aln)
+    ws.row_dimensions[r].height = 19.25
+    r += 2
+
+    fin_id = extra.get("fin_chief_id")
+    mcel(r, 1, r + 2, 3,
+         person_pos(fin_id) or "начальник фінансової служби",
+         aln=Alignment(horizontal="left", vertical="center", wrap_text=True))
+    v(r + 2, 10, person_name(fin_id), aln=l_aln)
+    ws.row_dimensions[r].height = 15.4
+    r += 3
+
+    v(r, 7, "(підпис)", aln=c_aln, brd=bot_bdr)
+    mcel(r, 9, r, 10, "(власне ім'я та прізвище)", aln=c_aln, brd=bot_bdr)
+
+    # ── Stream ────────────────────────────────────────────────────────────────
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
-    filename = f"nakладна_{doc.doc_number or doc.id}.xlsx"
+    filename = f"накладна_{doc.doc_number or doc.id}.xlsx"
     return StreamingResponse(
         buf,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
