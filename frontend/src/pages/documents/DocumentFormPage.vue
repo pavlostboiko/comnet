@@ -454,7 +454,14 @@ function onItemChange(idx) {
   if (!row.item_id) return
   const ref = itemById(row.item_id)
   if (!ref) return
-  // Defaults applied only when field is empty (don't clobber user input)
+  // Copy snap into the row so columns render immediately. Backend re-snaps
+  // authoritatively on save from item_id (single source of truth for signed
+  // docs); these row values are for display + draft persistence only.
+  row.item_name         = ref.name || ''
+  row.nomenclature_code = ref.nomenclature_code || ''
+  row.unit_of_measure   = ref.unit_of_measure || ''
+  row.category          = ref.category || ''
+  row.price             = ref.price != null ? Number(ref.price) : null
   if (row.quantity == null || row.quantity === '') row.quantity = 1
   if (row.qty_received == null || row.qty_received === '') row.qty_received = 1
   if (!row.notes && ref.serial_number) row.notes = ref.serial_number
@@ -500,6 +507,7 @@ function applyDoc(doc) {
 function applyDefaultsIfDraft() {
   if (form.value.status !== 'draft') return
   if (form.value.doc_type !== 'накладна_25') return
+  if (!form.value.doc_date) form.value.doc_date = new Date().toISOString().slice(0, 10)
   if (!form.value.op_type_id && opTypes.value.length)
     form.value.op_type_id = opTypes.value[0].id
   if (!form.value.sender_id && subdivisionPersons.value.length)

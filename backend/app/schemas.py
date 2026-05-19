@@ -180,6 +180,7 @@ class ItemListRead(BaseModel):
     number: str
     name: Optional[str] = None
     category: Optional[str] = None
+    nomenclature_code: Optional[str] = None
     serial_number: Optional[str] = None
     unit_of_measure: Optional[str] = None
     price: Optional[Decimal] = None
