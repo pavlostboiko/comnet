@@ -3,6 +3,29 @@ from typing import Optional, List
 from pydantic import BaseModel
 
 
+# --- Services ---
+
+class ServiceRead(BaseModel):
+    id: int
+    name: str
+    chief_name: Optional[str] = None
+    chief_position: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class ServiceCreate(BaseModel):
+    name: str
+    chief_name: Optional[str] = None
+    chief_position: Optional[str] = None
+
+
+class ServiceUpdate(BaseModel):
+    name: Optional[str] = None
+    chief_name: Optional[str] = None
+    chief_position: Optional[str] = None
+
+
 # --- Auth ---
 
 class Token(BaseModel):

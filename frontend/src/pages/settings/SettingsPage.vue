@@ -15,6 +15,10 @@
               Особи
               <span class="tab-count">{{ persons.length }}</span>
             </button>
+            <button class="tt-btn" :class="{ on: activeTab === 'services' }" @click="activeTab = 'services'">
+              Служби
+              <span class="tab-count">{{ services.length }}</span>
+            </button>
             <button class="tt-btn" :class="{ on: activeTab === 'optypes' }" @click="activeTab = 'optypes'">
               Типи операцій
             </button>
@@ -40,6 +44,16 @@
                   <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
                 Додати особу
+              </button>
+            </template>
+            <!-- Services tab actions -->
+            <template v-if="activeTab === 'services'">
+              <button class="btn-primary" @click="openServiceModal()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Додати службу
               </button>
             </template>
             <!-- Op types tab actions -->
@@ -143,6 +157,53 @@
             </tbody>
           </table>
           <div class="t-foot">{{ persons.length }} осіб</div>
+        </div>
+
+        <!-- TAB: СЛУЖБИ -->
+        <div v-show="activeTab === 'services'">
+          <table>
+            <thead>
+              <tr>
+                <th>Служба забезпечення</th>
+                <th>ПІБ начальника</th>
+                <th>Посада начальника</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="s in services" :key="s.id">
+                <td class="td-name">{{ s.name }}</td>
+                <td>{{ s.chief_name || '—' }}</td>
+                <td>{{ s.chief_position || '—' }}</td>
+                <td>
+                  <div class="acts">
+                    <button class="act e" title="Редагувати" @click="openServiceModal(s)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                    </button>
+                    <button class="act d" title="Видалити" @click="confirmDeleteService(s)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-1 14H6L5 6" />
+                        <path d="M10 11v6M14 11v6" />
+                        <path d="M9 6V4h6v2" />
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              <tr v-if="services.length === 0">
+                <td colspan="4" style="text-align:center; color:var(--text-light); padding:32px">
+                  Немає служб
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="t-foot">{{ services.length }} служб</div>
         </div>
 
         <!-- TAB: ТИПИ ОПЕРАЦІЙ -->
@@ -329,6 +390,41 @@
       </div>
     </div>
 
+    <!-- ====== SERVICE MODAL ====== -->
+    <div class="overlay" :class="{ open: serviceModalOpen }" @click.self="serviceModalOpen = false">
+      <div class="modal-sm-box">
+        <div class="modal-head">
+          <span class="modal-title">{{ editingService ? 'Редагувати службу' : 'Додати службу' }}</span>
+          <button class="modal-close" @click="serviceModalOpen = false">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2.5" stroke-linecap="round">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Служба забезпечення <span style="color:var(--danger)">*</span></label>
+            <input v-model="sForm.name" class="form-input" placeholder="Медична служба" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">ПІБ начальника</label>
+            <input v-model="sForm.chief_name" class="form-input" placeholder="Іваненко І.І." />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Посада начальника</label>
+            <input v-model="sForm.chief_position" class="form-input" placeholder="Начальник медичної служби" />
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-cancel" @click="serviceModalOpen = false">Скасувати</button>
+          <button class="btn-primary" :disabled="saving || !sForm.name.trim()" @click="saveService">
+            {{ saving ? 'Збереження…' : (editingService ? 'Зберегти' : 'Додати') }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- ====== OPTYPE MODAL ====== -->
     <div class="overlay" :class="{ open: optypeModalOpen }" @click.self="optypeModalOpen = false">
       <div class="modal-sm-box">
@@ -367,6 +463,7 @@ import {
   getOpTypes, createOpType, updateOpType, deleteOpType,
   createOpTypeDetail, updateOpTypeDetail, deleteOpTypeDetail,
   getPersons, createPerson, updatePerson, deletePerson,
+  getServices, createService, updateService, deleteService,
 } from '../../api/settings.js'
 
 // ── State ──────────────────────────────────────────────────────────────────
@@ -380,6 +477,12 @@ const unit = reactive({ name: '', short_name: '', edrpou: '', location: '' })
 const persons = ref([])
 const personSearch = ref('')
 const searchFocused = ref(false)
+
+// Services
+const services = ref([])
+const serviceModalOpen = ref(false)
+const editingService = ref(null)
+const sForm = reactive({ name: '', chief_name: '', chief_position: '' })
 
 // Op Types
 const opTypes = ref([])
@@ -433,7 +536,7 @@ const filteredPersons = computed(() => {
 // ── Lifecycle ──────────────────────────────────────────────────────────────
 
 onMounted(async () => {
-  await Promise.all([loadUnit(), loadPersons(), loadOpTypes()])
+  await Promise.all([loadUnit(), loadPersons(), loadOpTypes(), loadServices()])
 })
 
 // ── Loaders ────────────────────────────────────────────────────────────────
@@ -451,6 +554,11 @@ async function loadPersons() {
 async function loadOpTypes() {
   const { data } = await getOpTypes()
   opTypes.value = data
+}
+
+async function loadServices() {
+  const { data } = await getServices()
+  services.value = data
 }
 
 // ── Unit actions ───────────────────────────────────────────────────────────
@@ -512,6 +620,43 @@ async function confirmDeletePerson(p) {
   await deletePerson(p.id)
   showToast('Особу видалено')
   await loadPersons()
+}
+
+// ── Service actions ────────────────────────────────────────────────────────
+
+function openServiceModal(s = null) {
+  editingService.value = s
+  if (s) {
+    Object.assign(sForm, { name: s.name, chief_name: s.chief_name || '', chief_position: s.chief_position || '' })
+  } else {
+    Object.assign(sForm, { name: '', chief_name: '', chief_position: '' })
+  }
+  serviceModalOpen.value = true
+}
+
+async function saveService() {
+  if (saving.value || !sForm.name.trim()) return
+  saving.value = true
+  try {
+    if (editingService.value) {
+      await updateService(editingService.value.id, { ...sForm })
+      showToast('Службу збережено')
+    } else {
+      await createService({ ...sForm })
+      showToast('Службу додано')
+    }
+    serviceModalOpen.value = false
+    await loadServices()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function confirmDeleteService(s) {
+  if (!confirm(`Видалити службу "${s.name}"?`)) return
+  await deleteService(s.id)
+  showToast('Службу видалено')
+  await loadServices()
 }
 
 // ── Op Type actions ────────────────────────────────────────────────────────

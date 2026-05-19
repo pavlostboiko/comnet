@@ -21,3 +21,9 @@ export const getPersons = () => http.get('/settings/persons')
 export const createPerson = (data) => http.post('/settings/persons', data)
 export const updatePerson = (id, data) => http.put(`/settings/persons/${id}`, data)
 export const deletePerson = (id) => http.delete(`/settings/persons/${id}`)
+
+// Services
+export const getServices = () => http.get('/settings/services')
+export const createService = (data) => http.post('/settings/services', data)
+export const updateService = (id, data) => http.put(`/settings/services/${id}`, data)
+export const deleteService = (id) => http.delete(`/settings/services/${id}`)

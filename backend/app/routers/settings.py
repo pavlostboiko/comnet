@@ -5,10 +5,11 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import OpType, OpTypeDetail, Person, UnitSettings, User
+from app.models import OpType, OpTypeDetail, Person, Service, UnitSettings, User
 from app.schemas import (
     OpTypeCreate, OpTypeDetailCreate, OpTypeDetailRead, OpTypeDetailUpdate,
     OpTypeRead, OpTypeUpdate, PersonCreate, PersonRead, PersonUpdate,
+    ServiceCreate, ServiceRead, ServiceUpdate,
     UnitSettingsRead, UnitSettingsUpdate,
 )
 
@@ -207,5 +208,55 @@ def delete_person(
     row = db.get(Person, person_id)
     if not row:
         raise HTTPException(status_code=404, detail="Person not found")
+    db.delete(row)
+    db.commit()
+
+
+# ── Services ──────────────────────────────────────────────────────────────────
+
+@router.get("/services", response_model=List[ServiceRead])
+def get_services(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    return db.query(Service).order_by(Service.name).all()
+
+
+@router.post("/services", response_model=ServiceRead, status_code=status.HTTP_201_CREATED)
+def create_service(
+    payload: ServiceCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    row = Service(**payload.model_dump())
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.put("/services/{service_id}", response_model=ServiceRead)
+def update_service(
+    service_id: int,
+    payload: ServiceUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    row = db.get(Service, service_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Service not found")
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(row, field, value)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.delete("/services/{service_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_service(
+    service_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    row = db.get(Service, service_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Service not found")
     db.delete(row)
     db.commit()
