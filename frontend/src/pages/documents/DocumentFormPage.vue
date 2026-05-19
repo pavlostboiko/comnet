@@ -87,13 +87,6 @@
               <input :value="validityDisplay" readonly />
             </div>
             <div class="form-row">
-              <label>Служба</label>
-              <select v-model.number="form.service_id" :disabled="isReadonly">
-                <option :value="null">— не вказано —</option>
-                <option v-for="s in services" :key="s.id" :value="s.id">{{ s.name }}</option>
-              </select>
-            </div>
-            <div class="form-row">
               <label>Підстава (мета)</label>
               <input v-model="form.basis" :readonly="isReadonly" />
             </div>
@@ -102,50 +95,46 @@
               <input :value="opTypeDisplay" readonly />
             </div>
           </div>
-          <div v-if="showServiceChief" class="snap-line">
-            Начальник служби: <b>{{ serviceChiefPostDisplay || '—' }}</b>,
-            <b>{{ serviceChiefNameDisplay || '—' }}</b>
-          </div>
         </div>
 
-        <!-- 3.2 Передає / Приймає -->
+        <!-- 3.2 Сторони — Звідки / Куди / Служба -->
         <div class="tile">
-          <div class="tile-title">Сторона "передає / приймає"</div>
-          <div class="form-grid two-col">
+          <div class="tile-title">Сторони</div>
+          <div class="form-grid three-col">
             <div class="party">
-              <div class="party-head">Передає</div>
-              <div class="form-row">
-                <label>Підрозділ-відправник</label>
-                <select v-model.number="form.sender_id" :disabled="isReadonly">
-                  <option :value="null">— не вказано —</option>
-                  <option v-for="p in persons" :key="p.id" :value="p.id">{{ subdivLabel(p) }}</option>
-                </select>
-              </div>
-              <div class="form-row calc">
-                <label>Посада</label>
-                <input :value="senderPostDisplay" readonly />
-              </div>
-              <div class="form-row calc">
-                <label>ПІБ</label>
-                <input :value="senderNameDisplay" readonly />
+              <div class="party-head">Звідки</div>
+              <select v-model.number="form.sender_id" :disabled="isReadonly" class="party-select">
+                <option :value="null">— оберіть підрозділ —</option>
+                <option v-for="p in subdivisionPersons" :key="p.id" :value="p.id">{{ p.unit }}</option>
+              </select>
+              <div class="auto-block">
+                <div class="auto-lbl">Передає</div>
+                <div class="auto-val">{{ senderPostDisplay || '—' }}</div>
+                <div class="auto-val">{{ senderNameDisplay || '—' }}</div>
               </div>
             </div>
             <div class="party">
-              <div class="party-head">Приймає</div>
-              <div class="form-row">
-                <label>Підрозділ-отримувач</label>
-                <select v-model.number="form.receiver_id" :disabled="isReadonly">
-                  <option :value="null">— не вказано —</option>
-                  <option v-for="p in persons" :key="p.id" :value="p.id">{{ subdivLabel(p) }}</option>
-                </select>
+              <div class="party-head">Куди</div>
+              <select v-model.number="form.receiver_id" :disabled="isReadonly" class="party-select">
+                <option :value="null">— оберіть підрозділ —</option>
+                <option v-for="p in subdivisionPersons" :key="p.id" :value="p.id">{{ p.unit }}</option>
+              </select>
+              <div class="auto-block">
+                <div class="auto-lbl">Приймає</div>
+                <div class="auto-val">{{ receiverPostDisplay || '—' }}</div>
+                <div class="auto-val">{{ responsibleRecipientDisplay || '—' }}</div>
               </div>
-              <div class="form-row calc">
-                <label>Звання + ПІБ (одержувач)</label>
-                <input :value="responsibleRecipientDisplay" readonly />
-              </div>
-              <div class="form-row calc">
-                <label>Посада</label>
-                <input :value="receiverPostDisplay" readonly />
+            </div>
+            <div class="party">
+              <div class="party-head">Служба</div>
+              <select v-model.number="form.service_id" :disabled="isReadonly" class="party-select">
+                <option :value="null">— оберіть службу —</option>
+                <option v-for="s in services" :key="s.id" :value="s.id">{{ s.name }}</option>
+              </select>
+              <div class="auto-block">
+                <div class="auto-lbl">Керівник</div>
+                <div class="auto-val">{{ serviceChiefPostDisplay || '—' }}</div>
+                <div class="auto-val">{{ serviceChiefNameDisplay || '—' }}</div>
               </div>
             </div>
           </div>
@@ -353,6 +342,16 @@ const itemById    = (id) => id ? items.value.find(i => i.id === id)    : null
 const opTypeById  = (id) => id ? opTypes.value.find(o => o.id === id)  : null
 const serviceById = (id) => id ? services.value.find(s => s.id === id) : null
 
+// Persons that represent a subdivision (have non-empty `unit`). TZ §2.1: one
+// row per subdivision; the dropdown shows the unit, the FK still points at
+// the person whose snap will be captured.
+const subdivisionPersons = computed(() =>
+  persons.value
+    .filter(p => (p.unit || '').trim() && p.is_active !== false)
+    .slice()
+    .sort((a, b) => (a.unit || '').localeCompare(b.unit || '', 'uk'))
+)
+
 const selectedSender    = computed(() => personById(form.value.sender_id))
 const selectedReceiver  = computed(() => personById(form.value.receiver_id))
 const selectedFin       = computed(() => personById(form.value.fin_id))
@@ -378,18 +377,10 @@ const serviceChiefPostDisplay = computed(() =>
   isReadonly.value ? (ed.value.snap_service_chief_post || '') : (selectedService.value?.chief_position || ''))
 const serviceChiefNameDisplay = computed(() =>
   isReadonly.value ? (ed.value.snap_service_chief_name || '') : (selectedService.value?.chief_name || ''))
-const showServiceChief = computed(() =>
-  isReadonly.value ? !!(ed.value.snap_service_chief_post || ed.value.snap_service_chief_name) : !!selectedService.value)
-
 // ── Display helpers ──────────────────────────────────────────────────────
 function personDisplayName(p) {
   if (!p) return ''
   return [p.first_name, (p.last_name || '').toUpperCase()].filter(Boolean).join(' ')
-}
-function subdivLabel(p) {
-  if (!p) return ''
-  const sub = p.unit ? `[${p.unit}] ` : ''
-  return sub + personDisplayName(p) + (p.position ? ` — ${p.position}` : '')
 }
 function finLabel(p) {
   if (!p) return ''
@@ -467,8 +458,14 @@ function rowAmount(row) {
   return p && q ? Math.round(p * q * 100) / 100 : null
 }
 function onItemChange(idx) {
-  // No client-side snap — backend snaps on save. UI rerenders via itemSnap().
-  void idx
+  const row = form.value.items[idx]
+  if (!row.item_id) return
+  const ref = itemById(row.item_id)
+  if (!ref) return
+  // Defaults applied only when field is empty (don't clobber user input)
+  if (row.quantity == null || row.quantity === '') row.quantity = 1
+  if (row.qty_received == null || row.qty_received === '') row.qty_received = 1
+  if (!row.notes && ref.serial_number) row.notes = ref.serial_number
 }
 
 const totalQty    = computed(() => form.value.items.reduce((s, it) => s + (Number(it.quantity) || 0), 0))
@@ -627,6 +624,8 @@ onMounted(async () => {
 
 .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 18px; }
 .form-grid.two-col { grid-template-columns: repeat(2, 1fr); }
+.form-grid.three-col { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 880px) { .form-grid.three-col { grid-template-columns: 1fr; } }
 .form-row { display: flex; flex-direction: column; gap: 3px; }
 .form-row label { font-size: 11.5px; color: var(--text-light); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
 .form-row input, .form-row select {
@@ -639,10 +638,24 @@ onMounted(async () => {
 .form-row.calc input { font-style: italic; }
 .req { color: #ef4444; }
 
-.party { background: var(--bg); padding: 12px; border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 8px; }
+.party { background: var(--bg); padding: 14px; border-radius: var(--radius-sm); display: flex; flex-direction: column; gap: 10px; }
 .party-head { font-size: 12px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .07em; }
 
-.snap-line { margin-top: 10px; padding: 8px 12px; background: var(--bg); border-radius: var(--radius-sm); font-size: 13px; color: var(--text-mid); }
+.party-select {
+  border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px;
+  font-size: 13.5px; font-family: inherit; outline: none; background: var(--surface); color: var(--text);
+  width: 100%;
+}
+.party-select:focus { border-color: var(--accent); }
+.party-select:disabled { background: var(--bg); color: var(--text-mid); }
+
+.auto-block {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 12px; background: var(--surface); border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm); font-size: 13px;
+}
+.auto-lbl { font-size: 10.5px; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 2px; }
+.auto-val { color: var(--text); font-style: italic; }
 
 /* Items table */
 .table-scroll { overflow-x: auto; margin: 0 -20px; padding: 0 20px; }
