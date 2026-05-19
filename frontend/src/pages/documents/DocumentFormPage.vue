@@ -74,13 +74,9 @@
                      :class="{ missing: signErrors.includes('doc_number') }" />
             </div>
             <div class="form-row">
-              <label>Дата складання <span class="req">*</span></label>
+              <label>Дата <span class="req">*</span></label>
               <input v-model="form.doc_date" type="date" :readonly="isReadonly"
                      :class="{ missing: signErrors.includes('doc_date') }" />
-            </div>
-            <div class="form-row">
-              <label>Дата операції</label>
-              <input v-model="form.date_operation" type="date" :readonly="isReadonly" />
             </div>
             <div class="form-row calc">
               <label>Дійсна до (calc: +3 дні)</label>
@@ -89,10 +85,6 @@
             <div class="form-row">
               <label>Підстава (мета)</label>
               <input v-model="form.basis" :readonly="isReadonly" />
-            </div>
-            <div class="form-row calc">
-              <label>Вид операції</label>
-              <input :value="opTypeDisplay" readonly />
             </div>
           </div>
         </div>
@@ -499,6 +491,25 @@ function fieldLabel(f) {
 function applyDoc(doc) {
   form.value = { ...emptyForm(), ...doc, items: doc.items || [] }
   warnings.value = doc.warnings || []
+  applyDefaultsIfDraft()
+}
+
+// Auto-select the first available option in each dropdown when this is a
+// draft and the field is empty. Lets the user save a quick doc without
+// touching every dropdown.
+function applyDefaultsIfDraft() {
+  if (form.value.status !== 'draft') return
+  if (form.value.doc_type !== 'накладна_25') return
+  if (!form.value.op_type_id && opTypes.value.length)
+    form.value.op_type_id = opTypes.value[0].id
+  if (!form.value.sender_id && subdivisionPersons.value.length)
+    form.value.sender_id = subdivisionPersons.value[0].id
+  if (!form.value.receiver_id && subdivisionPersons.value.length)
+    form.value.receiver_id = subdivisionPersons.value[0].id
+  if (!form.value.service_id && services.value.length)
+    form.value.service_id = services.value[0].id
+  if (!form.value.fin_id && persons.value.length)
+    form.value.fin_id = persons.value[0].id
 }
 
 async function save() {

@@ -384,7 +384,7 @@ def create_document(payload: DocIn, db: Session = Depends(get_db), user=Depends(
         doc_type=payload.doc_type,
         doc_number=payload.doc_number,
         doc_date=payload.doc_date,
-        date_operation=payload.date_operation,
+        date_operation=payload.date_operation or payload.doc_date,
         from_unit=payload.from_unit,
         to_unit=payload.to_unit,
         basis=payload.basis,
@@ -425,7 +425,7 @@ def update_document(doc_id: int, payload: DocIn, db: Session = Depends(get_db), 
     doc.doc_type = payload.doc_type
     doc.doc_number = payload.doc_number
     doc.doc_date = payload.doc_date
-    doc.date_operation = payload.date_operation
+    doc.date_operation = payload.date_operation or payload.doc_date
     doc.from_unit = payload.from_unit
     doc.to_unit = payload.to_unit
     doc.basis = payload.basis
@@ -578,7 +578,7 @@ def export_xlsx(doc_id: int, db: Session = Depends(get_db), _=Depends(get_curren
     sv("E7", doc.doc_number or "")
     sv("I8",  extra.get("composed_location") or "")
     sv("I10", doc.doc_date or "")
-    sr(12, 3, doc.date_operation or "")
+    sr(12, 3, doc.date_operation or doc.doc_date or "")
     sr(12, 9, extra.get("snap_service_name") or doc.service or "")
     sv("C13", extra.get("snap_op_type_name") or "")
     sv("I13", doc.basis or "")
