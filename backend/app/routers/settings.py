@@ -59,7 +59,7 @@ def create_op_type(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    row = OpType(name=payload.name)
+    row = OpType(name=payload.name, number_prefix=payload.number_prefix)
     db.add(row)
     db.commit()
     db.refresh(row)

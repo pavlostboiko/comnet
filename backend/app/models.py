@@ -32,6 +32,7 @@ class OpType(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False, unique=True)
+    number_prefix = Column(String, nullable=True)
 
     details = relationship("OpTypeDetail", back_populates="op_type", cascade="all, delete-orphan")
 
@@ -157,11 +158,17 @@ class Document(Base):
     id = Column(Integer, primary_key=True)
     doc_type = Column(String, nullable=False)  # 'надходження' | 'переміщення' | 'накладна_25'
     doc_number = Column(String, nullable=True)
-    doc_date = Column(String, nullable=True)
+    doc_date = Column(String, nullable=True)           # date_compiled
+    date_operation = Column(String, nullable=True)
     from_unit = Column(String, nullable=True)
     to_unit = Column(String, nullable=True)
     basis = Column(String, nullable=True)
     service = Column(String, nullable=True)
+    op_type_id = Column(Integer, ForeignKey("op_types.id", ondelete="SET NULL"), nullable=True)
+    service_id = Column(Integer, ForeignKey("services.id", ondelete="SET NULL"), nullable=True)
+    sender_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
+    receiver_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
+    fin_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
     status = Column(String, nullable=False, default="draft")  # draft | signed | receiver_signed
     signed_at = Column(DateTime, nullable=True)
     signed_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -179,6 +186,7 @@ class DocumentItem(Base):
     id = Column(Integer, primary_key=True)
     document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
     sort_order = Column(Integer, nullable=True)
+    item_id = Column(Integer, ForeignKey("items.id", ondelete="SET NULL"), nullable=True)
     item_name = Column(String, nullable=True)
     nomenclature_code = Column(String, nullable=True)
     unit_of_measure = Column(String, nullable=True)

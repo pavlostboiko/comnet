@@ -220,6 +220,7 @@
                 </svg>
               </span>
               <span class="optype-parent-name">{{ ot.name }}</span>
+              <span v-if="ot.number_prefix" class="optype-prefix">{{ ot.number_prefix }}</span>
               <span class="optype-sub-count">{{ ot.details.length }}</span>
               <div class="optype-parent-acts">
                 <button class="act e" title="Редагувати" @click.stop="openOptypeModal(ot)">
@@ -442,6 +443,11 @@
             <label class="form-label">Назва</label>
             <input v-model="otForm.name" class="form-input" placeholder="Назва типу" @keydown.enter="saveOptype" />
           </div>
+          <div v-if="!isDetailMode" class="form-group">
+            <label class="form-label">Префікс номера накладної</label>
+            <input v-model="otForm.number_prefix" class="form-input" placeholder="напр. 85/635-" @keydown.enter="saveOptype" />
+            <div class="form-hint">Підставляється перед автоінкрементним номером (85/635-1, 85/635-2, ...).</div>
+          </div>
         </div>
         <div class="modal-foot">
           <button class="btn-cancel" @click="optypeModalOpen = false">Скасувати</button>
@@ -519,7 +525,7 @@ const editingOpType = ref(null)       // parent OpType being edited
 const editingDetail = ref(null)       // OpTypeDetail being edited
 const detailParentId = ref(null)      // parent id when adding/editing detail
 const isDetailMode = ref(false)       // true = editing a detail, false = parent
-const otForm = reactive({ name: '' })
+const otForm = reactive({ name: '', number_prefix: '' })
 
 // ── Computed ───────────────────────────────────────────────────────────────
 
@@ -673,6 +679,7 @@ function openOptypeModal(ot) {
   editingOpType.value = ot
   editingDetail.value = null
   otForm.name = ot ? ot.name : ''
+  otForm.number_prefix = ot ? (ot.number_prefix || '') : ''
   optypeModalTitle.value = ot ? 'Редагувати тип операції' : 'Додати тип операції'
   optypeModalOpen.value = true
 }
@@ -683,6 +690,7 @@ function openDetailModal(detail, parentOt) {
   editingOpType.value = null
   detailParentId.value = parentOt.id
   otForm.name = detail ? detail.name : ''
+  otForm.number_prefix = ''
   optypeModalTitle.value = detail ? 'Редагувати підтип' : 'Додати підтип'
   optypeModalOpen.value = true
 }
@@ -701,11 +709,12 @@ async function saveOptype() {
     }
   } else {
     // Saving a parent op type
+    const payload = { name: otForm.name, number_prefix: otForm.number_prefix || null }
     if (editingOpType.value) {
-      await updateOpType(editingOpType.value.id, { name: otForm.name })
+      await updateOpType(editingOpType.value.id, payload)
       showToast('Тип операції збережено')
     } else {
-      await createOpType({ name: otForm.name })
+      await createOpType(payload)
       showToast('Тип операції додано')
     }
   }
@@ -1083,6 +1092,16 @@ tbody tr:hover .acts { opacity: 1; }
 .optype-chevron.open { transform: rotate(90deg); }
 
 .optype-parent-name { font-size: 14px; font-weight: 600; color: var(--text); flex: 1; }
+
+.optype-prefix {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--accent-light);
+  padding: 1px 7px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
 
 .optype-sub-count {
   font-family: 'DM Mono', monospace;

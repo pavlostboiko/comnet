@@ -1,5 +1,7 @@
-# Docs
+# Docs (локальні, не комітяться)
 ПЛАН_ПРОЄКТУ.md
+СХЕМА_БД.md
+API.md
 
 # Environment
 .env

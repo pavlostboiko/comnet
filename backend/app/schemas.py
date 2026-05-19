@@ -84,6 +84,7 @@ class OpTypeDetailUpdate(BaseModel):
 class OpTypeRead(BaseModel):
     id: int
     name: str
+    number_prefix: Optional[str] = None
     details: List[OpTypeDetailRead] = []
 
     model_config = {"from_attributes": True}
@@ -91,10 +92,12 @@ class OpTypeRead(BaseModel):
 
 class OpTypeCreate(BaseModel):
     name: str
+    number_prefix: Optional[str] = None
 
 
 class OpTypeUpdate(BaseModel):
     name: Optional[str] = None
+    number_prefix: Optional[str] = None
 
 
 # --- Persons ---
