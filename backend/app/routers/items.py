@@ -1,6 +1,7 @@
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -40,7 +41,13 @@ def _get_or_404(db: Session, item_id: int) -> Item:
 
 @router.get("", response_model=List[ItemListRead])
 def list_items(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    return db.query(Item).order_by(Item.number).all()
+    # Natural sort by `number`: pure-numeric strings sorted by zero-padded
+    # value ("1" < "2" < "10"), mixed/alpha values keep lexicographic order.
+    natural_key = case(
+        (Item.number.op("~")("^[0-9]+$"), func.lpad(Item.number, 20, "0")),
+        else_=Item.number,
+    )
+    return db.query(Item).order_by(natural_key, Item.number).all()
 
 
 @router.get("/{item_id}", response_model=ItemRead)
