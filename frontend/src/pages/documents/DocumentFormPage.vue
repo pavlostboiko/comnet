@@ -450,31 +450,23 @@ function rowAmount(row) {
   const q = Number(row.quantity) || 0
   return p && q ? Math.round(p * q * 100) / 100 : null
 }
-function applyItemSnap(row, ref) {
+function onAutocompleteSelect(idx, item) {
   // Copy snap into the row so columns render immediately. Backend re-snaps
   // authoritatively on save from item_id (single source of truth for signed
   // docs); these row values are for display + draft persistence only.
-  row.item_name         = ref.name || ''
-  row.nomenclature_code = ref.nomenclature_code || ''
-  row.unit_of_measure   = ref.unit_of_measure || ''
-  row.category          = ref.category || ''
-  row.price             = ref.price != null ? Number(ref.price) : null
+  const row = form.value.items[idx]
+  row.item_id           = item.id
+  row.item_name         = item.name || ''
+  row.nomenclature_code = item.nomenclature_code || ''
+  row.unit_of_measure   = item.unit_of_measure || ''
+  row.category          = item.category || ''
+  row.price             = item.price != null ? Number(item.price) : null
+  // qty defaults: only set if empty (don't clobber a quantity the user typed)
   if (row.quantity == null || row.quantity === '') row.quantity = 1
   if (row.qty_received == null || row.qty_received === '') row.qty_received = 1
-  if (!row.notes && ref.serial_number) row.notes = ref.serial_number
-}
-
-function onItemChange(idx) {
-  const row = form.value.items[idx]
-  if (!row.item_id) return
-  const ref = itemById(row.item_id)
-  if (ref) applyItemSnap(row, ref)
-}
-
-function onAutocompleteSelect(idx, item) {
-  const row = form.value.items[idx]
-  row.item_id = item.id
-  applyItemSnap(row, item)
+  // Serial: always overwrite — changing the item means the previous serial
+  // is no longer correct. User can edit the note after if they need to.
+  row.notes = item.serial_number || ''
 }
 
 const totalQty    = computed(() => form.value.items.reduce((s, it) => s + (Number(it.quantity) || 0), 0))
