@@ -43,11 +43,13 @@ const highlighted = ref(0)
 watch(() => props.modelValue, v => { if (v !== query.value) query.value = v || '' })
 
 const filtered = computed(() => {
-  if (!query.value || query.value.length < 2) return []
-  const q = query.value.toLowerCase()
-  return (props.items || [])
-    .filter(it => (it.name || '').toLowerCase().includes(q) || (it.number || '').toLowerCase().includes(q))
-    .slice(0, 10)
+  const list = props.items || []
+  const q = (query.value || '').trim().toLowerCase()
+  if (!q) return list.slice(0, 30)   // browse first 30 when empty
+  return list
+    .filter(it => (it.name || '').toLowerCase().includes(q)
+               || (it.number || '').toLowerCase().includes(q))
+    .slice(0, 30)
 })
 
 function select(item) {

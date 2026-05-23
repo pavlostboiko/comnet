@@ -182,11 +182,11 @@
                 <tr v-for="(it, idx) in form.items" :key="idx">
                   <td class="td-center">{{ idx + 1 }}</td>
                   <td>
-                    <select v-if="!isReadonly" v-model.number="it.item_id" class="cell-input"
-                            @change="onItemChange(idx)">
-                      <option :value="null">— оберіть —</option>
-                      <option v-for="i in items" :key="i.id" :value="i.id">{{ i.name }} ({{ i.number }})</option>
-                    </select>
+                    <ItemAutocomplete
+                      v-if="!isReadonly"
+                      v-model="it.item_name"
+                      :items="items"
+                      @select="onAutocompleteSelect(idx, $event)" />
                     <div v-else class="cell-text">{{ it.item_name }}</div>
                   </td>
                   <td class="cell-text">{{ itemSnap(it).nomenclature_code }}</td>
@@ -292,6 +292,7 @@ import {
   getDocument, updateDocument, signDocument, unsignDocument, exportDocumentXlsx
 } from '../../api/documents'
 import http from '../../api/http'
+import ItemAutocomplete from '../invoices/components/ItemAutocomplete.vue'
 
 const route = useRoute()
 const docId = computed(() => Number(route.params.id))
@@ -449,11 +450,7 @@ function rowAmount(row) {
   const q = Number(row.quantity) || 0
   return p && q ? Math.round(p * q * 100) / 100 : null
 }
-function onItemChange(idx) {
-  const row = form.value.items[idx]
-  if (!row.item_id) return
-  const ref = itemById(row.item_id)
-  if (!ref) return
+function applyItemSnap(row, ref) {
   // Copy snap into the row so columns render immediately. Backend re-snaps
   // authoritatively on save from item_id (single source of truth for signed
   // docs); these row values are for display + draft persistence only.
@@ -465,6 +462,19 @@ function onItemChange(idx) {
   if (row.quantity == null || row.quantity === '') row.quantity = 1
   if (row.qty_received == null || row.qty_received === '') row.qty_received = 1
   if (!row.notes && ref.serial_number) row.notes = ref.serial_number
+}
+
+function onItemChange(idx) {
+  const row = form.value.items[idx]
+  if (!row.item_id) return
+  const ref = itemById(row.item_id)
+  if (ref) applyItemSnap(row, ref)
+}
+
+function onAutocompleteSelect(idx, item) {
+  const row = form.value.items[idx]
+  row.item_id = item.id
+  applyItemSnap(row, item)
 }
 
 const totalQty    = computed(() => form.value.items.reduce((s, it) => s + (Number(it.quantity) || 0), 0))
