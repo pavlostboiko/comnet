@@ -248,8 +248,11 @@
               <label>Тип документа</label>
               <select v-model="form.doc_type" :disabled="isReadonly">
                 <option value="надходження">Надходження</option>
-                <option value="переміщення">Переміщення</option>
-                <option value="накладна_25">Накладна (Дод. 25)</option>
+                <option value="накладна_25">Переміщення</option>
+                <!-- Legacy type — only kept for existing docs of this type -->
+                <option v-if="form.doc_type === 'переміщення'" value="переміщення">
+                  Переміщення (стара форма)
+                </option>
               </select>
             </div>
             <div class="form-row">
@@ -479,10 +482,10 @@ function fmt(v) {
 
 // ── Labels ───────────────────────────────────────────────────────────────
 function typeLabel(t) {
-  return { надходження: 'Надходження', переміщення: 'Переміщення', накладна_25: 'Накладна (Дод. 25)' }[t] || t
+  return { надходження: 'Надходження', переміщення: 'Переміщення', накладна_25: 'Переміщення' }[t] || t
 }
 function typeClass(t) {
-  return { надходження: 'incoming', переміщення: 'transfer', накладна_25: 'invoice' }[t] || ''
+  return { надходження: 'incoming', переміщення: 'transfer', накладна_25: 'transfer' }[t] || ''
 }
 function statusLabel(s) {
   return { draft: 'Чернетка', signed: 'Підписано' }[s] || s

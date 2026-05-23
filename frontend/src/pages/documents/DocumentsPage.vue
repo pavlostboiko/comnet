@@ -16,8 +16,7 @@
           </button>
           <div v-if="menuOpen" class="dropdown-menu">
             <div class="dropdown-item" @click="createNew('надходження')">Надходження</div>
-            <div class="dropdown-item" @click="createNew('переміщення')">Переміщення</div>
-            <div class="dropdown-item" @click="createNew('накладна_25')">Накладна (Дод. 25)</div>
+            <div class="dropdown-item" @click="createNew('накладна_25')">Переміщення</div>
           </div>
         </div>
       </template>
@@ -111,14 +110,18 @@ const menuRef    = ref(null)
 const typeOptions = [
   { value: '',            label: 'Всі' },
   { value: 'надходження', label: 'Надходження' },
-  { value: 'переміщення', label: 'Переміщення' },
-  { value: 'накладна_25', label: 'Накладна' },
+  { value: 'переміщення', label: 'Переміщення' },   // matches both "переміщення" and "накладна_25"
 ]
 
+const TRANSFER_TYPES = ['переміщення', 'накладна_25']
+
 const filtered = computed(() => {
-  const list = typeFilter.value
-    ? docs.value.filter(d => d.doc_type === typeFilter.value)
-    : docs.value
+  let list = docs.value
+  if (typeFilter.value === 'переміщення') {
+    list = list.filter(d => TRANSFER_TYPES.includes(d.doc_type))
+  } else if (typeFilter.value) {
+    list = list.filter(d => d.doc_type === typeFilter.value)
+  }
   return [...list].sort((a, b) => {
     const da = a.doc_date || ''
     const db = b.doc_date || ''
@@ -127,10 +130,10 @@ const filtered = computed(() => {
 })
 
 function typeLabel(t) {
-  return { надходження: 'Надходження', переміщення: 'Переміщення', накладна_25: 'Накладна' }[t] || t
+  return { надходження: 'Надходження', переміщення: 'Переміщення', накладна_25: 'Переміщення' }[t] || t
 }
 function typeClass(t) {
-  return { надходження: 'incoming', переміщення: 'transfer', накладна_25: 'invoice' }[t] || ''
+  return { надходження: 'incoming', переміщення: 'transfer', накладна_25: 'transfer' }[t] || ''
 }
 function statusLabel(s) {
   return { draft: 'Чернетка', signed: 'Підписано', receiver_signed: 'Підписано отримувачем' }[s] || s
