@@ -67,15 +67,16 @@
                 <th style="width:50px;text-align:center">Од.</th>
                 <th style="width:80px;text-align:right">К-сть</th>
                 <th style="width:120px;text-align:right">Вартість, грн</th>
+                <th style="width:200px">Примітки</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="loading">
-                <td colspan="9" style="text-align:center;padding:32px;color:var(--text-light)">Завантаження…</td>
+                <td colspan="10" style="text-align:center;padding:32px;color:var(--text-light)">Завантаження…</td>
               </tr>
               <tr v-else-if="!filteredItems.length">
-                <td colspan="9" style="text-align:center;padding:32px;color:var(--text-light)">Нічого не знайдено</td>
+                <td colspan="10" style="text-align:center;padding:32px;color:var(--text-light)">Нічого не знайдено</td>
               </tr>
               <tr v-for="item in filteredItems" :key="item.id" @click="openCard(item)">
                 <td><span class="td-num-badge">{{ item.number }}</span></td>
@@ -96,6 +97,7 @@
                 <td style="text-align:center">{{ item.unit_of_measure || '—' }}</td>
                 <td class="td-num-val" :class="{ 'td-qty-large': true }">{{ fmtQty(item.quantity) }}</td>
                 <td class="td-num-val">{{ fmtPrice(item.price) }}</td>
+                <td class="td-notes" :title="item.notes || ''">{{ item.notes || '' }}</td>
                 <td @click.stop>
                   <div class="acts">
                     <button class="act e" title="Редагувати" @click="openFormFromList(item)">
@@ -634,6 +636,7 @@ td:last-child { padding-right:20px; }
 .td-serial { font-family:'DM Mono',monospace; font-size:12.5px; }
 .td-serial.none { color:var(--text-light); font-style:italic; font-family:inherit; }
 .td-num-val { font-family:'DM Mono',monospace; font-size:12.5px; text-align:right; }
+.td-notes { font-size:12.5px; color:var(--text-light); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .td-qty-large { color:var(--text); font-weight:600; }
 .unoffic-badge { display:inline-block; margin-left:6px; padding:1px 6px; border-radius:var(--radius-sm); font-size:11px; font-weight:600; background:#fef9c3; color:#a16207; }
 

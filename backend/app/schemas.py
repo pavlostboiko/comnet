@@ -186,6 +186,7 @@ class ItemListRead(BaseModel):
     price: Optional[Decimal] = None
     quantity: Optional[Decimal] = None
     item_type: Optional[str] = None
+    notes: Optional[str] = None
     is_official: bool
 
     model_config = {"from_attributes": True}
