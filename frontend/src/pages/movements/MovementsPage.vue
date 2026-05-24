@@ -159,9 +159,8 @@
               <label class="form-label">Тип документа</label>
               <select class="form-select" v-model="f.doc_type">
                 <option value="">— оберіть —</option>
-                <option value="Н-440/25">Н-440/25 (Накладна)</option>
-                <option value="Н-431">Н-431 (з ПДВ)</option>
-                <option value="РВ-57">РВ-57 (Розподільча відомість)</option>
+                <option value="Акт прийому-передачі">Акт прийому-передачі</option>
+                <option value="Накладна (вимога)">Накладна (вимога)</option>
               </select>
             </div>
             <div class="form-group">

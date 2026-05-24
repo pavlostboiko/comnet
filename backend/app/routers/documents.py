@@ -25,6 +25,15 @@ REQUIRED_FIELDS = {
     "накладна_25":  ["doc_number", "doc_date"],
 }
 
+# Human-readable label written to Movement.doc_type when sign creates a row.
+# Movement.doc_type is free text; we use these two canonical values for new
+# rows, but legacy values stored elsewhere (Н-440/25, РВ-57, …) still render.
+MOVEMENT_DOC_LABEL = {
+    "надходження":  "Акт прийому-передачі",
+    "переміщення":  "Накладна (вимога)",
+    "накладна_25":  "Накладна (вимога)",
+}
+
 
 # ── Schemas ────────────────────────────────────────────────────────────────
 
@@ -328,7 +337,7 @@ def sign_document(doc_id: int, db: Session = Depends(get_db), user=Depends(get_c
             basis=doc.basis,
             doc_date=doc.doc_date,
             doc_number=doc.doc_number,
-            doc_type=doc.doc_type,
+            doc_type=MOVEMENT_DOC_LABEL.get(doc.doc_type, doc.doc_type),
             service=doc.service,
             price=it.price,
             mvo_from_id=doc.sender_id,
