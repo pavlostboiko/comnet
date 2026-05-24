@@ -8,25 +8,57 @@
 
 ## Як запускати
 
-### Backend (pytest)
+### Backend pure-logic (pytest)
 ```bash
-# В контейнері:
 docker compose exec backend pytest -v
-
-# Локально (потрібен pytest + всі deps):
+# або локально (треба pytest + deps):
 cd backend && pytest tests/ -v
 ```
 
-### Frontend
-Автотестів немає (немає Vitest setup). Поки що — мануально через браузер.
+### Інтеграційні + UI smoke (Playwright)
+```bash
+docker compose --profile test up --build playwright --abort-on-container-exit
+# HTML-репорт: tests/e2e/results/index.html
+```
+**Важливо:** обов'язково з `--build`, інакше Docker візьме закешований образ з попередніми тестами і зміни в `.spec.js` НЕ підхопляться.
+
+Підставка облікового запису: `TEST_USER`/`TEST_PASS` беруться з `.env` (default `admin`/`admin123`).
 
 ---
 
 ## Покриття автоматичними тестами
 
-Усього: **31 тест** у `backend/tests/`. Залежності DB не потрібні — тестується pure logic.
+| Категорія | Розташування | К-сть | DB? |
+|-----------|--------------|-------|-----|
+| Pure-logic (UA пропис, XLSX shift) | `backend/tests/` | 31 | ні |
+| Інтеграційні + UI smoke (Playwright) | `tests/e2e/tests/` | 14 (13✓ + 1 skip) | так — dev-DB через `--profile test` |
 
-### `tests/test_uk_num2words.py` (24 тести)
+### `tests/e2e/tests/api_documents.spec.js` — інтеграційні (HTTP)
+
+API-тести через Playwright `request` (без браузера). Покривають критичні гарантії snapshot-архітектури — це **протекція перед рефакторингом** `documents.py`.
+
+| Тест | Що перевіряє |
+|------|--------------|
+| `sign creates movements; unsign removes them` | POST /sign → status=signed + N movements; POST /unsign → status=draft + movements deleted |
+| `signed doc snap immune to person edits (TZ §8.4)` | Підписаний доc → мутувати Person + Item напряму через /api/settings/persons → snap фрозен, не змінюється |
+| `auto-numbering generates sequential by prefix` | Док з порожнім `doc_number` отримує `prefix + (MAX+1)`; явний номер не перезаписується; наступний авто = MAX+1 |
+| `export-xlsx returns 200 with spreadsheet body` | Відповідь 200, `content-type: spreadsheetml`, body починається з ZIP magic `PK`. Skipped якщо `unit_settings.name` порожній |
+
+### `tests/e2e/tests/auth/documents/items/settings.spec.js` — UI smoke (Playwright + browser)
+
+| Spec | Тести |
+|------|-------|
+| `auth.spec.js` | login+logout, redirect не-авторизованих |
+| `items.spec.js` | сторінка вантажиться, пошук не крешить |
+| `documents.spec.js` | список вантажиться, створення Надходження, створення Переміщення (накладна_25), видалення чернетки |
+| `settings.spec.js` | таби видимі (Підрозділ/Особи/Типи/Служби), додавання особи, редагування особи |
+
+### `tests/e2e/tests/helpers/`
+
+- `login.js` — спільний `uiLogin(page)` + `loginApi(request)` (повертає `request.newContext` з Bearer-токеном)
+- `seed.js` — `seedNakladnaContext(api, label)` створює унікально-iменовані opType (з `number_prefix`), service, sender, receiver, fin, item; повертає масив `cleanup` шляхів для безпечного видалення в afterEach
+
+### `backend/tests/test_uk_num2words.py` (24 тести)
 UA-пропис для XLSX-експорту накладної (TZ §7.5–§7.6, §8.7, §8.9).
 
 | Тест | Що перевіряє |
@@ -38,7 +70,7 @@ UA-пропис для XLSX-експорту накладної (TZ §7.5–§7.
 | `test_amount_no_latin_contamination` | Жодної латинки в сумі прописом |
 | `test_amount_rounding_half_up` | `0.005 → "01 копійка"` (ROUND_HALF_UP) |
 
-### `tests/test_invoice_export.py` (7 тестів)
+### `backend/tests/test_invoice_export.py` (7 тестів)
 Логіка зсуву рядків у XLSX-шаблоні (TZ §8.1–§8.3, §9).
 
 | Тест | Що перевіряє |
@@ -204,19 +236,21 @@ UA-пропис для XLSX-експорту накладної (TZ §7.5–§7.
 ## Прогалини / куди йти далі (priority)
 
 ### 🔴 Високий
-1. **Snap invariance integration test** — TZ §8.4-§8.5: створити доc, підписати, змінити PERS/NOM, перепідгрузити доc, перевірити що snap НЕ змінився. Найдешевший тест якості архітектури.
-2. **Sign/unsign flow + movement creation** — POST /sign створює movements, /unsign видаляє, status переходи.
-3. **Auto-number generation** — `MAX(N)+1` per префікс, попередження про дублікати.
-4. **Settings CRUD smoke** — op_types/persons/services/unit базові тести.
+1. ~~Snap invariance integration test~~ ✅ зроблено (`api_documents.spec.js`)
+2. ~~Sign/unsign flow + movement creation~~ ✅ зроблено
+3. ~~Auto-number generation~~ ✅ зроблено
+4. **Settings CRUD smoke** — op_types/persons/services/unit базові API-тести. Існує UI smoke для додавання/редагування особи, але не охоплює inkop_types з `number_prefix`, services з chief_*, unit_settings.
 
 ### 🟡 Середній
-5. Items: натуральне сортування `_natural_key` (pure SQL тест)
-6. Documents: required fields validation для sign
+5. Items: натуральне сортування `1, 2, ..., 10` (pytest для SQL CASE або Playwright API)
+6. Documents: required fields validation для sign — assert 422 + missing list для накладна без doc_date
 7. Items: `_sync_documents` поведінка при PUT з документами
+8. **XLSX export** — наразі skip без `unit_settings.name`. Зробити seed unit_settings у beforeEach + cleanup
+9. **Дублікат номера накладної** — POST з existing doc_number → response `warnings` непорожній
 
 ### 🟢 Низький
-- E2E через Playwright (наприклад, login → create наклад → sign → export XLSX → assert file)
 - Frontend unit-тести (Vitest)
+- Тести `_natural_key` для items.number з мішаними значеннями ("K-1", "1A")
 
 ---
 
