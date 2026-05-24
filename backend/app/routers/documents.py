@@ -1,6 +1,5 @@
 import io
-import os
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional
 from urllib.parse import quote
@@ -12,16 +11,9 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.invoice_export import (
-    ROW_TOTALS, ROW_CHIEF_POST, ROW_CHIEF_NAME, ROW_QTY_WORDS, ROW_AMT_WORDS,
-    ROW_SENDER, ROW_RECEIVER, ROW_FIN_POST, ROW_FIN_NAME,
-    TEMPLATE_LAST_ROW, adjust_item_rows,
-)
-from app.models import (
-    Document, DocumentItem, Item, Movement, OpType, Person, Service,
-    UnitSettings, User,
-)
-from app.uk_num2words import amount_to_words_uk, qty_to_words_uk
+from app.document_export import build_xlsx, has_snap
+from app.document_snapshot import resolve_auto_number, snap_nakladna
+from app.models import Document, DocumentItem, Item, Movement, User
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -32,20 +24,6 @@ REQUIRED_FIELDS = {
     "переміщення":  ["doc_number", "doc_date", "from_unit", "to_unit"],
     "накладна_25":  ["doc_number", "doc_date"],
 }
-
-# Keys stored inside extra_data JSON
-SNAP_KEYS = [
-    "snap_unit_name", "snap_edrpou", "composed_location",
-    "snap_op_type_name", "snap_service_name",
-    "snap_service_chief_post", "snap_service_chief_name",
-    "snap_sender_subdiv", "snap_sender_post", "snap_sender_name",
-    "snap_recv_subdiv", "snap_recv_rank", "snap_recv_name", "snap_recv_post",
-    "snap_fin_post", "snap_fin_name",
-    "validity_date", "total_qty_words", "total_amount_words",
-]
-
-UK_MONTHS = ["січня", "лютого", "березня", "квітня", "травня", "червня",
-             "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"]
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────
@@ -78,126 +56,6 @@ class DocIn(BaseModel):
     receiver_id: Optional[int] = None
     fin_id: Optional[int] = None
     items: List[DocItemIn] = []
-
-
-# ── Helpers ────────────────────────────────────────────────────────────────
-
-def _person_full_name(p: Person) -> str:
-    """«Ім'я ПРІЗВИЩЕ» — first_name + last_name.upper()"""
-    return " ".join(filter(None, [
-        (p.first_name or "").strip(),
-        (p.last_name or "").strip().upper(),
-    ]))
-
-
-def _parse_date(s: Optional[str]):
-    if not s:
-        return None
-    for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y"):
-        try:
-            return datetime.strptime(s, fmt)
-        except ValueError:
-            continue
-    return None
-
-
-def _calc_validity(doc_date: Optional[str]) -> str:
-    """`doc_date + 3 days` formatted as `"DD" місяця YYYY року`."""
-    dt = _parse_date(doc_date)
-    if not dt:
-        return ""
-    valid = dt + timedelta(days=3)
-    return f'"{valid.day:02d}" {UK_MONTHS[valid.month - 1]} {valid.year} року'
-
-
-def _next_doc_number(prefix: str, db: Session, exclude_id: Optional[int] = None) -> str:
-    """`prefix` + (max trailing integer among existing docs with that prefix + 1)."""
-    if not prefix:
-        return ""
-    q = db.query(Document.doc_number).filter(
-        Document.doc_number.like(prefix + "%"),
-    )
-    if exclude_id is not None:
-        q = q.filter(Document.id != exclude_id)
-    max_n = 0
-    for (num,) in q.all():
-        if not num or not num.startswith(prefix):
-            continue
-        try:
-            n = int(num[len(prefix):])
-            if n > max_n:
-                max_n = n
-        except ValueError:
-            pass
-    return f"{prefix}{max_n + 1}"
-
-
-def _snap_nakladna(doc: Document, db: Session):
-    """Refresh snapshot fields on `doc` from current FK references.
-
-    Called on every save while status == 'draft'. Stored values are read at
-    export time (signed docs are immutable so their snap is frozen).
-    """
-    extra = dict(doc.extra_data or {})
-    # Clear any prior snap, keep other keys untouched
-    for k in SNAP_KEYS:
-        extra.pop(k, None)
-
-    settings = db.query(UnitSettings).first()
-    if settings:
-        extra["snap_unit_name"]    = settings.name or ""
-        extra["snap_edrpou"]       = settings.edrpou or ""
-        extra["composed_location"] = settings.location or ""
-
-    if doc.op_type_id:
-        ot = db.get(OpType, doc.op_type_id)
-        if ot:
-            extra["snap_op_type_name"] = ot.name or ""
-
-    if doc.service_id:
-        sv = db.get(Service, doc.service_id)
-        if sv:
-            doc.service = sv.name or ""
-            extra["snap_service_name"]       = sv.name or ""
-            extra["snap_service_chief_post"] = sv.chief_position or ""
-            extra["snap_service_chief_name"] = sv.chief_name or ""
-
-    if doc.sender_id:
-        p = db.get(Person, doc.sender_id)
-        if p:
-            doc.from_unit = p.unit or ""
-            extra["snap_sender_subdiv"] = p.unit or ""
-            extra["snap_sender_post"]   = p.position or ""
-            extra["snap_sender_name"]   = _person_full_name(p)
-
-    if doc.receiver_id:
-        p = db.get(Person, doc.receiver_id)
-        if p:
-            doc.to_unit = p.unit or ""
-            extra["snap_recv_subdiv"] = p.unit or ""
-            extra["snap_recv_rank"]   = p.rank or ""
-            extra["snap_recv_name"]   = _person_full_name(p)
-            extra["snap_recv_post"]   = p.position or ""
-
-    if doc.fin_id:
-        p = db.get(Person, doc.fin_id)
-        if p:
-            extra["snap_fin_post"] = p.position or ""
-            extra["snap_fin_name"] = _person_full_name(p)
-
-    extra["validity_date"] = _calc_validity(doc.doc_date)
-
-    total_qty = Decimal(0)
-    total_amt = Decimal(0)
-    for it in doc.items:
-        q = Decimal(str(it.quantity or 0))
-        p = Decimal(str(it.price or 0))
-        total_qty += q
-        total_amt += q * p
-    extra["total_qty_words"]    = qty_to_words_uk(total_qty) if total_qty else ""
-    extra["total_amount_words"] = amount_to_words_uk(total_amt) if total_amt else ""
-
-    doc.extra_data = extra
 
 
 def _apply_items(doc: Document, items: List[DocItemIn], db: Session, snap_from_items: bool):
@@ -319,29 +177,6 @@ def _get_or_404(doc_id: int, db: Session) -> Document:
     return doc
 
 
-def _resolve_auto_number(doc: Document, db: Session):
-    """If `doc.doc_number` is blank and op_type has a `number_prefix`, fill it
-    via next sequential number. Warns on duplicate but does not block.
-    Returns a list of warnings.
-    """
-    warnings = []
-    if doc.doc_number:
-        # Duplicate check
-        dup = db.query(Document).filter(
-            Document.doc_number == doc.doc_number,
-            Document.id != (doc.id or -1),
-        ).first()
-        if dup:
-            warnings.append(f"Накладна з номером {doc.doc_number} вже існує")
-        return warnings
-
-    if doc.op_type_id:
-        ot = db.get(OpType, doc.op_type_id)
-        if ot and ot.number_prefix:
-            doc.doc_number = _next_doc_number(ot.number_prefix, db, exclude_id=doc.id)
-    return warnings
-
-
 # ── CRUD ───────────────────────────────────────────────────────────────────
 
 @router.get("")
@@ -400,13 +235,13 @@ def create_document(payload: DocIn, db: Session = Depends(get_db), user=Depends(
     db.add(doc)
     db.flush()
 
-    warnings = _resolve_auto_number(doc, db)
+    warnings = resolve_auto_number(doc, db)
 
     is_nakl = payload.doc_type == "накладна_25"
     _apply_items(doc, payload.items, db, snap_from_items=is_nakl)
 
     if is_nakl:
-        _snap_nakladna(doc, db)
+        snap_nakladna(doc, db)
 
     db.commit()
     db.refresh(doc)
@@ -435,13 +270,13 @@ def update_document(doc_id: int, payload: DocIn, db: Session = Depends(get_db), 
     doc.receiver_id = payload.receiver_id
     doc.fin_id = payload.fin_id
 
-    warnings = _resolve_auto_number(doc, db)
+    warnings = resolve_auto_number(doc, db)
 
     is_nakl = payload.doc_type == "накладна_25"
     _apply_items(doc, payload.items, db, snap_from_items=is_nakl)
 
     if is_nakl:
-        _snap_nakladna(doc, db)
+        snap_nakladna(doc, db)
 
     db.commit()
     db.refresh(doc)
@@ -527,131 +362,26 @@ def unsign_document(doc_id: int, db: Session = Depends(get_db), _=Depends(get_cu
 
 # ── Excel export (накладна_25) ─────────────────────────────────────────────
 
-EXPORT_REQUIRED_SNAP = ("snap_unit_name",)  # if missing → 400, doc not migrated
-
-
-def _has_snap(doc: Document) -> bool:
-    extra = doc.extra_data or {}
-    return any(extra.get(k) for k in EXPORT_REQUIRED_SNAP)
-
-
 @router.get("/{doc_id}/export/xlsx")
 def export_xlsx(doc_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
     doc = _get_or_404(doc_id, db)
     if doc.doc_type != "накладна_25":
         raise HTTPException(400, "XLSX-експорт доступний лише для типу «накладна_25»")
-    if not _has_snap(doc):
+    if not has_snap(doc):
         raise HTTPException(
             400,
             "Документ створено до переходу на снапшот-архітектуру. "
             "Відкрийте його в редакторі та збережіть, щоб згенерувати snap-поля.",
         )
 
-    try:
-        from openpyxl import load_workbook
-    except ImportError:
-        raise HTTPException(500, "openpyxl not installed")
-
-    extra = doc.extra_data or {}
-    items_list = _items_for_display(doc)
-    n_items = len(items_list)
-
-    # Load template
-    tpl_path = os.path.join(os.path.dirname(__file__), "..", "nakladna_template.xlsx")
-    wb = load_workbook(tpl_path)
-    ws = wb.active
-
-    # ── Handle variable N (delegated to invoice_export module) ────────────
-    shift = adjust_item_rows(ws, n_items)
-
-    # ── Helpers for writing ───────────────────────────────────────────────
-    def sv(addr, value):
-        ws[addr].value = value
-
-    def sr(row, col, value):
-        ws.cell(row=row, column=col).value = value
-
-    # ── Header (rows 1–15, fixed) ─────────────────────────────────────────
-    sv("B2", extra.get("snap_unit_name") or "")
-    sv("D4", extra.get("snap_edrpou") or "")
-    sv("B6", extra.get("validity_date") or 'Дійсна до "____" _________ ____ року')
-    sv("E7", doc.doc_number or "")
-    sv("I8",  extra.get("composed_location") or "")
-    sv("I10", doc.doc_date or "")
-    sr(12, 3, doc.date_operation or doc.doc_date or "")
-    sr(12, 9, extra.get("snap_service_name") or doc.service or "")
-    sv("C13", extra.get("snap_op_type_name") or "")
-    sv("I13", doc.basis or "")
-
-    recv_full = " ".join(filter(None, [
-        (extra.get("snap_recv_rank") or "").strip(),
-        (extra.get("snap_recv_name") or "").strip(),
-    ]))
-    sv("C14", recv_full)
-
-    sv("C15", extra.get("snap_sender_subdiv") or doc.from_unit or "")
-    sv("I15", extra.get("snap_recv_subdiv") or doc.to_unit or "")
-
-    # ── Item rows ─────────────────────────────────────────────────────────
-    total_qty = Decimal(0)
-    total_amt = Decimal(0)
-    for idx, it in enumerate(items_list):
-        r = 20 + idx
-        qty = Decimal(str(it["quantity"])) if it["quantity"] is not None else Decimal(0)
-        price = Decimal(str(it["price"])) if it["price"] is not None else Decimal(0)
-        amt = qty * price
-        sr(r, 1,  idx + 1)
-        sr(r, 2,  it["item_name"] or "")
-        sr(r, 3,  it["nomenclature_code"] or "")
-        sr(r, 4,  it["unit_of_measure"] or "")
-        sr(r, 5,  it["category"] or "")
-        sr(r, 6,  float(price) if price else "")
-        sr(r, 7,  float(qty) if qty else "")
-        sr(r, 8,  float(it["qty_received"]) if it["qty_received"] is not None else "")
-        sr(r, 9,  float(amt) if amt else "")
-        sr(r, 10, it["notes"] or "")
-        total_qty += qty
-        total_amt += amt
-
-    # ── Totals (row 25 + shift) ───────────────────────────────────────────
-    sr(ROW_TOTALS + shift, 7, float(total_qty) if total_qty else "")
-    sr(ROW_TOTALS + shift, 8, float(total_qty) if total_qty else "")
-    sr(ROW_TOTALS + shift, 9, float(total_amt) if total_amt else "")
-
-    # ── Service chief signature (row 27 + shift) ──────────────────────────
-    sr(ROW_CHIEF_POST + shift, 1,  extra.get("snap_service_chief_post") or "")
-    sr(ROW_CHIEF_NAME + shift, 10, extra.get("snap_service_chief_name") or "")
-
-    # ── Total in words ────────────────────────────────────────────────────
-    sr(ROW_QTY_WORDS + shift, 3, extra.get("total_qty_words") or "")  # C29:I29
-    amt_words = extra.get("total_amount_words") or ""
-    sr(ROW_AMT_WORDS + shift, 1, f"на\xa0суму {amt_words}" if amt_words else "")  # A31:J31
-
-    # ── МВО ───────────────────────────────────────────────────────────────
-    sr(ROW_SENDER + shift, 1,  extra.get("snap_sender_post") or "")
-    sr(ROW_SENDER + shift, 10, extra.get("snap_sender_name") or "")
-    sr(ROW_RECEIVER + shift, 1,  extra.get("snap_recv_post") or "")
-    sr(ROW_RECEIVER + shift, 10, extra.get("snap_recv_name") or "")
-
-    # ── Fin signature (rows 41–43 + shift) ────────────────────────────────
-    sr(ROW_FIN_POST + shift, 1,  extra.get("snap_fin_post") or "")
-    sr(ROW_FIN_NAME + shift, 10, extra.get("snap_fin_name") or "")
-
-    # ── Update print area ─────────────────────────────────────────────────
-    new_last = TEMPLATE_LAST_ROW + shift
-    ws.print_area = f"A1:J{new_last}"
-
-    # ── Stream ────────────────────────────────────────────────────────────
-    buf = io.BytesIO()
-    wb.save(buf)
-    buf.seek(0)
+    body = build_xlsx(doc, _items_for_display(doc))
     display_name = f"накладна_{doc.doc_number or doc.id}.xlsx"
     encoded = quote(display_name.encode("utf-8"))
     return StreamingResponse(
-        buf,
+        io.BytesIO(body),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
             "Content-Disposition":
-                f'attachment; filename="nakladna.xlsx"; filename*=UTF-8\'\'{encoded}'
+                f'attachment; filename="nakladna.xlsx"; filename*=UTF-8\'\'{encoded}',
         },
     )

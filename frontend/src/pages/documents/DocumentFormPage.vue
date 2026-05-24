@@ -295,7 +295,7 @@ import {
   getDocument, updateDocument, signDocument, unsignDocument, exportDocumentXlsx
 } from '../../api/documents'
 import http from '../../api/http'
-import ItemAutocomplete from '../invoices/components/ItemAutocomplete.vue'
+import ItemAutocomplete from '../../components/ItemAutocomplete.vue'
 
 const route = useRoute()
 const docId = computed(() => Number(route.params.id))
