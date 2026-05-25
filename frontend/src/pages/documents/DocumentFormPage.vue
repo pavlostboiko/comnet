@@ -4,7 +4,8 @@
       <template #actions>
         <router-link to="/documents" class="back-link">← Документи</router-link>
         <div class="doc-title">
-          <span class="type-badge" :class="typeClass(form.doc_type)">{{ typeLabel(form.doc_type) }}</span>
+          <span class="type-badge" :class="opClass(form.operation)">{{ opLabel(form.operation) }}</span>
+          <span class="form-badge">{{ formLabel(form.form_type) }}</span>
           <span class="doc-num">{{ form.doc_number || 'без номера' }}</span>
           <span class="status-badge" :class="form.status">{{ statusLabel(form.status) }}</span>
         </div>
@@ -13,13 +14,12 @@
           <button class="btn-outline" @click="save" :disabled="saving">
             {{ saving ? 'Збереження...' : 'Зберегти' }}
           </button>
-          <button v-if="form.doc_type === 'накладна_25'" class="btn-sign" @click="doSign" :disabled="signing">
+          <button class="btn-sign" @click="doSign" :disabled="signing">
             {{ signing ? '...' : 'Підписати' }}
           </button>
         </template>
 
-        <template v-if="isNakl">
-          <!-- Друк / PDF тимчасово вимкнено — HTML-шаблон чекає на оновлення під snap-схему -->
+        <template v-if="hasXlsx">
           <button class="btn-outline" @click="exportXlsx" :disabled="exporting">
             {{ exporting ? '...' : 'XLSX' }}
           </button>
@@ -41,8 +41,8 @@
 
       <div v-if="loading" class="loading">Завантаження...</div>
 
-      <!-- ── накладна_25 (нова форма за ТЗ §3) ────────────────────────── -->
-      <template v-else-if="form.doc_type === 'накладна_25'">
+      <!-- ── form=накладна (нова форма за ТЗ §3) ─────────────────────── -->
+      <template v-else-if="form.form_type === 'накладна'">
 
         <!-- 3.1 Реквізити документа -->
         <div class="tile">
@@ -95,11 +95,25 @@
           <div class="form-grid three-col">
             <div class="party">
               <div class="party-head">Звідки</div>
-              <select v-model.number="form.sender_id" :disabled="isReadonly" class="party-select">
+              <!-- Надходження зовні: вільний текст постачальника -->
+              <input
+                v-if="form.operation === 'надходження'"
+                v-model="form.from_unit"
+                :readonly="isReadonly"
+                class="party-select"
+                placeholder="постачальник / в/ч / організація" />
+              <!-- Переміщення: select з підрозділів довідника осіб -->
+              <select
+                v-else
+                v-model.number="form.sender_id"
+                :disabled="isReadonly"
+                class="party-select">
                 <option :value="null">— оберіть підрозділ —</option>
                 <option v-for="p in subdivisionPersons" :key="p.id" :value="p.id">{{ p.unit }}</option>
               </select>
-              <div class="auto-block">
+              <!-- Auto-fill підрозділ-відправника. Для надходження зовні
+                   немає посади/ПІБ — приховуємо блок. -->
+              <div v-if="form.operation === 'переміщення'" class="auto-block">
                 <div class="auto-lbl">Передає</div>
                 <div class="auto-val">{{ senderPostDisplay || '—' }}</div>
                 <div class="auto-val">{{ senderNameDisplay || '—' }}</div>
@@ -240,21 +254,11 @@
         </div>
       </template>
 
-      <!-- ── Інші типи (надходження / переміщення) — мінімальна форма ──── -->
-      <template v-else>
+      <!-- ── form=акт (Акт прийому-передачі) — мінімальна форма ────────── -->
+      <template v-else-if="form.form_type === 'акт'">
         <div class="tile">
+          <div class="tile-title">Реквізити акту</div>
           <div class="form-grid">
-            <div class="form-row">
-              <label>Тип документа</label>
-              <select v-model="form.doc_type" :disabled="isReadonly">
-                <option value="надходження">Надходження</option>
-                <option value="накладна_25">Переміщення</option>
-                <!-- Legacy type — only kept for existing docs of this type -->
-                <option v-if="form.doc_type === 'переміщення'" value="переміщення">
-                  Переміщення (стара форма)
-                </option>
-              </select>
-            </div>
             <div class="form-row">
               <label>№ документа <span class="req">*</span></label>
               <input v-model="form.doc_number" :readonly="isReadonly"
@@ -265,10 +269,10 @@
               <input v-model="form.doc_date" type="date" :readonly="isReadonly"
                      :class="{ missing: signErrors.includes('doc_date') }" />
             </div>
-            <div class="form-row" v-if="form.doc_type !== 'надходження'">
-              <label>Звідки <span class="req">*</span></label>
+            <div class="form-row">
+              <label>Звідки</label>
               <input v-model="form.from_unit" :readonly="isReadonly"
-                     :class="{ missing: signErrors.includes('from_unit') }" />
+                     placeholder="постачальник / в/ч / організація" />
             </div>
             <div class="form-row">
               <label>Куди <span class="req">*</span></label>
@@ -279,6 +283,58 @@
               <label>Підстава</label>
               <input v-model="form.basis" :readonly="isReadonly" />
             </div>
+          </div>
+        </div>
+
+        <div class="tile">
+          <div class="tile-header">
+            <span class="tile-title">Позиції майна</span>
+            <span class="tile-count">{{ form.items.length }}</span>
+            <button v-if="!isReadonly" class="btn-outline-sm" @click="addItem">+ Рядок</button>
+          </div>
+          <div class="table-scroll">
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th style="width:36px">№</th>
+                  <th>Майно</th>
+                  <th style="width:110px">Код</th>
+                  <th style="width:70px">Од.</th>
+                  <th style="width:80px">К-сть</th>
+                  <th style="width:130px">Примітка</th>
+                  <th v-if="!isReadonly" style="width:28px"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(it, idx) in form.items" :key="idx">
+                  <td class="td-center">{{ idx + 1 }}</td>
+                  <td>
+                    <ItemAutocomplete
+                      v-if="!isReadonly"
+                      v-model="it.item_name"
+                      :items="items"
+                      @select="onAutocompleteSelect(idx, $event)" />
+                    <div v-else class="cell-text">{{ it.item_name }}</div>
+                  </td>
+                  <td class="cell-text">{{ it.nomenclature_code || '' }}</td>
+                  <td class="cell-text">{{ it.unit_of_measure || '' }}</td>
+                  <td>
+                    <input v-if="!isReadonly" v-model.number="it.quantity" type="number" class="cell-input" step="0.0001" />
+                    <span v-else class="cell-text td-right">{{ it.quantity ?? '' }}</span>
+                  </td>
+                  <td>
+                    <input v-if="!isReadonly" v-model="it.notes" class="cell-input" />
+                    <span v-else class="cell-text">{{ it.notes }}</span>
+                  </td>
+                  <td v-if="!isReadonly" class="td-center">
+                    <button class="del-btn" @click="removeItem(idx)">×</button>
+                  </td>
+                </tr>
+                <tr v-if="!form.items.length">
+                  <td :colspan="isReadonly ? 6 : 7" class="empty-items">Позицій немає</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </template>
@@ -314,7 +370,8 @@ const services     = ref([])
 const unitSettings = ref(null)
 
 const emptyForm = () => ({
-  doc_type: 'накладна_25',
+  operation: 'переміщення',
+  form_type: 'накладна',
   doc_type_label: null,
   doc_number: '', doc_date: '', date_operation: '',
   from_unit: '', to_unit: '', basis: '', service: '',
@@ -327,10 +384,9 @@ const emptyForm = () => ({
 const form = ref(emptyForm())
 
 const isReadonly = computed(() => form.value.status !== 'draft')
-const isNakl = computed(() =>
-  form.value.doc_type === 'накладна_25' ||
-  (form.value.doc_type_label || '').includes('Накладна')
-)
+// XLSX export is wired only to the Накладна (вимога) form (any operation).
+// Акт прийому-передачі has no template yet → button hidden.
+const hasXlsx = computed(() => form.value.form_type === 'накладна')
 
 // ── Lookups ──────────────────────────────────────────────────────────────
 const personById  = (id) => id ? persons.value.find(p => p.id === id)  : null
@@ -481,11 +537,14 @@ function fmt(v) {
 }
 
 // ── Labels ───────────────────────────────────────────────────────────────
-function typeLabel(t) {
-  return { надходження: 'Надходження', переміщення: 'Переміщення', накладна_25: 'Переміщення' }[t] || t
+function opLabel(o) {
+  return { надходження: 'Надходження', переміщення: 'Переміщення' }[o] || o
 }
-function typeClass(t) {
-  return { надходження: 'incoming', переміщення: 'transfer', накладна_25: 'transfer' }[t] || ''
+function opClass(o) {
+  return { надходження: 'incoming', переміщення: 'transfer' }[o] || ''
+}
+function formLabel(f) {
+  return { накладна: 'Накладна (вимога)', акт: 'Акт прийому-передачі' }[f] || f
 }
 function statusLabel(s) {
   return { draft: 'Чернетка', signed: 'Підписано' }[s] || s
@@ -501,21 +560,30 @@ function fieldLabel(f) {
 
 // ── Persistence ──────────────────────────────────────────────────────────
 function applyDoc(doc) {
-  form.value = { ...emptyForm(), ...doc, items: doc.items || [] }
+  // Backend emits `form` for the paper form; in the Vue template it conflicts
+  // with `form` (our reactive ref), so rename to `form_type` in local state.
+  const { form: formField, ...rest } = doc
+  form.value = {
+    ...emptyForm(),
+    ...rest,
+    form_type: formField ?? doc.form_type ?? 'накладна',
+    items: doc.items || [],
+  }
   warnings.value = doc.warnings || []
   applyDefaultsIfDraft()
 }
 
 // Auto-select the first available option in each dropdown when this is a
-// draft and the field is empty. Lets the user save a quick doc without
-// touching every dropdown.
+// draft and the field is empty. Only fires for form=накладна — акт form
+// doesn't surface those dropdowns.
 function applyDefaultsIfDraft() {
   if (form.value.status !== 'draft') return
-  if (form.value.doc_type !== 'накладна_25') return
   if (!form.value.doc_date) form.value.doc_date = new Date().toISOString().slice(0, 10)
+  if (form.value.form_type !== 'накладна') return
   if (!form.value.op_type_id && opTypes.value.length)
     form.value.op_type_id = opTypes.value[0].id
-  if (!form.value.sender_id && subdivisionPersons.value.length)
+  if (form.value.operation === 'переміщення'
+      && !form.value.sender_id && subdivisionPersons.value.length)
     form.value.sender_id = subdivisionPersons.value[0].id
   if (!form.value.receiver_id && subdivisionPersons.value.length)
     form.value.receiver_id = subdivisionPersons.value[0].id
@@ -530,7 +598,10 @@ async function save() {
   signErrors.value = []
   warnings.value = []
   try {
-    const updated = await updateDocument(docId.value, form.value)
+    // Rename back: local form_type → backend field `form`
+    const { form_type, ...rest } = form.value
+    const payload = { ...rest, form: form_type }
+    const updated = await updateDocument(docId.value, payload)
     applyDoc(updated)
   } finally { saving.value = false }
 }
@@ -636,6 +707,7 @@ onMounted(async () => {
 .type-badge.incoming { background: #d1fae5; color: #065f46; }
 .type-badge.transfer { background: #dbeafe; color: #1e40af; }
 .type-badge.invoice  { background: #fef3c7; color: #92400e; }
+.form-badge { display: inline-block; padding: 2px 8px; border-radius: var(--radius-sm); font-size: 11.5px; color: var(--text-mid); background: var(--bg); border: 1px solid var(--border); font-family: 'DM Mono', monospace; }
 
 .status-badge { display: inline-block; padding: 2px 8px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 500; }
 .status-badge.draft  { background: var(--bg); color: var(--text-light); border: 1px solid var(--border); }

@@ -139,12 +139,19 @@ def snap_nakladna(doc: Document, db: Session) -> None:
             extra["snap_service_chief_name"] = sv.chief_name or ""
 
     if doc.sender_id:
+        # Переміщення (or any sender that's an internal subdivision)
         p = db.get(Person, doc.sender_id)
         if p:
             doc.from_unit = p.unit or ""
             extra["snap_sender_subdiv"] = p.unit or ""
             extra["snap_sender_post"]   = p.position or ""
             extra["snap_sender_name"]   = person_full_name(p)
+    else:
+        # Надходження зовні: «Звідки» — вільний текст постачальника. No FK,
+        # no post/name to snap; the freeform from_unit IS the supplier name.
+        extra["snap_sender_subdiv"] = doc.from_unit or ""
+        extra["snap_sender_post"]   = ""
+        extra["snap_sender_name"]   = ""
 
     if doc.receiver_id:
         p = db.get(Person, doc.receiver_id)

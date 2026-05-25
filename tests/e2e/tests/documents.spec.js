@@ -7,30 +7,46 @@ test('documents page loads', async ({ page }) => {
   await expect(page.locator('.tile-title').first()).toContainText('Документи')
 })
 
-test('create надходження document', async ({ page }) => {
+test('create Надходження — Накладна document', async ({ page }) => {
   await uiLogin(page)
   await page.goto(`${URL}/documents`)
 
   await page.click('button:has-text("Новий документ")')
-  await page.click('.dropdown-item:has-text("Надходження")')
+  await page.click('.dropdown-item:has-text("Надходження — Накладна (вимога)")')
 
   await page.waitForURL(/\/documents\/\d+/)
   await expect(page.locator('.type-badge')).toContainText('Надходження')
+  // For Надходження + Накладна: «Звідки» must be a free-text INPUT, not a select
+  const fromInput = page.locator('.party-head:has-text("Звідки")').locator('..').locator('input.party-select')
+  await expect(fromInput).toBeVisible()
 })
 
-test('create переміщення (накладна_25) document', async ({ page }) => {
+test('create Надходження — Акт document', async ({ page }) => {
   await uiLogin(page)
   await page.goto(`${URL}/documents`)
 
-  // After the 878a6b5 rename, dropdown only has «Надходження» and «Переміщення»
-  // («Переміщення» → внутрішньо doc_type=накладна_25 з повною формою)
   await page.click('button:has-text("Новий документ")')
-  await page.click('.dropdown-item:has-text("Переміщення")')
+  await page.click('.dropdown-item:has-text("Надходження — Акт прийому-передачі")')
+
+  await page.waitForURL(/\/documents\/\d+/)
+  await expect(page.locator('.type-badge')).toContainText('Надходження')
+  // Акт form: no «Сторони» 3-col block, no XLSX button
+  await expect(page.locator('.party-head:has-text("Звідки")')).toHaveCount(0)
+  await expect(page.locator('button:has-text("XLSX")')).toHaveCount(0)
+})
+
+test('create Переміщення — Накладна document', async ({ page }) => {
+  await uiLogin(page)
+  await page.goto(`${URL}/documents`)
+
+  await page.click('button:has-text("Новий документ")')
+  await page.click('.dropdown-item:has-text("Переміщення — Накладна (вимога)")')
 
   await page.waitForURL(/\/documents\/\d+/)
   await expect(page.locator('.type-badge')).toContainText('Переміщення')
-  // The нaкладна form has the «Сторони» 3-column block
-  await expect(page.locator('.party-head:has-text("Звідки")')).toBeVisible()
+  // For Переміщення: «Звідки» is a SELECT (subdivision picker)
+  const fromSelect = page.locator('.party-head:has-text("Звідки")').locator('..').locator('select.party-select')
+  await expect(fromSelect).toBeVisible()
 })
 
 test('delete draft document', async ({ page }) => {
@@ -38,7 +54,7 @@ test('delete draft document', async ({ page }) => {
   await page.goto(`${URL}/documents`)
 
   await page.click('button:has-text("Новий документ")')
-  await page.click('.dropdown-item:has-text("Надходження")')
+  await page.click('.dropdown-item:has-text("Надходження — Акт прийому-передачі")')
   await page.waitForURL(/\/documents\/\d+/)
 
   await page.goto(`${URL}/documents`)

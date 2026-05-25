@@ -26,7 +26,7 @@ test.describe('Documents API', () => {
     const seed = await seedNakladnaContext(api, 'sign')
 
     const doc = await postJson(api, '/api/documents', {
-      doc_type: 'накладна_25',
+      operation: 'переміщення', form: 'накладна',
       doc_date: '2026-05-23',
       op_type_id: seed.opType.id,
       service_id: seed.service.id,
@@ -63,7 +63,7 @@ test.describe('Documents API', () => {
     const seed = await seedNakladnaContext(api, 'snap')
 
     const doc = await postJson(api, '/api/documents', {
-      doc_type: 'накладна_25',
+      operation: 'переміщення', form: 'накладна',
       doc_date: '2026-05-23',
       op_type_id: seed.opType.id,
       service_id: seed.service.id,
@@ -116,7 +116,7 @@ test.describe('Documents API', () => {
     const otCleanup = `/api/settings/op-types/${opType.id}`
 
     const mkAuto = () => postJson(api, '/api/documents', {
-      doc_type: 'накладна_25',
+      operation: 'переміщення', form: 'накладна',
       doc_date: '2026-05-23',
       op_type_id: opType.id,
       items: [],
@@ -132,7 +132,7 @@ test.describe('Documents API', () => {
 
     // Explicit number is NOT overridden
     const explicit = await postJson(api, '/api/documents', {
-      doc_type: 'накладна_25',
+      operation: 'переміщення', form: 'накладна',
       doc_date: '2026-05-23',
       op_type_id: opType.id,
       doc_number: `${prefix}99`,
@@ -159,7 +159,7 @@ test.describe('Documents API', () => {
     const seed = await seedNakladnaContext(api, 'xlsx')
 
     const doc = await postJson(api, '/api/documents', {
-      doc_type: 'накладна_25',
+      operation: 'переміщення', form: 'накладна',
       doc_date: '2026-05-23',
       op_type_id: seed.opType.id,
       service_id: seed.service.id,
@@ -178,5 +178,39 @@ test.describe('Documents API', () => {
     // Excel files start with PK (ZIP magic)
     expect(body[0]).toBe(0x50)
     expect(body[1]).toBe(0x4b)
+  })
+
+  // ── Receipt + Накладна: «Звідки» is a free-text supplier (no sender FK) ──
+  test('надходження + накладна snaps free-text from_unit when no sender_id', async () => {
+    const seed = await seedNakladnaContext(api, 'recv')
+
+    const doc = await postJson(api, '/api/documents', {
+      operation: 'надходження', form: 'накладна',
+      doc_date: '2026-05-25',
+      from_unit: 'ТОВ Постачальник',          // free text instead of sender_id
+      op_type_id: seed.opType.id,
+      service_id: seed.service.id,
+      receiver_id: seed.receiver.id,
+      fin_id: seed.fin.id,
+      items: [{ item_id: seed.item.id, quantity: 1, qty_received: 1 }],
+    })
+    extraCleanup.push(`/api/documents/${doc.id}`, ...seed.cleanup)
+
+    expect(doc.sender_id).toBeNull()
+    expect(doc.from_unit).toBe('ТОВ Постачальник')
+    expect(doc.extra_data.snap_sender_subdiv).toBe('ТОВ Постачальник')
+    expect(doc.extra_data.snap_sender_post).toBe('')
+    expect(doc.extra_data.snap_sender_name).toBe('')
+  })
+
+  // ── Illegal combo: переміщення + акт rejected with 400 ───────────────
+  test('illegal combo: переміщення + акт returns 422', async () => {
+    const resp = await api.post('/api/documents', { data: {
+      operation: 'переміщення', form: 'акт',
+      doc_date: '2026-05-25',
+      items: [],
+    }})
+    // Pydantic validator → 422 Unprocessable Entity
+    expect(resp.status()).toBe(422)
   })
 })

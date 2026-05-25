@@ -6,7 +6,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -17,21 +17,23 @@ from app.models import Document, DocumentItem, Item, Movement, User
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
-DOC_TYPES = ("надходження", "переміщення", "накладна_25")
+OPERATIONS = ("надходження", "переміщення")
+FORMS = ("накладна", "акт")
 
+# (operation, form) → required fields for sign. form=акт is only valid with
+# operation=надходження (validated separately in DocIn).
 REQUIRED_FIELDS = {
-    "надходження":  ["doc_number", "doc_date", "to_unit"],
-    "переміщення":  ["doc_number", "doc_date", "from_unit", "to_unit"],
-    "накладна_25":  ["doc_number", "doc_date"],
+    ("надходження", "накладна"): ["doc_number", "doc_date", "to_unit"],
+    ("надходження", "акт"):      ["doc_number", "doc_date", "to_unit"],
+    ("переміщення", "накладна"): ["doc_number", "doc_date"],
 }
 
-# Human-readable label written to Movement.doc_type when sign creates a row.
-# Movement.doc_type is free text; we use these two canonical values for new
-# rows, but legacy values stored elsewhere (Н-440/25, РВ-57, …) still render.
+# Human-readable label written to Movement.doc_type at sign time. Keyed by
+# `form` (paper artefact). Legacy values in old movement rows (Н-440/25, ...)
+# still render as-is.
 MOVEMENT_DOC_LABEL = {
-    "надходження":  "Акт прийому-передачі",
-    "переміщення":  "Накладна (вимога)",
-    "накладна_25":  "Накладна (вимога)",
+    "накладна": "Накладна (вимога)",
+    "акт":      "Акт прийому-передачі",
 }
 
 
@@ -52,7 +54,8 @@ class DocItemIn(BaseModel):
 
 
 class DocIn(BaseModel):
-    doc_type: str = "накладна_25"
+    operation: str = "переміщення"
+    form: str = "накладна"
     doc_number: Optional[str] = None
     doc_date: Optional[str] = None
     date_operation: Optional[str] = None
@@ -65,6 +68,19 @@ class DocIn(BaseModel):
     receiver_id: Optional[int] = None
     fin_id: Optional[int] = None
     items: List[DocItemIn] = []
+
+    @model_validator(mode="after")
+    def _check_combo(self):
+        if self.operation not in OPERATIONS:
+            raise ValueError(f"operation must be one of {OPERATIONS}")
+        if self.form not in FORMS:
+            raise ValueError(f"form must be one of {FORMS}")
+        if (self.operation, self.form) not in REQUIRED_FIELDS:
+            raise ValueError(
+                f"Combination operation={self.operation!r} + form={self.form!r} "
+                f"is not supported"
+            )
+        return self
 
 
 def _apply_items(doc: Document, items: List[DocItemIn], db: Session, snap_from_items: bool):
@@ -158,8 +174,14 @@ def _doc_to_dict(doc: Document) -> dict:
     extra = doc.extra_data or {}
     return {
         "id": doc.id,
-        "doc_type": doc.doc_type,
-        "doc_type_label": doc.movements[0].doc_type if doc.movements else None,
+        "operation": doc.operation,
+        "form": doc.form,
+        # `doc_type_label` is the human-readable Movement.doc_type written at
+        # sign time. For unsigned docs we surface the canonical form label so
+        # the list view shows something useful even before sign.
+        "doc_type_label":
+            doc.movements[0].doc_type if doc.movements
+            else MOVEMENT_DOC_LABEL.get(doc.form, doc.form),
         "doc_number": doc.doc_number,
         "doc_date": doc.doc_date,
         "date_operation": doc.date_operation,
@@ -190,19 +212,25 @@ def _get_or_404(doc_id: int, db: Session) -> Document:
 
 @router.get("")
 def list_documents(
-    doc_type: Optional[str] = None,
+    operation: Optional[str] = None,
+    form: Optional[str] = None,
     db: Session = Depends(get_db),
     _=Depends(get_current_user),
 ):
     q = db.query(Document)
-    if doc_type:
-        q = q.filter(Document.doc_type == doc_type)
+    if operation:
+        q = q.filter(Document.operation == operation)
+    if form:
+        q = q.filter(Document.form == form)
     docs = q.order_by(Document.created_at.desc()).all()
     return [
         {
             "id": d.id,
-            "doc_type": d.doc_type,
-            "doc_type_label": d.movements[0].doc_type if d.movements else None,
+            "operation": d.operation,
+            "form": d.form,
+            "doc_type_label":
+                d.movements[0].doc_type if d.movements
+                else MOVEMENT_DOC_LABEL.get(d.form, d.form),
             "doc_number": d.doc_number,
             "doc_date": d.doc_date,
             "from_unit": d.from_unit,
@@ -221,11 +249,9 @@ def get_document(doc_id: int, db: Session = Depends(get_db), _=Depends(get_curre
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_document(payload: DocIn, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    if payload.doc_type not in DOC_TYPES:
-        raise HTTPException(400, f"doc_type must be one of: {DOC_TYPES}")
-
     doc = Document(
-        doc_type=payload.doc_type,
+        operation=payload.operation,
+        form=payload.form,
         doc_number=payload.doc_number,
         doc_date=payload.doc_date,
         date_operation=payload.date_operation or payload.doc_date,
@@ -246,7 +272,7 @@ def create_document(payload: DocIn, db: Session = Depends(get_db), user=Depends(
 
     warnings = resolve_auto_number(doc, db)
 
-    is_nakl = payload.doc_type == "накладна_25"
+    is_nakl = payload.form == "накладна"
     _apply_items(doc, payload.items, db, snap_from_items=is_nakl)
 
     if is_nakl:
@@ -266,7 +292,8 @@ def update_document(doc_id: int, payload: DocIn, db: Session = Depends(get_db), 
     if doc.status != "draft":
         raise HTTPException(400, "Підписаний документ не можна редагувати. Спочатку зніміть підпис.")
 
-    doc.doc_type = payload.doc_type
+    doc.operation = payload.operation
+    doc.form = payload.form
     doc.doc_number = payload.doc_number
     doc.doc_date = payload.doc_date
     doc.date_operation = payload.date_operation or payload.doc_date
@@ -281,7 +308,7 @@ def update_document(doc_id: int, payload: DocIn, db: Session = Depends(get_db), 
 
     warnings = resolve_auto_number(doc, db)
 
-    is_nakl = payload.doc_type == "накладна_25"
+    is_nakl = payload.form == "накладна"
     _apply_items(doc, payload.items, db, snap_from_items=is_nakl)
 
     if is_nakl:
@@ -313,7 +340,7 @@ def sign_document(doc_id: int, db: Session = Depends(get_db), user=Depends(get_c
         raise HTTPException(400, "Документ вже підписано.")
 
     errors = []
-    for field in REQUIRED_FIELDS.get(doc.doc_type, []):
+    for field in REQUIRED_FIELDS.get((doc.operation, doc.form), []):
         if not getattr(doc, field, None):
             errors.append(field)
     if not doc.items:
@@ -321,8 +348,9 @@ def sign_document(doc_id: int, db: Session = Depends(get_db), user=Depends(get_c
     if errors:
         raise HTTPException(422, {"detail": "Заповніть обов'язкові поля", "missing": errors})
 
+    is_incoming = (doc.operation == "надходження")
+    label = MOVEMENT_DOC_LABEL.get(doc.form, doc.form)
     for it in _sorted_items(doc):
-        is_incoming = (doc.doc_type == "надходження")
         m = Movement(
             document_id=doc.id,
             entry_date=doc.doc_date,
@@ -337,7 +365,7 @@ def sign_document(doc_id: int, db: Session = Depends(get_db), user=Depends(get_c
             basis=doc.basis,
             doc_date=doc.doc_date,
             doc_number=doc.doc_number,
-            doc_type=MOVEMENT_DOC_LABEL.get(doc.doc_type, doc.doc_type),
+            doc_type=label,
             service=doc.service,
             price=it.price,
             mvo_from_id=doc.sender_id,
@@ -369,13 +397,13 @@ def unsign_document(doc_id: int, db: Session = Depends(get_db), _=Depends(get_cu
     return _doc_to_dict(doc)
 
 
-# ── Excel export (накладна_25) ─────────────────────────────────────────────
+# ── Excel export (form=накладна, any operation) ────────────────────────────
 
 @router.get("/{doc_id}/export/xlsx")
 def export_xlsx(doc_id: int, db: Session = Depends(get_db), _=Depends(get_current_user)):
     doc = _get_or_404(doc_id, db)
-    if doc.doc_type != "накладна_25":
-        raise HTTPException(400, "XLSX-експорт доступний лише для типу «накладна_25»")
+    if doc.form != "накладна":
+        raise HTTPException(400, "XLSX-експорт доступний лише для форми «Накладна (вимога)»")
     if not has_snap(doc):
         raise HTTPException(
             400,

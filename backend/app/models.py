@@ -156,7 +156,8 @@ class Document(Base):
     __tablename__ = "documents"
 
     id = Column(Integer, primary_key=True)
-    doc_type = Column(String, nullable=False)  # 'надходження' | 'переміщення' | 'накладна_25'
+    operation = Column(String, nullable=False)  # 'надходження' | 'переміщення'
+    form = Column(String, nullable=False)       # 'накладна' | 'акт'
     doc_number = Column(String, nullable=True)
     doc_date = Column(String, nullable=True)           # date_compiled
     date_operation = Column(String, nullable=True)

@@ -15,8 +15,14 @@
             </svg>
           </button>
           <div v-if="menuOpen" class="dropdown-menu">
-            <div class="dropdown-item" @click="createNew('надходження')">Надходження</div>
-            <div class="dropdown-item" @click="createNew('накладна_25')">Переміщення</div>
+            <div
+              v-for="opt in NEW_OPTIONS"
+              :key="`${opt.operation}-${opt.form}`"
+              class="dropdown-item"
+              @click="createNew(opt)"
+            >
+              {{ opt.label }}
+            </div>
           </div>
         </div>
       </template>
@@ -57,8 +63,8 @@
             <tbody>
               <tr v-for="doc in filtered" :key="doc.id" @click="open(doc)">
                 <td>
-                  <span class="type-badge" :class="typeClass(doc.doc_type)">{{ typeLabel(doc.doc_type) }}</span>
-                  <div v-if="doc.doc_type_label && doc.doc_type_label !== doc.doc_type" class="doc-type-label">{{ doc.doc_type_label }}</div>
+                  <span class="type-badge" :class="opClass(doc.operation)">{{ opLabel(doc.operation) }}</span>
+                  <div v-if="doc.doc_type_label" class="doc-type-label">{{ doc.doc_type_label }}</div>
                 </td>
                 <td class="td-mono">{{ doc.doc_number || '—' }}</td>
                 <td class="td-mono">{{ doc.doc_date || '—' }}</td>
@@ -107,20 +113,24 @@ const typeFilter = ref('')
 const menuOpen   = ref(false)
 const menuRef    = ref(null)
 
+// Three flat options; future forms (акт техн. стану, Додаток 47, …) just
+// append rows here without touching the dropdown markup.
+const NEW_OPTIONS = [
+  { operation: 'надходження', form: 'накладна', label: 'Надходження — Накладна (вимога)' },
+  { operation: 'надходження', form: 'акт',      label: 'Надходження — Акт прийому-передачі' },
+  { operation: 'переміщення', form: 'накладна', label: 'Переміщення — Накладна (вимога)' },
+]
+
 const typeOptions = [
   { value: '',            label: 'Всі' },
   { value: 'надходження', label: 'Надходження' },
-  { value: 'переміщення', label: 'Переміщення' },   // matches both "переміщення" and "накладна_25"
+  { value: 'переміщення', label: 'Переміщення' },
 ]
-
-const TRANSFER_TYPES = ['переміщення', 'накладна_25']
 
 const filtered = computed(() => {
   let list = docs.value
-  if (typeFilter.value === 'переміщення') {
-    list = list.filter(d => TRANSFER_TYPES.includes(d.doc_type))
-  } else if (typeFilter.value) {
-    list = list.filter(d => d.doc_type === typeFilter.value)
+  if (typeFilter.value) {
+    list = list.filter(d => d.operation === typeFilter.value)
   }
   return [...list].sort((a, b) => {
     const da = a.doc_date || ''
@@ -129,11 +139,11 @@ const filtered = computed(() => {
   })
 })
 
-function typeLabel(t) {
-  return { надходження: 'Надходження', переміщення: 'Переміщення', накладна_25: 'Переміщення' }[t] || t
+function opLabel(op) {
+  return { надходження: 'Надходження', переміщення: 'Переміщення' }[op] || op
 }
-function typeClass(t) {
-  return { надходження: 'incoming', переміщення: 'transfer', накладна_25: 'transfer' }[t] || ''
+function opClass(op) {
+  return { надходження: 'incoming', переміщення: 'transfer' }[op] || ''
 }
 function statusLabel(s) {
   return { draft: 'Чернетка', signed: 'Підписано', receiver_signed: 'Підписано отримувачем' }[s] || s
@@ -147,9 +157,9 @@ async function load() {
 
 function open(doc) { router.push(`/documents/${doc.id}`) }
 
-async function createNew(docType) {
+async function createNew(opt) {
   menuOpen.value = false
-  const doc = await createDocument({ doc_type: docType, items: [] })
+  const doc = await createDocument({ operation: opt.operation, form: opt.form, items: [] })
   router.push(`/documents/${doc.id}`)
 }
 
