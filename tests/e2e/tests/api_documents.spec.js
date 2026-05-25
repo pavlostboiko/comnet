@@ -213,4 +213,38 @@ test.describe('Documents API', () => {
     // Pydantic validator → 422 Unprocessable Entity
     expect(resp.status()).toBe(422)
   })
+
+  // ── After unsign, the draft must keep its items + lose its movements
+  // ── (regression for 7b7f04c). The new-flow path keeps document_items
+  // ── untouched; the legacy import-script path (no document_items, rows
+  // ── only in movements) is hydrated before delete — that branch is
+  // ── exercised only by code review here because there's no API to drop
+  // ── document_items while keeping a doc signed.
+  test('unsign leaves items intact and wipes movements', async () => {
+    const seed = await seedNakladnaContext(api, 'unhyd')
+
+    const doc = await postJson(api, '/api/documents', {
+      operation: 'переміщення', form: 'накладна',
+      doc_date: '2026-05-26',
+      op_type_id: seed.opType.id,
+      service_id: seed.service.id,
+      sender_id: seed.sender.id,
+      receiver_id: seed.receiver.id,
+      fin_id: seed.fin.id,
+      items: [
+        { item_id: seed.item.id, quantity: 3, qty_received: 3, notes: 'SN-A' },
+        { item_id: seed.item.id, quantity: 2, qty_received: 2, notes: 'SN-B' },
+      ],
+    })
+    extraCleanup.push(`/api/documents/${doc.id}`, ...seed.cleanup)
+
+    await api.post(`/api/documents/${doc.id}/sign`)
+
+    const unsigned = await api.post(`/api/documents/${doc.id}/unsign`).then(r => r.json())
+    expect(unsigned.status).toBe('draft')
+    expect(unsigned.items.length).toBe(2)
+
+    const movs = await api.get('/api/movements').then(r => r.json())
+    expect(movs.filter(m => m.doc_number === doc.doc_number).length).toBe(0)
+  })
 })
