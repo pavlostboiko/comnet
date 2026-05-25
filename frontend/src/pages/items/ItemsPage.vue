@@ -16,7 +16,7 @@
         <!-- Header -->
         <div class="tile-header">
           <span class="tile-title">Довідник майна</span>
-          <span class="tile-count">{{ items.length }}</span>
+          <span class="tile-count">{{ viewMode === 'groups' ? groupedItems.length : items.length }}</span>
           <div class="tile-tabs">
             <button class="tt-btn" :class="{ on: activeTab === 'all' }" @click="activeTab='all'">
               Всі <span class="c">{{ tabCounts.all }}</span>
@@ -26,6 +26,17 @@
             </button>
             <button class="tt-btn" :class="{ on: activeTab === 'nonserial' }" @click="activeTab='nonserial'">
               Несерійні <span class="c">{{ tabCounts.nonserial }}</span>
+            </button>
+          </div>
+          <!-- View-mode toggle: per-card vs grouped. Aggregates by
+               (name, price, category, unit_of_measure) — useful for звірка
+               and as a preview of the layout used by Дод. 14 / Дод. 47. -->
+          <div class="view-toggle">
+            <button class="vt-btn" :class="{ on: viewMode === 'cards' }" @click="viewMode = 'cards'">
+              Картки
+            </button>
+            <button class="vt-btn" :class="{ on: viewMode === 'groups' }" @click="viewMode = 'groups'">
+              Групи
             </button>
           </div>
         </div>
@@ -54,8 +65,8 @@
           <span class="sub-clear" v-if="selectedType" @click="selectedType=null">× Скинути</span>
         </div>
 
-        <!-- Table -->
-        <div class="table-wrap">
+        <!-- Cards view (per-unit) -->
+        <div v-if="viewMode === 'cards'" class="table-wrap">
           <table>
             <thead>
               <tr>
@@ -121,8 +132,59 @@
           </table>
         </div>
 
+        <!-- Groups view: aggregate by (name, price, category, unit) -->
+        <div v-else class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Найменування</th>
+                <th style="width:80px">Категорія</th>
+                <th style="width:60px;text-align:center">Од.</th>
+                <th style="width:120px;text-align:right">Вартість, грн</th>
+                <th style="width:80px;text-align:right">К-сть</th>
+                <th style="width:130px;text-align:right">Сума, грн</th>
+                <th style="width:80px;text-align:center">Карток</th>
+                <th>№№ карток</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="loading">
+                <td colspan="8" style="text-align:center;padding:32px;color:var(--text-light)">Завантаження…</td>
+              </tr>
+              <tr v-else-if="!groupedItems.length">
+                <td colspan="8" style="text-align:center;padding:32px;color:var(--text-light)">Нічого не знайдено</td>
+              </tr>
+              <tr v-for="g in groupedItems" :key="g.key">
+                <td><span class="td-name">{{ g.name }}</span></td>
+                <td>
+                  <span v-if="g.category" class="cat-badge" :class="catClass(g.category)">{{ g.category }}</span>
+                </td>
+                <td style="text-align:center">{{ g.unit_of_measure || '—' }}</td>
+                <td class="td-num-val">{{ fmtPrice(g.price) }}</td>
+                <td class="td-num-val">{{ fmtQty(g.total_quantity) }}</td>
+                <td class="td-num-val">{{ fmtPrice(g.total_amount) }}</td>
+                <td style="text-align:center">{{ g.card_count }}</td>
+                <td class="td-card-numbers" :title="g.card_numbers.join(', ')">{{ g.card_numbers.join(', ') }}</td>
+              </tr>
+            </tbody>
+            <tfoot v-if="!loading && groupedItems.length">
+              <tr class="totals-row">
+                <td colspan="5" style="text-align:right;font-weight:600">Разом:</td>
+                <td class="td-num-val" style="font-weight:600">{{ fmtPrice(groupedTotalAmount) }}</td>
+                <td style="text-align:center;font-weight:600">{{ groupedTotalCards }}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
         <div class="t-foot">
-          Показано <b>{{ filteredItems.length }}</b> з <b>{{ items.length }}</b> позицій
+          <template v-if="viewMode === 'cards'">
+            Показано <b>{{ filteredItems.length }}</b> з <b>{{ items.length }}</b> позицій
+          </template>
+          <template v-else>
+            Показано <b>{{ groupedItems.length }}</b> груп ({{ groupedTotalCards }} карток)
+          </template>
         </div>
       </div>
     </div>
@@ -375,6 +437,7 @@ const loading      = ref(false)
 const search       = ref('')
 const searchInputRef = ref(null)
 const activeTab    = ref('all')
+const viewMode     = ref('cards')   // 'cards' | 'groups'
 const selectedType = ref(null)
 
 // Card
@@ -427,6 +490,45 @@ const filteredItems = computed(() => {
   }
   return list
 })
+
+// Aggregate the SAME filter pipeline (so tabs + search apply to groups too)
+// by (name, price, category, unit_of_measure) — these together define
+// «same kind of asset» that should appear as one row in Дод. 14/47.
+const groupedItems = computed(() => {
+  const groups = new Map()
+  for (const it of filteredItems.value) {
+    const priceKey = it.price != null ? Number(it.price).toFixed(2) : ''
+    const key = [it.name || '', priceKey, it.category || '', it.unit_of_measure || ''].join('|')
+    let g = groups.get(key)
+    if (!g) {
+      g = {
+        key,
+        name: it.name || '',
+        price: it.price != null ? Number(it.price) : null,
+        category: it.category || '',
+        unit_of_measure: it.unit_of_measure || '',
+        total_quantity: 0,
+        total_amount: 0,
+        card_count: 0,
+        card_numbers: [],
+      }
+      groups.set(key, g)
+    }
+    const qty = Number(it.quantity) || 0
+    g.total_quantity += qty
+    g.total_amount   += qty * (g.price || 0)
+    g.card_count     += 1
+    g.card_numbers.push(it.number)
+  }
+  // Natural sort card numbers within each group
+  for (const g of groups.values()) {
+    g.card_numbers.sort((a, b) => String(a).localeCompare(String(b), 'uk', { numeric: true }))
+  }
+  return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, 'uk'))
+})
+
+const groupedTotalCards  = computed(() => groupedItems.value.reduce((s, g) => s + g.card_count, 0))
+const groupedTotalAmount = computed(() => groupedItems.value.reduce((s, g) => s + g.total_amount, 0))
 
 // ── Helpers ────────────────────────────────────────────────────
 function catClass(cat) {
@@ -599,6 +701,12 @@ onUnmounted(() => document.removeEventListener('keydown', onKeyDown))
 .tile-title { font-size:15px; font-weight:700; }
 .tile-count { font-family:'DM Mono',monospace; font-size:11.5px; font-weight:500; background:var(--accent-light); color:var(--accent); padding:2px 8px; border-radius:var(--radius-sm); }
 .tile-tabs { display:flex; gap:2px; background:var(--bg); padding:3px; border-radius:var(--radius-sm); border:1px solid var(--border-light); margin-left:auto; }
+.view-toggle { display:flex; gap:2px; background:var(--bg); padding:3px; border-radius:var(--radius-sm); border:1px solid var(--border-light); }
+.vt-btn { padding:5px 12px; border:none; background:transparent; border-radius:var(--radius-sm); font-family:inherit; font-size:12.5px; font-weight:500; color:var(--text-light); cursor:pointer; transition:all 0.12s; }
+.vt-btn:hover { color:var(--text-mid); }
+.vt-btn.on { background:var(--surface); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,0.06); font-weight:600; }
+.td-card-numbers { font-family:'DM Mono',monospace; font-size:12px; color:var(--text-light); max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.totals-row td { padding:10px 8px; background:var(--bg); border-top:1px solid var(--border); }
 .tt-btn { padding:5px 13px; border:none; background:transparent; border-radius:var(--radius-sm); font-family:inherit; font-size:13px; font-weight:500; color:var(--text-light); cursor:pointer; transition:all 0.12s; display:flex; align-items:center; gap:6px; }
 .tt-btn:hover { color:var(--text-mid); }
 .tt-btn.on { background:var(--surface); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,0.06); font-weight:600; }
