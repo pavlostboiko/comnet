@@ -137,24 +137,24 @@
           <table>
             <thead>
               <tr>
+                <th style="width:50px;text-align:center">№</th>
                 <th>Найменування</th>
                 <th style="width:80px">Категорія</th>
                 <th style="width:60px;text-align:center">Од.</th>
                 <th style="width:120px;text-align:right">Вартість, грн</th>
                 <th style="width:80px;text-align:right">К-сть</th>
                 <th style="width:130px;text-align:right">Сума, грн</th>
-                <th style="width:80px;text-align:center">Карток</th>
-                <th>№№ карток</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="loading">
-                <td colspan="8" style="text-align:center;padding:32px;color:var(--text-light)">Завантаження…</td>
+                <td colspan="7" style="text-align:center;padding:32px;color:var(--text-light)">Завантаження…</td>
               </tr>
               <tr v-else-if="!groupedItems.length">
-                <td colspan="8" style="text-align:center;padding:32px;color:var(--text-light)">Нічого не знайдено</td>
+                <td colspan="7" style="text-align:center;padding:32px;color:var(--text-light)">Нічого не знайдено</td>
               </tr>
-              <tr v-for="g in groupedItems" :key="g.key">
+              <tr v-for="(g, idx) in groupedItems" :key="g.key">
+                <td style="text-align:center;color:var(--text-light);font-family:'DM Mono',monospace;font-size:12px">{{ idx + 1 }}</td>
                 <td><span class="td-name">{{ g.name }}</span></td>
                 <td>
                   <span v-if="g.category" class="cat-badge" :class="catClass(g.category)">{{ g.category }}</span>
@@ -163,16 +163,12 @@
                 <td class="td-num-val">{{ fmtPrice(g.price) }}</td>
                 <td class="td-num-val">{{ fmtQty(g.total_quantity) }}</td>
                 <td class="td-num-val">{{ fmtPrice(g.total_amount) }}</td>
-                <td style="text-align:center">{{ g.card_count }}</td>
-                <td class="td-card-numbers" :title="g.card_numbers.join(', ')">{{ g.card_numbers.join(', ') }}</td>
               </tr>
             </tbody>
             <tfoot v-if="!loading && groupedItems.length">
               <tr class="totals-row">
-                <td colspan="5" style="text-align:right;font-weight:600">Разом:</td>
+                <td colspan="6" style="text-align:right;font-weight:600">Разом:</td>
                 <td class="td-num-val" style="font-weight:600">{{ fmtPrice(groupedTotalAmount) }}</td>
-                <td style="text-align:center;font-weight:600">{{ groupedTotalCards }}</td>
-                <td></td>
               </tr>
             </tfoot>
           </table>
@@ -183,7 +179,7 @@
             Показано <b>{{ filteredItems.length }}</b> з <b>{{ items.length }}</b> позицій
           </template>
           <template v-else>
-            Показано <b>{{ groupedItems.length }}</b> груп ({{ groupedTotalCards }} карток)
+            Показано <b>{{ groupedItems.length }}</b> унікальних позицій
           </template>
         </div>
       </div>
