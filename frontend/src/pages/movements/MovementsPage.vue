@@ -54,20 +54,20 @@
           <table>
             <thead>
               <tr>
-                <th style="width:44px">#</th>
-                <th style="width:100px">Дата</th>
-                <th style="width:130px">Тип документа</th>
-                <th style="width:110px">№ документа</th>
-                <th style="width:130px">Звідки</th>
-                <th style="width:110px">МВО звідки</th>
-                <th style="width:130px">Куди</th>
-                <th style="width:110px">МВО куди</th>
-                <th style="width:80px">Категорія</th>
-                <th>Найменування</th>
-                <th style="width:50px;text-align:right">Од.</th>
-                <th style="width:90px;text-align:right">Надійшло</th>
-                <th style="width:90px;text-align:right">Вибуло</th>
-                <th style="width:110px;text-align:right">Ціна, грн</th>
+                <th class="sortable" style="width:44px" @click="toggleSort('id')">#  <span class="sort-arrow">{{ sortIcon('id') }}</span></th>
+                <th class="sortable" style="width:100px" @click="toggleSort('entry_date')">Дата <span class="sort-arrow">{{ sortIcon('entry_date') }}</span></th>
+                <th class="sortable" style="width:130px" @click="toggleSort('doc_type')">Тип документа <span class="sort-arrow">{{ sortIcon('doc_type') }}</span></th>
+                <th class="sortable" style="width:110px" @click="toggleSort('doc_number')">№ документа <span class="sort-arrow">{{ sortIcon('doc_number') }}</span></th>
+                <th class="sortable" style="width:130px" @click="toggleSort('from_unit')">Звідки <span class="sort-arrow">{{ sortIcon('from_unit') }}</span></th>
+                <th class="sortable" style="width:110px" @click="toggleSort('mvo_from_name')">МВО звідки <span class="sort-arrow">{{ sortIcon('mvo_from_name') }}</span></th>
+                <th class="sortable" style="width:130px" @click="toggleSort('to_unit')">Куди <span class="sort-arrow">{{ sortIcon('to_unit') }}</span></th>
+                <th class="sortable" style="width:110px" @click="toggleSort('mvo_to_name')">МВО куди <span class="sort-arrow">{{ sortIcon('mvo_to_name') }}</span></th>
+                <th class="sortable" style="width:80px" @click="toggleSort('category')">Категорія <span class="sort-arrow">{{ sortIcon('category') }}</span></th>
+                <th class="sortable" @click="toggleSort('item_name')">Найменування <span class="sort-arrow">{{ sortIcon('item_name') }}</span></th>
+                <th class="sortable" style="width:50px;text-align:right" @click="toggleSort('unit_of_measure')">Од. <span class="sort-arrow">{{ sortIcon('unit_of_measure') }}</span></th>
+                <th class="sortable" style="width:90px;text-align:right" @click="toggleSort('qty_in')">Надійшло <span class="sort-arrow">{{ sortIcon('qty_in') }}</span></th>
+                <th class="sortable" style="width:90px;text-align:right" @click="toggleSort('qty_out')">Вибуло <span class="sort-arrow">{{ sortIcon('qty_out') }}</span></th>
+                <th class="sortable" style="width:110px;text-align:right" @click="toggleSort('price')">Ціна, грн <span class="sort-arrow">{{ sortIcon('price') }}</span></th>
                 <th></th>
               </tr>
             </thead>
@@ -75,10 +75,10 @@
               <tr v-if="loading">
                 <td colspan="15" style="text-align:center;padding:32px;color:var(--text-light)">Завантаження…</td>
               </tr>
-              <tr v-else-if="!filtered.length">
+              <tr v-else-if="!sorted.length">
                 <td colspan="15" style="text-align:center;padding:32px;color:var(--text-light)">Нічого не знайдено</td>
               </tr>
-              <tr v-for="m in filtered" :key="m.id">
+              <tr v-for="m in sorted" :key="m.id">
                 <td><span class="td-idx">{{ m.id }}</span></td>
                 <td class="td-mono">{{ fmtDate(m.entry_date) }}</td>
                 <td>
@@ -282,6 +282,7 @@ import TopBar from '../../components/TopBar.vue'
 import { createMovement, deleteMovement as apiDelete, getMovements, updateMovement } from '../../api/movements.js'
 import { getItems } from '../../api/items.js'
 import { getPersons } from '../../api/settings.js'
+import { useSort } from '../../composables/useSort.js'
 
 const CATEGORIES = ['1','2','3','4','5','пр.','непр.','пот.рем.']
 
@@ -362,6 +363,9 @@ const filtered = computed(() => {
   }
   return list
 })
+
+// Click-sort. Default = entry_date DESC (matches backend ORDER BY).
+const { sorted, toggleSort, sortIcon } = useSort(filtered, 'entry_date', 'desc')
 
 // ── Helpers ────────────────────────────────────────────────────
 function fmtDate(d) {
@@ -580,6 +584,10 @@ onMounted(fetchAll)
 .table-wrap { overflow-x:auto; }
 .table-wrap::-webkit-scrollbar { height:6px; }
 .table-wrap::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+th.sortable { cursor:pointer; user-select:none; transition:background 0.1s; white-space:nowrap; }
+th.sortable:hover { background:var(--bg); }
+.sort-arrow { color:var(--text-light); font-size:10px; margin-left:3px; opacity:0.5; }
+th.sortable:hover .sort-arrow { opacity:1; }
 table { width:100%; border-collapse:collapse; min-width:1260px; }
 thead tr { background:var(--bg); }
 th { padding:9px 12px; text-align:left; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-light); border-bottom:1px solid var(--border); white-space:nowrap; }

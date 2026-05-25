@@ -45,23 +45,23 @@
         </div>
 
         <div v-if="loading" class="empty-state">Завантаження…</div>
-        <div v-else-if="!filtered.length" class="empty-state">Документів немає</div>
+        <div v-else-if="!sorted.length" class="empty-state">Документів немає</div>
         <div v-else class="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Тип</th>
-                <th>№</th>
-                <th>Дата</th>
-                <th>Звідки</th>
-                <th>Куди</th>
-                <th style="text-align:center">Позицій</th>
-                <th>Статус</th>
+                <th class="sortable" @click="toggleSort('operation')">Тип <span class="sort-arrow">{{ sortIcon('operation') }}</span></th>
+                <th class="sortable" @click="toggleSort('doc_number')">№ <span class="sort-arrow">{{ sortIcon('doc_number') }}</span></th>
+                <th class="sortable" @click="toggleSort('doc_date')">Дата <span class="sort-arrow">{{ sortIcon('doc_date') }}</span></th>
+                <th class="sortable" @click="toggleSort('from_unit')">Звідки <span class="sort-arrow">{{ sortIcon('from_unit') }}</span></th>
+                <th class="sortable" @click="toggleSort('to_unit')">Куди <span class="sort-arrow">{{ sortIcon('to_unit') }}</span></th>
+                <th class="sortable" style="text-align:center" @click="toggleSort('items_count')">Позицій <span class="sort-arrow">{{ sortIcon('items_count') }}</span></th>
+                <th class="sortable" @click="toggleSort('status')">Статус <span class="sort-arrow">{{ sortIcon('status') }}</span></th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="doc in filtered" :key="doc.id" @click="open(doc)">
+              <tr v-for="doc in sorted" :key="doc.id" @click="open(doc)">
                 <td>
                   <span class="type-badge" :class="opClass(doc.operation)">{{ opLabel(doc.operation) }}</span>
                   <div v-if="doc.doc_type_label" class="doc-type-label">{{ doc.doc_type_label }}</div>
@@ -105,6 +105,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { getDocuments, deleteDocument, createDocument } from '../../api/documents'
 import TopBar from '../../components/TopBar.vue'
+import { useSort } from '../../composables/useSort.js'
 
 const router  = useRouter()
 const docs    = ref([])
@@ -138,6 +139,10 @@ const filtered = computed(() => {
     return da < db ? 1 : da > db ? -1 : b.id - a.id
   })
 })
+
+// Click-sort: default is the doc_date DESC computed above (no key set yet).
+// Clicking a header overrides; visual ↕/▲/▼ indicator per column.
+const { sorted, toggleSort, sortIcon } = useSort(filtered)
 
 function opLabel(op) {
   return { надходження: 'Надходження', переміщення: 'Переміщення' }[op] || op
@@ -242,4 +247,8 @@ tbody tr:hover .acts { opacity:1; }
 
 .empty-state { color:var(--text-light); padding:48px; text-align:center; font-size:14px; }
 .t-foot { padding:9px 20px; border-top:1px solid var(--border-light); font-size:13px; color:var(--text-light); background:var(--bg); }
+th.sortable { cursor:pointer; user-select:none; transition:background 0.1s; }
+th.sortable:hover { background:var(--bg); }
+.sort-arrow { color:var(--text-light); font-size:10px; margin-left:3px; opacity:0.5; }
+th.sortable:hover .sort-arrow { opacity:1; }
 </style>

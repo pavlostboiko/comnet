@@ -70,15 +70,15 @@
           <table>
             <thead>
               <tr>
-                <th style="width:70px">№ картки</th>
-                <th>Найменування</th>
-                <th style="width:150px">Тип</th>
-                <th style="width:130px">Серійний №</th>
-                <th style="width:80px">Категорія</th>
-                <th style="width:50px;text-align:center">Од.</th>
-                <th style="width:80px;text-align:right">К-сть</th>
-                <th style="width:120px;text-align:right">Вартість, грн</th>
-                <th style="width:200px">Примітки</th>
+                <th class="sortable" style="width:70px" @click="cardsToggleSort('number')">№ картки <span class="sort-arrow">{{ cardsSortIcon('number') }}</span></th>
+                <th class="sortable" @click="cardsToggleSort('name')">Найменування <span class="sort-arrow">{{ cardsSortIcon('name') }}</span></th>
+                <th class="sortable" style="width:150px" @click="cardsToggleSort('item_type')">Тип <span class="sort-arrow">{{ cardsSortIcon('item_type') }}</span></th>
+                <th class="sortable" style="width:130px" @click="cardsToggleSort('serial_number')">Серійний № <span class="sort-arrow">{{ cardsSortIcon('serial_number') }}</span></th>
+                <th class="sortable" style="width:80px" @click="cardsToggleSort('category')">Категорія <span class="sort-arrow">{{ cardsSortIcon('category') }}</span></th>
+                <th class="sortable" style="width:50px;text-align:center" @click="cardsToggleSort('unit_of_measure')">Од. <span class="sort-arrow">{{ cardsSortIcon('unit_of_measure') }}</span></th>
+                <th class="sortable" style="width:80px;text-align:right" @click="cardsToggleSort('quantity')">К-сть <span class="sort-arrow">{{ cardsSortIcon('quantity') }}</span></th>
+                <th class="sortable" style="width:120px;text-align:right" @click="cardsToggleSort('price')">Вартість, грн <span class="sort-arrow">{{ cardsSortIcon('price') }}</span></th>
+                <th class="sortable" style="width:200px" @click="cardsToggleSort('notes')">Примітки <span class="sort-arrow">{{ cardsSortIcon('notes') }}</span></th>
                 <th></th>
               </tr>
             </thead>
@@ -86,10 +86,10 @@
               <tr v-if="loading">
                 <td colspan="10" style="text-align:center;padding:32px;color:var(--text-light)">Завантаження…</td>
               </tr>
-              <tr v-else-if="!filteredItems.length">
+              <tr v-else-if="!cardsSorted.length">
                 <td colspan="10" style="text-align:center;padding:32px;color:var(--text-light)">Нічого не знайдено</td>
               </tr>
-              <tr v-for="item in filteredItems" :key="item.id" @click="openCard(item)">
+              <tr v-for="item in cardsSorted" :key="item.id" @click="openCard(item)">
                 <td><span class="td-num-badge">{{ item.number }}</span></td>
                 <td>
                   <span class="td-name">{{ item.name }}</span>
@@ -138,22 +138,22 @@
             <thead>
               <tr>
                 <th style="width:50px;text-align:center">№</th>
-                <th>Найменування</th>
-                <th style="width:80px">Категорія</th>
-                <th style="width:60px;text-align:center">Од.</th>
-                <th style="width:120px;text-align:right">Вартість, грн</th>
-                <th style="width:80px;text-align:right">К-сть</th>
-                <th style="width:130px;text-align:right">Сума, грн</th>
+                <th class="sortable" @click="groupsToggleSort('name')">Найменування <span class="sort-arrow">{{ groupsSortIcon('name') }}</span></th>
+                <th class="sortable" style="width:80px" @click="groupsToggleSort('category')">Категорія <span class="sort-arrow">{{ groupsSortIcon('category') }}</span></th>
+                <th class="sortable" style="width:60px;text-align:center" @click="groupsToggleSort('unit_of_measure')">Од. <span class="sort-arrow">{{ groupsSortIcon('unit_of_measure') }}</span></th>
+                <th class="sortable" style="width:120px;text-align:right" @click="groupsToggleSort('price')">Вартість, грн <span class="sort-arrow">{{ groupsSortIcon('price') }}</span></th>
+                <th class="sortable" style="width:80px;text-align:right" @click="groupsToggleSort('total_quantity')">К-сть <span class="sort-arrow">{{ groupsSortIcon('total_quantity') }}</span></th>
+                <th class="sortable" style="width:130px;text-align:right" @click="groupsToggleSort('total_amount')">Сума, грн <span class="sort-arrow">{{ groupsSortIcon('total_amount') }}</span></th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="loading">
                 <td colspan="7" style="text-align:center;padding:32px;color:var(--text-light)">Завантаження…</td>
               </tr>
-              <tr v-else-if="!groupedItems.length">
+              <tr v-else-if="!groupsSorted.length">
                 <td colspan="7" style="text-align:center;padding:32px;color:var(--text-light)">Нічого не знайдено</td>
               </tr>
-              <tr v-for="(g, idx) in groupedItems" :key="g.key">
+              <tr v-for="(g, idx) in groupsSorted" :key="g.key">
                 <td style="text-align:center;color:var(--text-light);font-family:'DM Mono',monospace;font-size:12px">{{ idx + 1 }}</td>
                 <td><span class="td-name">{{ g.name }}</span></td>
                 <td>
@@ -165,7 +165,7 @@
                 <td class="td-num-val">{{ fmtPrice(g.total_amount) }}</td>
               </tr>
             </tbody>
-            <tfoot v-if="!loading && groupedItems.length">
+            <tfoot v-if="!loading && groupsSorted.length">
               <tr class="totals-row">
                 <td colspan="6" style="text-align:right;font-weight:600">Разом:</td>
                 <td class="td-num-val" style="font-weight:600">{{ fmtPrice(groupedTotalAmount) }}</td>
@@ -418,6 +418,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import { createItem, deleteItem as apiDelete, getItem, getItems, updateItem } from '../../api/items.js'
+import { useSort } from '../../composables/useSort.js'
 
 const DOC_TYPE_LABELS = {
   акт_техн_стану:  'Акт техн. стану',
@@ -525,6 +526,20 @@ const groupedItems = computed(() => {
 
 const groupedTotalCards  = computed(() => groupedItems.value.reduce((s, g) => s + g.card_count, 0))
 const groupedTotalAmount = computed(() => groupedItems.value.reduce((s, g) => s + g.total_amount, 0))
+
+// Click-sort for the two table views. Default for cards = no sort (preserves
+// backend's natural sort by number). Groups view defaults to alphabetic by name.
+const {
+  sortBy: cardsSortBy, sorted: cardsSorted,
+  toggleSort: cardsToggleSort, sortIcon: cardsSortIcon,
+} = useSort(filteredItems)
+void cardsSortBy
+
+const {
+  sortBy: groupsSortBy, sorted: groupsSorted,
+  toggleSort: groupsToggleSort, sortIcon: groupsSortIcon,
+} = useSort(groupedItems, 'name', 'asc')
+void groupsSortBy
 
 // ── Helpers ────────────────────────────────────────────────────
 function catClass(cat) {
@@ -703,6 +718,10 @@ onUnmounted(() => document.removeEventListener('keydown', onKeyDown))
 .vt-btn.on { background:var(--surface); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,0.06); font-weight:600; }
 .td-card-numbers { font-family:'DM Mono',monospace; font-size:12px; color:var(--text-light); max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .totals-row td { padding:10px 8px; background:var(--bg); border-top:1px solid var(--border); }
+th.sortable { cursor:pointer; user-select:none; transition:background 0.1s; }
+th.sortable:hover { background:var(--bg); }
+.sort-arrow { color:var(--text-light); font-size:10px; margin-left:3px; opacity:0.5; }
+th.sortable:hover .sort-arrow { opacity:1; }
 .tt-btn { padding:5px 13px; border:none; background:transparent; border-radius:var(--radius-sm); font-family:inherit; font-size:13px; font-weight:500; color:var(--text-light); cursor:pointer; transition:all 0.12s; display:flex; align-items:center; gap:6px; }
 .tt-btn:hover { color:var(--text-mid); }
 .tt-btn.on { background:var(--surface); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,0.06); font-weight:600; }
