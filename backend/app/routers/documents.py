@@ -388,6 +388,27 @@ def unsign_document(doc_id: int, db: Session = Depends(get_db), _=Depends(get_cu
     if doc.status == "draft":
         raise HTTPException(400, "Документ вже у статусі чернетки.")
 
+    # Imported documents (scripts/import_movements.py) have no DocumentItems —
+    # their rows live only in Movement. Hydrate from movements before delete
+    # so the user keeps the data when the doc goes back to draft.
+    if not doc.items and doc.movements:
+        for idx, m in enumerate(sorted(doc.movements, key=lambda x: x.id)):
+            qty = m.qty_in if (m.qty_in is not None and m.qty_in > 0) else m.qty_out
+            db.add(DocumentItem(
+                document          = doc,
+                sort_order        = idx,
+                item_name         = m.item_name,
+                nomenclature_code = m.nomenclature_code,
+                unit_of_measure   = m.unit_of_measure,
+                category          = str(m.category) if m.category is not None else None,
+                quantity          = qty,
+                qty_received      = m.qty_in,
+                price             = m.price,
+                amount            = (qty * m.price) if (qty is not None and m.price is not None) else None,
+                notes             = m.serial_number,
+            ))
+        db.flush()
+
     db.query(Movement).filter(Movement.document_id == doc.id).delete(synchronize_session=False)
     doc.status = "draft"
     doc.signed_at = None
