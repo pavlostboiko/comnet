@@ -22,6 +22,10 @@
             <button class="tt-btn" :class="{ on: activeTab === 'optypes' }" @click="activeTab = 'optypes'">
               Типи операцій
             </button>
+            <button v-if="isAdmin" class="tt-btn" :class="{ on: activeTab === 'users' }" @click="activeTab = 'users'">
+              Користувачі
+              <span class="tab-count">{{ users.length }}</span>
+            </button>
           </div>
           <div class="tile-actions">
             <!-- Persons tab actions -->
@@ -64,6 +68,16 @@
                   <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
                 Додати тип
+              </button>
+            </template>
+            <!-- Users tab actions -->
+            <template v-if="activeTab === 'users'">
+              <button class="btn-primary" @click="openUserModal()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Додати користувача
               </button>
             </template>
           </div>
@@ -274,6 +288,65 @@
             </div>
           </div>
         </div>
+
+        <!-- TAB: КОРИСТУВАЧІ -->
+        <div v-show="activeTab === 'users'">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Логін</th>
+                <th style="width:120px">Роль</th>
+                <th style="width:120px">Активний</th>
+                <th style="width:110px"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="u in users" :key="u.id">
+                <td>
+                  <b>{{ u.username }}</b>
+                  <span v-if="currentUser && u.id === currentUser.id" class="self-pill">ви</span>
+                </td>
+                <td><span class="role-badge" :class="u.role">{{ u.role }}</span></td>
+                <td>
+                  <span v-if="u.is_active" class="active-on">так</span>
+                  <span v-else class="active-off">ні</span>
+                </td>
+                <td>
+                  <div class="row-acts">
+                    <button class="act e" title="Редагувати" @click="openUserModal(u)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                    </button>
+                    <button class="act" title="Змінити пароль" @click="openPasswordModal(u)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" />
+                        <path d="M7 11V7a5 5 0 0110 0v4" />
+                      </svg>
+                    </button>
+                    <button class="act d" title="Видалити" @click="confirmDeleteUser(u)"
+                      :disabled="currentUser && u.id === currentUser.id">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-1 14H6L5 6" />
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              <tr v-if="users.length === 0">
+                <td colspan="4" style="text-align:center; color:var(--text-light); padding:32px">
+                  Немає користувачів
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="t-foot">{{ users.length }} користувачів</div>
+        </div>
       </div>
     </div>
 
@@ -456,6 +529,79 @@
       </div>
     </div>
 
+    <!-- ====== USER MODAL ====== -->
+    <div class="overlay" :class="{ open: userModalOpen }" @click.self="userModalOpen = false">
+      <div class="modal-sm-box">
+        <div class="modal-head">
+          <span class="modal-title">{{ editingUser ? 'Редагувати користувача' : 'Додати користувача' }}</span>
+          <button class="modal-close" @click="userModalOpen = false">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2.5" stroke-linecap="round">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Логін</label>
+            <input v-model="uForm.username" class="form-input" placeholder="admin" autocomplete="username" />
+          </div>
+          <div v-if="!editingUser" class="form-group">
+            <label class="form-label">Пароль</label>
+            <input v-model="uForm.password" class="form-input" type="password"
+              placeholder="мінімум 4 символи" autocomplete="new-password" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Роль</label>
+            <select v-model="uForm.role" class="form-input">
+              <option value="admin">admin</option>
+              <option value="operator">operator</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="checkbox-row">
+              <input type="checkbox" v-model="uForm.is_active" />
+              <span>Активний</span>
+            </label>
+          </div>
+          <div v-if="userError" class="form-error">{{ userError }}</div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-cancel" @click="userModalOpen = false">Скасувати</button>
+          <button class="btn-primary" :disabled="savingUser" @click="saveUser">Зберегти</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== PASSWORD MODAL ====== -->
+    <div class="overlay" :class="{ open: passwordModalOpen }" @click.self="passwordModalOpen = false">
+      <div class="modal-sm-box">
+        <div class="modal-head">
+          <span class="modal-title">Змінити пароль · {{ passwordTarget?.username }}</span>
+          <button class="modal-close" @click="passwordModalOpen = false">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2.5" stroke-linecap="round">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Новий пароль</label>
+            <input v-model="newPassword" class="form-input" type="password"
+              placeholder="мінімум 4 символи" autocomplete="new-password" />
+          </div>
+          <div v-if="passwordError" class="form-error">{{ passwordError }}</div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-cancel" @click="passwordModalOpen = false">Скасувати</button>
+          <button class="btn-primary" :disabled="savingUser || !newPassword" @click="saveNewPassword">
+            Встановити
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- TOAST -->
     <div class="toast" :class="{ show: toastVisible }">{{ toastMsg }}</div>
   </div>
@@ -471,6 +617,10 @@ import {
   getPersons, createPerson, updatePerson, deletePerson,
   getServices, createService, updateService, deleteService,
 } from '../../api/settings.js'
+import {
+  getUsers, createUser, updateUser, setUserPassword, deleteUser,
+} from '../../api/users.js'
+import { useAuthStore } from '../../stores/auth.js'
 
 // ── State ──────────────────────────────────────────────────────────────────
 
@@ -493,6 +643,21 @@ const sForm = reactive({ name: '', chief_name: '', chief_position: '' })
 // Op Types
 const opTypes = ref([])
 const openOpTypes = ref(new Set())
+
+// Users
+const auth = useAuthStore()
+const currentUser = computed(() => auth.user)
+const isAdmin = computed(() => currentUser.value?.role === 'admin')
+const users = ref([])
+const userModalOpen = ref(false)
+const editingUser = ref(null)
+const uForm = reactive({ username: '', password: '', role: 'admin', is_active: true })
+const userError = ref('')
+const savingUser = ref(false)
+const passwordModalOpen = ref(false)
+const passwordTarget = ref(null)
+const newPassword = ref('')
+const passwordError = ref('')
 
 // Saving state
 const saving = ref(false)
@@ -542,7 +707,8 @@ const filteredPersons = computed(() => {
 // ── Lifecycle ──────────────────────────────────────────────────────────────
 
 onMounted(async () => {
-  await Promise.all([loadUnit(), loadPersons(), loadOpTypes(), loadServices()])
+  await Promise.all([loadUnit(), loadPersons(), loadOpTypes(), loadServices(),
+                     loadUsers()])
 })
 
 // ── Loaders ────────────────────────────────────────────────────────────────
@@ -565,6 +731,94 @@ async function loadOpTypes() {
 async function loadServices() {
   const { data } = await getServices()
   services.value = data
+}
+
+async function loadUsers() {
+  // Try unconditionally — auth.user may not be hydrated yet on first mount
+  // and isAdmin could be falsely false. Backend will 403 for non-admins.
+  try {
+    const { data } = await getUsers()
+    users.value = data
+  } catch (e) {
+    if (e?.response?.status !== 403) throw e
+    users.value = []  // non-admin: tab is also hidden via v-if="isAdmin"
+  }
+}
+
+// ── User actions ───────────────────────────────────────────────────────────
+
+function openUserModal(u = null) {
+  editingUser.value = u
+  userError.value = ''
+  if (u) {
+    Object.assign(uForm, { username: u.username, password: '', role: u.role, is_active: u.is_active })
+  } else {
+    Object.assign(uForm, { username: '', password: '', role: 'admin', is_active: true })
+  }
+  userModalOpen.value = true
+}
+
+async function saveUser() {
+  if (savingUser.value) return
+  userError.value = ''
+  savingUser.value = true
+  try {
+    if (editingUser.value) {
+      await updateUser(editingUser.value.id, {
+        username: uForm.username,
+        role: uForm.role,
+        is_active: uForm.is_active,
+      })
+      showToast('Користувача оновлено')
+    } else {
+      await createUser({
+        username: uForm.username,
+        password: uForm.password,
+        role: uForm.role,
+        is_active: uForm.is_active,
+      })
+      showToast('Користувача створено')
+    }
+    userModalOpen.value = false
+    await loadUsers()
+  } catch (e) {
+    userError.value = e?.response?.data?.detail || 'Помилка збереження'
+  } finally {
+    savingUser.value = false
+  }
+}
+
+function openPasswordModal(u) {
+  passwordTarget.value = u
+  newPassword.value = ''
+  passwordError.value = ''
+  passwordModalOpen.value = true
+}
+
+async function saveNewPassword() {
+  if (savingUser.value || !newPassword.value) return
+  passwordError.value = ''
+  savingUser.value = true
+  try {
+    await setUserPassword(passwordTarget.value.id, newPassword.value)
+    showToast(`Пароль для ${passwordTarget.value.username} оновлено`)
+    passwordModalOpen.value = false
+  } catch (e) {
+    passwordError.value = e?.response?.data?.detail || 'Помилка зміни пароля'
+  } finally {
+    savingUser.value = false
+  }
+}
+
+async function confirmDeleteUser(u) {
+  if (!confirm(`Видалити користувача «${u.username}»?`)) return
+  try {
+    await deleteUser(u.id)
+    showToast('Користувача видалено')
+    await loadUsers()
+  } catch (e) {
+    alert(e?.response?.data?.detail || 'Помилка видалення')
+  }
 }
 
 // ── Unit actions ───────────────────────────────────────────────────────────
@@ -834,6 +1088,22 @@ function showToast(msg) {
   border-radius: 3px;
   line-height: 17px;
 }
+
+/* Users tab styling */
+.role-badge { display:inline-block; padding:2px 8px; border-radius:var(--radius-sm); font-family:'DM Mono',monospace; font-size:11px; font-weight:600; }
+.role-badge.admin    { background:#dbeafe; color:#1e40af; }
+.role-badge.operator { background:#f1f5f9; color:#475569; }
+.active-on  { color:#065f46; font-weight:600; }
+.active-off { color:#94a3b8; }
+.self-pill { display:inline-block; margin-left:6px; padding:1px 6px; background:var(--accent-light); color:var(--accent); border-radius:3px; font-size:10.5px; font-weight:600; }
+.checkbox-row { display:flex; align-items:center; gap:8px; font-size:13.5px; cursor:pointer; }
+.checkbox-row input[type=checkbox] { width:16px; height:16px; cursor:pointer; }
+.form-error { color:#dc2626; font-size:12.5px; background:#fef2f2; border:1px solid #fca5a5; border-radius:var(--radius-sm); padding:6px 10px; margin-top:8px; }
+.row-acts { display:flex; gap:4px; justify-content:flex-end; }
+.act { width:28px; height:28px; border:1px solid var(--border); background:var(--surface); border-radius:var(--radius-sm); cursor:pointer; padding:5px; color:var(--text-mid); display:inline-flex; align-items:center; justify-content:center; }
+.act:hover:not(:disabled) { background:var(--bg); color:var(--text); }
+.act:disabled { opacity:0.4; cursor:not-allowed; }
+.act.d:hover:not(:disabled) { color:#dc2626; border-color:#fca5a5; }
 
 .tile-actions {
   margin-left: auto;

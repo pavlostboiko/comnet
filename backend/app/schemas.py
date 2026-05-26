@@ -42,6 +42,25 @@ class UserOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# --- User admin (CRUD by admin) ---
+
+class UserAdminCreate(BaseModel):
+    username: str
+    password: str
+    role: str = "admin"          # 'admin' | 'operator' (operator role currently unused)
+    is_active: bool = True
+
+
+class UserAdminUpdate(BaseModel):
+    username: Optional[str] = None
+    role: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class PasswordSet(BaseModel):
+    password: str
+
+
 # --- Unit Settings ---
 
 class UnitSettingsRead(BaseModel):

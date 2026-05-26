@@ -10,6 +10,19 @@ test('settings page loads with tabs', async ({ page }) => {
   await expect(page.locator('button:has-text("Служби")')).toBeVisible()
 })
 
+test('Users tab visible to admin and lists rows', async ({ page }) => {
+  await uiLogin(page)
+  await page.goto(`${URL}/settings`)
+  // Tab is admin-only — visible because the default seed user is admin
+  const tab = page.locator('button.tt-btn:has-text("Користувачі")')
+  await expect(tab).toBeVisible()
+  await tab.click()
+  // The bootstrapped admin user appears at minimum
+  await expect(page.locator('tbody tr', { hasText: 'admin' }).first()).toBeVisible()
+  // «Додати користувача» button is in the actions area
+  await expect(page.locator('button:has-text("Додати користувача")')).toBeVisible()
+})
+
 test('add person — modal closes; exactly one row added', async ({ page }) => {
   await uiLogin(page)
   await page.goto(`${URL}/settings`)
