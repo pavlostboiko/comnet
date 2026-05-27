@@ -41,8 +41,23 @@
 
       <div v-if="loading" class="loading">Завантаження...</div>
 
+      <!-- Type-switcher + form variant render together (NOT in an
+           v-else-if chain, otherwise only one branch would mount). -->
+      <template v-else>
+        <!-- Type-switcher: only for draft. Lets the user fix legacy docs
+             that migration 006 mis-classified, or reshape an in-progress
+             draft if they picked the wrong combination at create time. -->
+        <div v-if="!isReadonly" class="tile type-switch-tile">
+          <label class="type-switch-label">Тип документа:</label>
+          <select v-model="comboKey" class="type-switch-select" @change="onComboChange">
+            <option v-for="opt in TYPE_OPTIONS" :key="opt.key" :value="opt.key">
+              {{ opt.label }}
+            </option>
+          </select>
+        </div>
+
       <!-- ── form=накладна (нова форма за ТЗ §3) ─────────────────────── -->
-      <template v-else-if="form.form_type === 'накладна'">
+      <template v-if="form.form_type === 'накладна'">
 
         <!-- 3.1 Реквізити документа -->
         <div class="tile">
@@ -256,6 +271,7 @@
 
       <!-- ── form=акт (Акт прийому-передачі) — мінімальна форма ────────── -->
       <template v-else-if="form.form_type === 'акт'">
+        <!-- (form=акт start; closing </template> below) -->
         <div class="tile">
           <div class="tile-title">Реквізити акту</div>
           <div class="form-grid">
@@ -338,6 +354,7 @@
           </div>
         </div>
       </template>
+      </template>  <!-- outer v-else (type-switcher + variant) -->
     </div>
   </div>
 
@@ -387,6 +404,27 @@ const isReadonly = computed(() => form.value.status !== 'draft')
 // XLSX export is wired only to the Накладна (вимога) form (any operation).
 // Акт прийому-передачі has no template yet → button hidden.
 const hasXlsx = computed(() => form.value.form_type === 'накладна')
+
+// Type-switcher options. Mirror of NEW_OPTIONS in DocumentsPage — kept
+// inline here (3 items) instead of extracted to a module.
+const TYPE_OPTIONS = [
+  { key: 'надходження|накладна', operation: 'надходження', form_type: 'накладна', label: 'Надходження — Накладна (вимога)' },
+  { key: 'надходження|акт',      operation: 'надходження', form_type: 'акт',      label: 'Надходження — Акт прийому-передачі' },
+  { key: 'переміщення|накладна', operation: 'переміщення', form_type: 'накладна', label: 'Переміщення — Накладна (вимога)' },
+]
+const comboKey = computed({
+  get: () => `${form.value.operation || ''}|${form.value.form_type || ''}`,
+  set: (k) => {
+    const opt = TYPE_OPTIONS.find(o => o.key === k)
+    if (!opt) return
+    form.value.operation = opt.operation
+    form.value.form_type = opt.form_type
+  },
+})
+function onComboChange() {
+  // Re-apply defaults if switching INTO накладна (might need op_type, sender, etc.)
+  applyDefaultsIfDraft()
+}
 
 // ── Lookups ──────────────────────────────────────────────────────────────
 const personById  = (id) => id ? persons.value.find(p => p.id === id)  : null
@@ -714,6 +752,10 @@ onMounted(async () => {
 .status-badge.signed { background: #d1fae5; color: #065f46; font-weight: 600; }
 
 .tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 20px; }
+.type-switch-tile { display:flex; align-items:center; gap:12px; padding:12px 20px; }
+.type-switch-label { font-size:12px; font-weight:700; color:var(--text-light); text-transform:uppercase; letter-spacing:.05em; }
+.type-switch-select { flex:1; max-width:420px; border:1px solid var(--border); border-radius:var(--radius-sm); padding:7px 10px; font-size:13.5px; font-family:inherit; background:var(--surface); color:var(--text); outline:none; }
+.type-switch-select:focus { border-color:var(--accent); }
 .tile-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .tile-title { font-size: 14px; font-weight: 700; color: var(--text); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 12px; }
 .tile-count { font-family: 'DM Mono', monospace; font-size: 11.5px; font-weight: 500; background: var(--accent-light); color: var(--accent); padding: 2px 8px; border-radius: var(--radius-sm); }
