@@ -93,10 +93,21 @@ class Item(Base):
     batch_id = Column(String, nullable=True)
     notes = Column(Text, nullable=True)
     is_official = Column(Boolean, nullable=False, default=True)
+    issued_to_person_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     documents = relationship("AssetDocument", secondary="item_documents", viewonly=True)
+    issued_to = relationship("Person", foreign_keys=[issued_to_person_id])
+
+    @property
+    def issued_to_name(self):
+        # Surfaced through Pydantic schemas via `from_attributes=True`
+        # (Pydantic treats this property the same as a column).
+        p = self.issued_to
+        if not p:
+            return None
+        return p.search_name or " ".join(filter(None, [p.first_name, p.last_name]))
 
 
 class AssetDocument(Base):

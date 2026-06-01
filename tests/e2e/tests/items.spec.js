@@ -22,6 +22,12 @@ test('can search items', async ({ page }) => {
   await expect(page.locator('.topbar')).toBeVisible()
 })
 
+test('Cards view has a «Видане» column header', async ({ page }) => {
+  await uiLogin(page)
+  await page.goto(`${URL}/items`)
+  await expect(page.locator('thead th:has-text("Видане")').first()).toBeVisible()
+})
+
 test('Groups view toggle renders aggregate columns', async ({ page }) => {
   await uiLogin(page)
   await page.goto(`${URL}/items`)

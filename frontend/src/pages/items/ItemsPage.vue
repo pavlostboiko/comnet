@@ -78,16 +78,17 @@
                 <th class="sortable" style="width:50px;text-align:center" @click="cardsToggleSort('unit_of_measure')">Од. <span class="sort-arrow">{{ cardsSortIcon('unit_of_measure') }}</span></th>
                 <th class="sortable" style="width:80px;text-align:right" @click="cardsToggleSort('quantity')">К-сть <span class="sort-arrow">{{ cardsSortIcon('quantity') }}</span></th>
                 <th class="sortable" style="width:120px;text-align:right" @click="cardsToggleSort('price')">Вартість, грн <span class="sort-arrow">{{ cardsSortIcon('price') }}</span></th>
+                <th class="sortable" style="width:150px" @click="cardsToggleSort('issued_to_name')">Видане <span class="sort-arrow">{{ cardsSortIcon('issued_to_name') }}</span></th>
                 <th class="sortable" style="width:200px" @click="cardsToggleSort('notes')">Примітки <span class="sort-arrow">{{ cardsSortIcon('notes') }}</span></th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="loading">
-                <td colspan="10" style="text-align:center;padding:32px;color:var(--text-light)">Завантаження…</td>
+                <td colspan="11" style="text-align:center;padding:32px;color:var(--text-light)">Завантаження…</td>
               </tr>
               <tr v-else-if="!cardsSorted.length">
-                <td colspan="10" style="text-align:center;padding:32px;color:var(--text-light)">Нічого не знайдено</td>
+                <td colspan="11" style="text-align:center;padding:32px;color:var(--text-light)">Нічого не знайдено</td>
               </tr>
               <tr v-for="item in cardsSorted" :key="item.id" @click="openCard(item)">
                 <td><span class="td-num-badge">{{ item.number }}</span></td>
@@ -108,6 +109,7 @@
                 <td style="text-align:center">{{ item.unit_of_measure || '—' }}</td>
                 <td class="td-num-val" :class="{ 'td-qty-large': true }">{{ fmtQty(item.quantity) }}</td>
                 <td class="td-num-val">{{ fmtPrice(item.price) }}</td>
+                <td class="td-issued" :title="item.issued_to_name || ''">{{ item.issued_to_name || '' }}</td>
                 <td class="td-notes" :title="item.notes || ''">{{ item.notes || '' }}</td>
                 <td @click.stop>
                   <div class="acts">
@@ -358,6 +360,15 @@
                 <input class="form-input" v-model="f.batch_id" placeholder="НКЛ-001/25">
               </div>
               <div class="form-group full">
+                <label class="form-label">Видане особі</label>
+                <select v-model.number="f.issued_to_person_id" class="form-input">
+                  <option :value="null">— не видане —</option>
+                  <option v-for="p in activePersons" :key="p.id" :value="p.id">
+                    {{ personLabel(p) }}
+                  </option>
+                </select>
+              </div>
+              <div class="form-group full">
                 <label class="form-label">Примітки</label>
                 <input class="form-input" v-model="f.notes" placeholder="Додаткова інформація">
               </div>
@@ -418,6 +429,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import { createItem, deleteItem as apiDelete, getItem, getItems, updateItem } from '../../api/items.js'
+import { getPersons } from '../../api/settings.js'
 import { useSort } from '../../composables/useSort.js'
 
 const DOC_TYPE_LABELS = {
@@ -452,8 +464,18 @@ const f = reactive({
   nomenclature_code: '', unit_of_measure: '',
   quantity: '', price: '', serial_number: '', batch_id: '', notes: '',
   is_official: true,
+  issued_to_person_id: null,
 })
 const docRows = ref([])
+
+// Persons (active only) for the «Видане особі» picker
+const persons = ref([])
+const activePersons = computed(() => persons.value.filter(p => p.is_active !== false))
+function personLabel(p) {
+  return p.search_name
+    || [p.first_name, p.last_name].filter(Boolean).join(' ')
+    || `#${p.id}`
+}
 
 // Toast
 const toastMsg     = ref('')
@@ -606,6 +628,7 @@ function populateForm(item) {
   f.batch_id         = item?.batch_id ?? ''
   f.notes            = item?.notes ?? ''
   f.is_official      = item?.is_official ?? true
+  f.issued_to_person_id = item?.issued_to_person_id ?? null
 
   docRows.value = item?.documents?.map(d => ({
     doc_type: d.doc_type ?? '',
@@ -644,6 +667,7 @@ async function submitForm() {
       batch_id:         f.batch_id || null,
       notes:            f.notes || null,
       is_official:      f.is_official,
+      issued_to_person_id: f.issued_to_person_id || null,
       documents:        docRows.value.filter(d => d.doc_type || d.doc_number),
     }
     if (formMode.value === 'add') {
@@ -681,9 +705,13 @@ function onKeyDown(e) {
 }
 
 // ── Init ───────────────────────────────────────────────────────
-onMounted(() => {
+onMounted(async () => {
   fetchItems()
   document.addEventListener('keydown', onKeyDown)
+  try {
+    const { data } = await getPersons()
+    persons.value = data
+  } catch (_e) { persons.value = [] }
 })
 onUnmounted(() => document.removeEventListener('keydown', onKeyDown))
 </script>
@@ -760,6 +788,7 @@ td:last-child { padding-right:20px; }
 .td-serial.none { color:var(--text-light); font-style:italic; font-family:inherit; }
 .td-num-val { font-family:'DM Mono',monospace; font-size:12.5px; text-align:right; }
 .td-notes { font-size:12.5px; color:var(--text-light); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.td-issued { font-size:12.5px; color:var(--text-mid); max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .td-qty-large { color:var(--text); font-weight:600; }
 .unoffic-badge { display:inline-block; margin-left:6px; padding:1px 6px; border-radius:var(--radius-sm); font-size:11px; font-weight:600; background:#fef9c3; color:#a16207; }
 
