@@ -77,6 +77,16 @@ class Person(Base):
     is_active = Column(Boolean, nullable=False, default=True)
 
 
+class Recipient(Base):
+    __tablename__ = "recipients"
+
+    id = Column(Integer, primary_key=True)
+    callsign = Column(String, nullable=False, unique=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+
 class Item(Base):
     __tablename__ = "items"
 
@@ -93,21 +103,18 @@ class Item(Base):
     batch_id = Column(String, nullable=True)
     notes = Column(Text, nullable=True)
     is_official = Column(Boolean, nullable=False, default=True)
-    issued_to_person_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
+    issued_to_recipient_id = Column(Integer, ForeignKey("recipients.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     documents = relationship("AssetDocument", secondary="item_documents", viewonly=True)
-    issued_to = relationship("Person", foreign_keys=[issued_to_person_id])
+    issued_to = relationship("Recipient", foreign_keys=[issued_to_recipient_id])
 
     @property
     def issued_to_name(self):
         # Surfaced through Pydantic schemas via `from_attributes=True`
         # (Pydantic treats this property the same as a column).
-        p = self.issued_to
-        if not p:
-            return None
-        return p.search_name or " ".join(filter(None, [p.first_name, p.last_name]))
+        return self.issued_to.callsign if self.issued_to else None
 
 
 class AssetDocument(Base):

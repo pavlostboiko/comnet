@@ -360,13 +360,12 @@
                 <input class="form-input" v-model="f.batch_id" placeholder="НКЛ-001/25">
               </div>
               <div class="form-group full">
-                <label class="form-label">Видане особі</label>
-                <select v-model.number="f.issued_to_person_id" class="form-input">
-                  <option :value="null">— не видане —</option>
-                  <option v-for="p in activePersons" :key="p.id" :value="p.id">
-                    {{ personLabel(p) }}
-                  </option>
-                </select>
+                <label class="form-label">Видане (позивний)</label>
+                <RecipientAutocomplete
+                  v-model="f.issued_to_recipient_id"
+                  :recipients="recipients"
+                  placeholder="введіть позивний або створіть новий"
+                  @created="onRecipientCreated" />
               </div>
               <div class="form-group full">
                 <label class="form-label">Примітки</label>
@@ -429,8 +428,9 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import { createItem, deleteItem as apiDelete, getItem, getItems, updateItem } from '../../api/items.js'
-import { getPersons } from '../../api/settings.js'
+import { getRecipients } from '../../api/recipients.js'
 import { useSort } from '../../composables/useSort.js'
+import RecipientAutocomplete from '../../components/RecipientAutocomplete.vue'
 
 const DOC_TYPE_LABELS = {
   акт_техн_стану:  'Акт техн. стану',
@@ -464,17 +464,16 @@ const f = reactive({
   nomenclature_code: '', unit_of_measure: '',
   quantity: '', price: '', serial_number: '', batch_id: '', notes: '',
   is_official: true,
-  issued_to_person_id: null,
+  issued_to_recipient_id: null,
 })
 const docRows = ref([])
 
-// Persons (active only) for the «Видане особі» picker
-const persons = ref([])
-const activePersons = computed(() => persons.value.filter(p => p.is_active !== false))
-function personLabel(p) {
-  return p.search_name
-    || [p.first_name, p.last_name].filter(Boolean).join(' ')
-    || `#${p.id}`
+// Recipients (особовий склад) — used by the «Видане» autocomplete + inline-add
+const recipients = ref([])
+function onRecipientCreated(r) {
+  // RecipientAutocomplete emits this after a successful inline POST.
+  // Append to the list so the new entry is immediately available everywhere.
+  if (!recipients.value.find(x => x.id === r.id)) recipients.value.push(r)
 }
 
 // Toast
@@ -628,7 +627,7 @@ function populateForm(item) {
   f.batch_id         = item?.batch_id ?? ''
   f.notes            = item?.notes ?? ''
   f.is_official      = item?.is_official ?? true
-  f.issued_to_person_id = item?.issued_to_person_id ?? null
+  f.issued_to_recipient_id = item?.issued_to_recipient_id ?? null
 
   docRows.value = item?.documents?.map(d => ({
     doc_type: d.doc_type ?? '',
@@ -667,7 +666,7 @@ async function submitForm() {
       batch_id:         f.batch_id || null,
       notes:            f.notes || null,
       is_official:      f.is_official,
-      issued_to_person_id: f.issued_to_person_id || null,
+      issued_to_recipient_id: f.issued_to_recipient_id || null,
       documents:        docRows.value.filter(d => d.doc_type || d.doc_number),
     }
     if (formMode.value === 'add') {
@@ -709,9 +708,9 @@ onMounted(async () => {
   fetchItems()
   document.addEventListener('keydown', onKeyDown)
   try {
-    const { data } = await getPersons()
-    persons.value = data
-  } catch (_e) { persons.value = [] }
+    const { data } = await getRecipients()
+    recipients.value = data
+  } catch (_e) { recipients.value = [] }
 })
 onUnmounted(() => document.removeEventListener('keydown', onKeyDown))
 </script>

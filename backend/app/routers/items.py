@@ -78,7 +78,7 @@ def create_item(
         batch_id=payload.batch_id,
         notes=payload.notes,
         is_official=payload.is_official,
-        issued_to_person_id=payload.issued_to_person_id,
+        issued_to_recipient_id=payload.issued_to_recipient_id,
         created_by=user.id,
     )
     db.add(item)

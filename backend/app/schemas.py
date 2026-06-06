@@ -207,7 +207,7 @@ class ItemListRead(BaseModel):
     item_type: Optional[str] = None
     notes: Optional[str] = None
     is_official: bool
-    issued_to_person_id: Optional[int] = None
+    issued_to_recipient_id: Optional[int] = None
     issued_to_name: Optional[str] = None  # populated via Item.issued_to_name @property
 
     model_config = {"from_attributes": True}
@@ -227,7 +227,7 @@ class ItemRead(BaseModel):
     batch_id: Optional[str] = None
     notes: Optional[str] = None
     is_official: bool
-    issued_to_person_id: Optional[int] = None
+    issued_to_recipient_id: Optional[int] = None
     issued_to_name: Optional[str] = None
     documents: List[AssetDocumentRead] = []
 
@@ -247,7 +247,7 @@ class ItemCreate(BaseModel):
     batch_id: Optional[str] = None
     notes: Optional[str] = None
     is_official: bool = True
-    issued_to_person_id: Optional[int] = None
+    issued_to_recipient_id: Optional[int] = None
     documents: List[AssetDocumentCreate] = []
 
 
@@ -264,8 +264,28 @@ class ItemUpdate(BaseModel):
     batch_id: Optional[str] = None
     notes: Optional[str] = None
     is_official: Optional[bool] = None
-    issued_to_person_id: Optional[int] = None
+    issued_to_recipient_id: Optional[int] = None
     documents: Optional[List[AssetDocumentCreate]] = None
+
+
+# --- Recipients (особовий склад — позивні) ---
+
+class RecipientRead(BaseModel):
+    id: int
+    callsign: str
+    is_active: bool
+
+    model_config = {"from_attributes": True}
+
+
+class RecipientCreate(BaseModel):
+    callsign: str
+    is_active: bool = True
+
+
+class RecipientUpdate(BaseModel):
+    callsign: Optional[str] = None
+    is_active: Optional[bool] = None
 
 
 # --- Movements ---

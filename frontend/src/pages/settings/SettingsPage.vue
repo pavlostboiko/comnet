@@ -22,6 +22,10 @@
             <button class="tt-btn" :class="{ on: activeTab === 'optypes' }" @click="activeTab = 'optypes'">
               Типи операцій
             </button>
+            <button class="tt-btn" :class="{ on: activeTab === 'recipients' }" @click="activeTab = 'recipients'">
+              Отримувачі
+              <span class="tab-count">{{ recipients.length }}</span>
+            </button>
             <button v-if="isAdmin" class="tt-btn" :class="{ on: activeTab === 'users' }" @click="activeTab = 'users'">
               Користувачі
               <span class="tab-count">{{ users.length }}</span>
@@ -68,6 +72,16 @@
                   <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
                 Додати тип
+              </button>
+            </template>
+            <!-- Recipients tab actions -->
+            <template v-if="activeTab === 'recipients'">
+              <button class="btn-primary" @click="openRecipientModal()">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Додати позивний
               </button>
             </template>
             <!-- Users tab actions -->
@@ -287,6 +301,52 @@
               </button>
             </div>
           </div>
+        </div>
+
+        <!-- TAB: ОТРИМУВАЧІ -->
+        <div v-show="activeTab === 'recipients'">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Позивний</th>
+                <th style="width:120px">Активний</th>
+                <th style="width:110px"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in recipients" :key="r.id">
+                <td><b>{{ r.callsign }}</b></td>
+                <td>
+                  <span v-if="r.is_active" class="active-on">так</span>
+                  <span v-else class="active-off">ні</span>
+                </td>
+                <td>
+                  <div class="row-acts">
+                    <button class="act e" title="Редагувати" @click="openRecipientModal(r)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                    </button>
+                    <button class="act d" title="Видалити" @click="confirmDeleteRecipient(r)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-1 14H6L5 6" />
+                      </svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              <tr v-if="recipients.length === 0">
+                <td colspan="3" style="text-align:center; color:var(--text-light); padding:32px">
+                  Немає отримувачів
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="t-foot">{{ recipients.length }} отримувачів</div>
         </div>
 
         <!-- TAB: КОРИСТУВАЧІ -->
@@ -529,6 +589,41 @@
       </div>
     </div>
 
+    <!-- ====== RECIPIENT MODAL ====== -->
+    <div class="overlay" :class="{ open: recipientModalOpen }" @click.self="recipientModalOpen = false">
+      <div class="modal-sm-box">
+        <div class="modal-head">
+          <span class="modal-title">{{ editingRecipient ? 'Редагувати позивний' : 'Додати позивний' }}</span>
+          <button class="modal-close" @click="recipientModalOpen = false">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2.5" stroke-linecap="round">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Позивний</label>
+            <input v-model="rForm.callsign" class="form-input" placeholder="напр. Лис"
+              @keydown.enter="saveRecipient" />
+          </div>
+          <div class="form-group">
+            <label class="checkbox-row">
+              <input type="checkbox" v-model="rForm.is_active" />
+              <span>Активний</span>
+            </label>
+          </div>
+          <div v-if="recipientError" class="form-error">{{ recipientError }}</div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-cancel" @click="recipientModalOpen = false">Скасувати</button>
+          <button class="btn-primary" :disabled="savingRecipient || !rForm.callsign.trim()" @click="saveRecipient">
+            Зберегти
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- ====== USER MODAL ====== -->
     <div class="overlay" :class="{ open: userModalOpen }" @click.self="userModalOpen = false">
       <div class="modal-sm-box">
@@ -620,6 +715,9 @@ import {
 import {
   getUsers, createUser, updateUser, setUserPassword, deleteUser,
 } from '../../api/users.js'
+import {
+  getRecipients, createRecipient, updateRecipient, deleteRecipient,
+} from '../../api/recipients.js'
 import { useAuthStore } from '../../stores/auth.js'
 
 // ── State ──────────────────────────────────────────────────────────────────
@@ -658,6 +756,14 @@ const passwordModalOpen = ref(false)
 const passwordTarget = ref(null)
 const newPassword = ref('')
 const passwordError = ref('')
+
+// Recipients
+const recipients = ref([])
+const recipientModalOpen = ref(false)
+const editingRecipient = ref(null)
+const rForm = reactive({ callsign: '', is_active: true })
+const recipientError = ref('')
+const savingRecipient = ref(false)
 
 // Saving state
 const saving = ref(false)
@@ -708,7 +814,7 @@ const filteredPersons = computed(() => {
 
 onMounted(async () => {
   await Promise.all([loadUnit(), loadPersons(), loadOpTypes(), loadServices(),
-                     loadUsers()])
+                     loadUsers(), loadRecipients()])
 })
 
 // ── Loaders ────────────────────────────────────────────────────────────────
@@ -731,6 +837,59 @@ async function loadOpTypes() {
 async function loadServices() {
   const { data } = await getServices()
   services.value = data
+}
+
+async function loadRecipients() {
+  try {
+    const { data } = await getRecipients()
+    recipients.value = data
+  } catch (_e) { recipients.value = [] }
+}
+
+function openRecipientModal(r = null) {
+  editingRecipient.value = r
+  recipientError.value = ''
+  rForm.callsign = r ? r.callsign : ''
+  rForm.is_active = r ? r.is_active : true
+  recipientModalOpen.value = true
+}
+
+async function saveRecipient() {
+  if (savingRecipient.value || !rForm.callsign.trim()) return
+  recipientError.value = ''
+  savingRecipient.value = true
+  try {
+    if (editingRecipient.value) {
+      await updateRecipient(editingRecipient.value.id, {
+        callsign: rForm.callsign.trim(),
+        is_active: rForm.is_active,
+      })
+      showToast('Позивний оновлено')
+    } else {
+      await createRecipient({
+        callsign: rForm.callsign.trim(),
+        is_active: rForm.is_active,
+      })
+      showToast('Позивний додано')
+    }
+    recipientModalOpen.value = false
+    await loadRecipients()
+  } catch (e) {
+    recipientError.value = e?.response?.data?.detail || 'Помилка збереження'
+  } finally {
+    savingRecipient.value = false
+  }
+}
+
+async function confirmDeleteRecipient(r) {
+  if (!confirm(`Видалити позивний «${r.callsign}»?`)) return
+  try {
+    await deleteRecipient(r.id)
+    showToast('Позивний видалено')
+    await loadRecipients()
+  } catch (e) {
+    alert(e?.response?.data?.detail || 'Помилка видалення')
+  }
 }
 
 async function loadUsers() {
