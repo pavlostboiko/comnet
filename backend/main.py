@@ -13,6 +13,7 @@ from app.routers import documents as documents_router
 from app.routers import items as items_router
 from app.routers import movements as movements_router
 from app.routers import settings as settings_router
+from app.routers import admin as admin_router
 from app.routers import recipients as recipients_router
 from app.routers import users as users_router
 
@@ -59,6 +60,7 @@ app.include_router(settings_router.router)
 app.include_router(documents_router.router)
 app.include_router(recipients_router.router)
 app.include_router(users_router.router)
+app.include_router(admin_router.router)
 
 
 @app.get("/api/health")

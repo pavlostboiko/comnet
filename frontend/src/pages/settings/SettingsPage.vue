@@ -30,6 +30,9 @@
               Користувачі
               <span class="tab-count">{{ users.length }}</span>
             </button>
+            <button v-if="isAdmin" class="tt-btn" :class="{ on: activeTab === 'import' }" @click="activeTab = 'import'">
+              Імпорт
+            </button>
           </div>
           <div class="tile-actions">
             <!-- Persons tab actions -->
@@ -407,6 +410,57 @@
           </table>
           <div class="t-foot">{{ users.length }} користувачів</div>
         </div>
+
+        <!-- TAB: ІМПОРТ -->
+        <div v-show="activeTab === 'import'">
+          <div class="import-grid">
+            <!-- Items import -->
+            <div class="import-card">
+              <div class="import-title">Імпорт майна (Items)</div>
+              <div class="import-hint">
+                XLSX з колонками: <code>№</code>, <code>Товар</code>, <code>Код номер</code>,
+                <code>Серійний номер</code>, <code>Од. виміру</code>, <code>Вартість</code>,
+                <code>Кіл-сть</code>, <code>Категорія</code>, <code>Де знаходиться</code>.
+                Дублікати за номером пропускаються.
+              </div>
+              <input type="file" accept=".xlsx" @change="onItemsFile" :disabled="importing" />
+              <button class="btn-primary" :disabled="!itemsFile || importing" @click="doImportItems">
+                {{ importing === 'items' ? 'Імпорт…' : 'Завантажити' }}
+              </button>
+              <pre v-if="itemsResult" class="import-result">{{ itemsResult }}</pre>
+            </div>
+
+            <!-- Movements import -->
+            <div class="import-card">
+              <div class="import-title">Імпорт переміщень (Movements)</div>
+              <div class="import-hint">
+                XLSX з фіксованим порядком колонок (legacy VBA layout): заголовок у рядку 2,
+                дані з рядка 3. A=дата, B=товар, D=од_вим, F=надійшло, G=вибуло, H=звідки,
+                I=куди, M=дата_док, N=№_док, Z=тип_операції тощо. Створює movements +
+                Document-обгортки де є № документа.
+              </div>
+              <input type="file" accept=".xlsx" @change="onMovementsFile" :disabled="importing" />
+              <button class="btn-primary" :disabled="!movementsFile || importing" @click="doImportMovements">
+                {{ importing === 'movements' ? 'Імпорт…' : 'Завантажити' }}
+              </button>
+              <pre v-if="movementsResult" class="import-result">{{ movementsResult }}</pre>
+            </div>
+          </div>
+
+          <!-- Danger zone -->
+          <div class="danger-zone">
+            <div class="danger-title">Очистити базу майна та документів</div>
+            <div class="danger-hint">
+              Видалить ВСІ записи: майно (items), накладні/документи, переміщення,
+              прив'язані документи. Налаштування (особи, отримувачі, користувачі, служби,
+              типи операцій, підрозділ) — лишаються.
+            </div>
+            <button class="btn-danger" :disabled="importing || wiping" @click="doWipe">
+              {{ wiping ? 'Очищення…' : '⚠ Очистити базу' }}
+            </button>
+            <pre v-if="wipeResult" class="import-result">{{ wipeResult }}</pre>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -718,6 +772,9 @@ import {
 import {
   getRecipients, createRecipient, updateRecipient, deleteRecipient,
 } from '../../api/recipients.js'
+import {
+  wipeInventory, importItems, importMovements,
+} from '../../api/admin.js'
 import { useAuthStore } from '../../stores/auth.js'
 
 // ── State ──────────────────────────────────────────────────────────────────
@@ -756,6 +813,67 @@ const passwordModalOpen = ref(false)
 const passwordTarget = ref(null)
 const newPassword = ref('')
 const passwordError = ref('')
+
+// Import tab
+const itemsFile = ref(null)
+const movementsFile = ref(null)
+const itemsResult = ref('')
+const movementsResult = ref('')
+const wipeResult = ref('')
+const importing = ref(null)   // null | 'items' | 'movements'
+const wiping = ref(false)
+
+function onItemsFile(e)     { itemsFile.value     = e.target.files[0] || null; itemsResult.value = '' }
+function onMovementsFile(e) { movementsFile.value = e.target.files[0] || null; movementsResult.value = '' }
+
+async function doImportItems() {
+  if (!itemsFile.value || importing.value) return
+  importing.value = 'items'
+  itemsResult.value = ''
+  try {
+    const { data } = await importItems(itemsFile.value)
+    itemsResult.value = JSON.stringify(data, null, 2)
+    showToast(`Items: +${data.created}, пропущено ${data.skipped}`)
+  } catch (e) {
+    itemsResult.value = `ПОМИЛКА: ${e?.response?.data?.detail || e.message}`
+  } finally {
+    importing.value = null
+  }
+}
+
+async function doImportMovements() {
+  if (!movementsFile.value || importing.value) return
+  importing.value = 'movements'
+  movementsResult.value = ''
+  try {
+    const { data } = await importMovements(movementsFile.value)
+    movementsResult.value = JSON.stringify(data, null, 2)
+    showToast(`Movements: +${data.created}, документів ${data.documents_created}`)
+  } catch (e) {
+    movementsResult.value = `ПОМИЛКА: ${e?.response?.data?.detail || e.message}`
+  } finally {
+    importing.value = null
+  }
+}
+
+async function doWipe() {
+  if (!confirm(
+    'ВИДАЛИТИ ВСЕ майно, документи та переміщення?\n' +
+    'Це необоротно. Налаштування лишаються.\n\n' +
+    'Підтверджуєте?'
+  )) return
+  wiping.value = true
+  wipeResult.value = ''
+  try {
+    const { data } = await wipeInventory()
+    wipeResult.value = JSON.stringify(data, null, 2)
+    showToast('База очищена')
+  } catch (e) {
+    wipeResult.value = `ПОМИЛКА: ${e?.response?.data?.detail || e.message}`
+  } finally {
+    wiping.value = false
+  }
+}
 
 // Recipients
 const recipients = ref([])
@@ -1263,6 +1381,21 @@ function showToast(msg) {
 .act:hover:not(:disabled) { background:var(--bg); color:var(--text); }
 .act:disabled { opacity:0.4; cursor:not-allowed; }
 .act.d:hover:not(:disabled) { color:#dc2626; border-color:#fca5a5; }
+
+/* Import tab */
+.import-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(380px, 1fr)); gap:16px; padding:20px; }
+.import-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:16px; display:flex; flex-direction:column; gap:10px; }
+.import-title { font-weight:700; font-size:14px; color:var(--text); }
+.import-hint { font-size:12.5px; color:var(--text-light); line-height:1.45; }
+.import-hint code { font-family:'DM Mono', monospace; font-size:11.5px; background:var(--bg); padding:1px 4px; border-radius:3px; }
+.import-result { background:#0f172a; color:#a5f3fc; padding:10px; border-radius:var(--radius-sm); font-size:11.5px; max-height:240px; overflow:auto; margin:0; white-space:pre-wrap; word-break:break-all; }
+
+.danger-zone { margin:20px; padding:16px; border:1px solid #fca5a5; background:#fef2f2; border-radius:var(--radius-sm); display:flex; flex-direction:column; gap:10px; }
+.danger-title { font-weight:700; color:#991b1b; font-size:14px; }
+.danger-hint { font-size:12.5px; color:#7f1d1d; line-height:1.45; }
+.btn-danger { padding:8px 18px; background:#dc2626; color:#fff; border:none; border-radius:var(--radius-sm); font-family:inherit; font-size:13.5px; font-weight:600; cursor:pointer; align-self:flex-start; }
+.btn-danger:hover:not(:disabled) { background:#b91c1c; }
+.btn-danger:disabled { opacity:0.5; cursor:not-allowed; }
 
 .tile-actions {
   margin-left: auto;
