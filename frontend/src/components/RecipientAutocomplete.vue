@@ -4,7 +4,7 @@
       ref="inputRef"
       v-model="query"
       class="rc-input"
-      :placeholder="placeholder || 'Позивний…'"
+      :placeholder="placeholder || 'Прізвище…'"
       @focus="onFocus"
       @blur="onBlur"
       @input="open = true"

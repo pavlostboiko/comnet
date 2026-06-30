@@ -14,7 +14,7 @@ os.environ.setdefault("SECRET_KEY", "test-only")
 from openpyxl import Workbook  # noqa: E402
 
 from app.routers.admin import (  # noqa: E402
-    ITEMS_COLUMN_MAP, OP_TYPE_MAP,
+    ITEMS_COLUMN_MAP, OP_TYPE_MAP, RECIPIENT_SKIP_VALUES,
     _find_items_header_row, _build_items_col_map, _parse_decimal,
 )
 
@@ -24,7 +24,8 @@ def _xlsx_with_items_header():
     ws = wb.active
     # Headers in row 1
     headers = ["№", "Товар", "Код номер", "Серійний номер",
-               "Од. виміру", "Вартість", "Кіл-сть", "Категорія", "Де знаходиться"]
+               "Од. виміру", "Вартість", "Кіл-сть", "Категорія",
+               "Де знаходиться", "Видано"]
     for col, h in enumerate(headers, 1):
         ws.cell(row=1, column=col, value=h)
     ws.cell(row=2, column=1, value="K-001")
@@ -67,3 +68,14 @@ def test_parse_decimal_handles_ua_locale():
     assert _parse_decimal(None) is None
     assert _parse_decimal("not a number") is None
     assert _parse_decimal(42) == Decimal("42")
+
+
+def test_видано_column_in_items_map():
+    # Header maps to a synthetic key that the importer resolves to a recipient FK
+    assert ITEMS_COLUMN_MAP.get("Видано") == "issued_recipient"
+
+
+def test_recipient_skip_values_include_warehouse():
+    # «Склад» / «склад» / empty must be skipped (don't autocreate a Склад recipient)
+    assert "склад" in RECIPIENT_SKIP_VALUES
+    assert "" in RECIPIENT_SKIP_VALUES

@@ -360,11 +360,11 @@
                 <input class="form-input" v-model="f.batch_id" placeholder="НКЛ-001/25">
               </div>
               <div class="form-group full">
-                <label class="form-label">Видане (позивний)</label>
+                <label class="form-label">Видане (прізвище)</label>
                 <RecipientAutocomplete
                   v-model="f.issued_to_recipient_id"
                   :recipients="recipients"
-                  placeholder="введіть позивний або створіть новий"
+                  placeholder="введіть прізвище або створіть нове"
                   @created="onRecipientCreated" />
               </div>
               <div class="form-group full">

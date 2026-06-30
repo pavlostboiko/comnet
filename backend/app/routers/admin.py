@@ -20,7 +20,7 @@ from app.auth import require_admin
 from app.database import get_db
 from app.models import (
     AssetDocument, Document, DocumentItem, Item, ItemDocument, Movement,
-    OpType, Person, User,
+    OpType, Person, Recipient, User,
 )
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -95,7 +95,12 @@ ITEMS_COLUMN_MAP = {
     "Кіл-сть":         "quantity",
     "Категорія":       "item_type",
     "Де знаходиться":  "notes",
+    "Видано":          "issued_recipient",  # resolved to recipient FK below
 }
+
+# Values in the «Видано» column that are NOT a recipient and must be skipped.
+# Case-insensitive. Add more as the user reports them.
+RECIPIENT_SKIP_VALUES = {"склад", ""}
 
 TYPE_PREFIX_RE = re.compile(r"^\d+\.\s*")
 
@@ -135,6 +140,12 @@ def import_items(
 
     created, skipped, errors = 0, 0, []
     existing_numbers = set(n for (n,) in db.query(Item.number).all())
+    # callsign_lc → recipient.id (case-insensitive lookup) — keep in-memory so
+    # we don't hit the DB for every row; new ones append as we create them.
+    recipients_by_callsign_lc = {
+        (r.callsign or "").lower(): r.id for r in db.query(Recipient).all()
+    }
+    recipients_created = 0
 
     for row in ws.iter_rows(min_row=header_row + 1, values_only=False):
         vals = {}
@@ -153,6 +164,23 @@ def import_items(
         if item_type:
             item_type = TYPE_PREFIX_RE.sub("", str(item_type)).strip()
 
+        # Resolve «Видано» → recipient FK (find-or-create), with skip list.
+        recipient_id = None
+        raw_recipient = _clean(vals.get("issued_recipient"))
+        if raw_recipient and raw_recipient.lower() not in RECIPIENT_SKIP_VALUES:
+            key = raw_recipient.lower()
+            if key in recipients_by_callsign_lc:
+                recipient_id = recipients_by_callsign_lc[key]
+            else:
+                new_rec = Recipient(
+                    callsign=raw_recipient, is_active=True, created_by=user.id,
+                )
+                db.add(new_rec)
+                db.flush()
+                recipients_by_callsign_lc[key] = new_rec.id
+                recipient_id = new_rec.id
+                recipients_created += 1
+
         try:
             db.add(Item(
                 number            = number,
@@ -165,6 +193,7 @@ def import_items(
                 item_type         = item_type,
                 notes             = _clean(vals.get("notes")),
                 is_official       = True,
+                issued_to_recipient_id = recipient_id,
                 created_by        = user.id,
             ))
             existing_numbers.add(number)
@@ -173,7 +202,12 @@ def import_items(
             errors.append(f"#{number}: {e}")
 
     db.commit()
-    return {"created": created, "skipped": skipped, "errors": errors}
+    return {
+        "created": created,
+        "skipped": skipped,
+        "errors": errors,
+        "recipients_created": recipients_created,
+    }
 
 
 # ── Movements import ──────────────────────────────────────────────────────

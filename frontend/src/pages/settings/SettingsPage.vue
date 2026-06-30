@@ -84,7 +84,7 @@
                   stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                   <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
-                Додати позивний
+                Додати прізвище
               </button>
             </template>
             <!-- Users tab actions -->
@@ -311,7 +311,7 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th>Позивний</th>
+                <th>Прізвище</th>
                 <th style="width:120px">Активний</th>
                 <th style="width:110px"></th>
               </tr>
@@ -647,7 +647,7 @@
     <div class="overlay" :class="{ open: recipientModalOpen }" @click.self="recipientModalOpen = false">
       <div class="modal-sm-box">
         <div class="modal-head">
-          <span class="modal-title">{{ editingRecipient ? 'Редагувати позивний' : 'Додати позивний' }}</span>
+          <span class="modal-title">{{ editingRecipient ? 'Редагувати прізвище' : 'Додати прізвище' }}</span>
           <button class="modal-close" @click="recipientModalOpen = false">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
               stroke-width="2.5" stroke-linecap="round">
@@ -657,8 +657,8 @@
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label class="form-label">Позивний</label>
-            <input v-model="rForm.callsign" class="form-input" placeholder="напр. Лис"
+            <label class="form-label">Прізвище</label>
+            <input v-model="rForm.callsign" class="form-input" placeholder="напр. Іваненко"
               @keydown.enter="saveRecipient" />
           </div>
           <div class="form-group">
@@ -982,13 +982,13 @@ async function saveRecipient() {
         callsign: rForm.callsign.trim(),
         is_active: rForm.is_active,
       })
-      showToast('Позивний оновлено')
+      showToast('Прізвище оновлено')
     } else {
       await createRecipient({
         callsign: rForm.callsign.trim(),
         is_active: rForm.is_active,
       })
-      showToast('Позивний додано')
+      showToast('Прізвище додано')
     }
     recipientModalOpen.value = false
     await loadRecipients()
@@ -1000,10 +1000,10 @@ async function saveRecipient() {
 }
 
 async function confirmDeleteRecipient(r) {
-  if (!confirm(`Видалити позивний «${r.callsign}»?`)) return
+  if (!confirm(`Видалити прізвище «${r.callsign}»?`)) return
   try {
     await deleteRecipient(r.id)
-    showToast('Позивний видалено')
+    showToast('Прізвище видалено')
     await loadRecipients()
   } catch (e) {
     alert(e?.response?.data?.detail || 'Помилка видалення')
