@@ -105,6 +105,20 @@ ITEMS_COLUMN_MAP = {
 # Case-insensitive. Add more as the user reports them.
 RECIPIENT_SKIP_VALUES = {"склад", ""}
 
+# Placeholder tokens that stand in for «no serial number» in source files.
+# Normalized to NULL on import so serial-vs-non-serial logic works correctly
+# (Groups view, splits section visibility, dedup, etc.).
+SERIAL_NONE_TOKENS = {"б/н", "бн", "б\\н", "н/д", "нд", "-", "—", "–", ""}
+
+
+def _normalize_serial(val) -> Optional[str]:
+    s = _clean(val)
+    if s is None:
+        return None
+    if s.lower() in SERIAL_NONE_TOKENS:
+        return None
+    return s
+
 TYPE_PREFIX_RE = re.compile(r"^\d+\.\s*")
 
 
@@ -189,7 +203,7 @@ def import_items(
                 number            = number,
                 name              = str(vals["name"]).strip(),
                 nomenclature_code = _clean(vals.get("nomenclature_code")),
-                serial_number     = _clean(vals.get("serial_number")),
+                serial_number     = _normalize_serial(vals.get("serial_number")),
                 unit_of_measure   = _clean(vals.get("unit_of_measure")),
                 price             = _parse_decimal(vals.get("price")),
                 quantity          = _parse_decimal(vals.get("quantity")) or Decimal("1"),
@@ -354,7 +368,7 @@ def import_movements(
                 basis             = _clean(_col(row, MV_COLS["basis"])),
                 doc_date          = doc_date,
                 doc_number        = doc_num,
-                serial_number     = _clean(_col(row, MV_COLS["serial_number"])),
+                serial_number     = _normalize_serial(_col(row, MV_COLS["serial_number"])),
                 nomenclature_code = _clean(_col(row, MV_COLS["nomenclature_code"])),
                 price             = _parse_decimal(_col(row, MV_COLS["price"])),
                 service           = _clean(_col(row, MV_COLS["service"])),

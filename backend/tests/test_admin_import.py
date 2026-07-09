@@ -14,8 +14,9 @@ os.environ.setdefault("SECRET_KEY", "test-only")
 from openpyxl import Workbook  # noqa: E402
 
 from app.routers.admin import (  # noqa: E402
-    ITEMS_COLUMN_MAP, OP_TYPE_MAP, RECIPIENT_SKIP_VALUES,
+    ITEMS_COLUMN_MAP, OP_TYPE_MAP, RECIPIENT_SKIP_VALUES, SERIAL_NONE_TOKENS,
     _find_items_header_row, _build_items_col_map, _parse_decimal,
+    _normalize_serial,
 )
 
 
@@ -79,3 +80,15 @@ def test_recipient_skip_values_include_warehouse():
     # «Склад» / «склад» / empty must be skipped (don't autocreate a Склад recipient)
     assert "склад" in RECIPIENT_SKIP_VALUES
     assert "" in RECIPIENT_SKIP_VALUES
+
+
+def test_normalize_serial_placeholders_become_none():
+    for token in ("б/н", "Б/Н", " б/н ", "-", "—", "н/д", "", None, "  "):
+        assert _normalize_serial(token) is None, f"expected None for {token!r}"
+
+
+def test_normalize_serial_preserves_real_values():
+    assert _normalize_serial("SN-12345") == "SN-12345"
+    assert _normalize_serial(" ABC123 ") == "ABC123"  # trimmed
+    assert _normalize_serial("б/н X") == "б/н X"      # only exact placeholder normalizes
+    assert _normalize_serial(42) == "42"
