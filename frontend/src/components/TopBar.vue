@@ -15,10 +15,10 @@
     <nav class="nav-links">
       <router-link class="nav-link" to="/items">Майно</router-link>
       <router-link class="nav-link" to="/movements">Переміщення</router-link>
-      <router-link class="nav-link" to="/documents">Документи</router-link>
+      <router-link v-if="isAdmin" class="nav-link" to="/documents">Документи</router-link>
       <router-link class="nav-link" to="/residues">Залишки</router-link>
-      <router-link class="nav-link" to="/reports">Звіти</router-link>
-      <router-link class="nav-link" to="/settings">Налаштування</router-link>
+      <router-link v-if="isAdmin" class="nav-link" to="/reports">Звіти</router-link>
+      <router-link v-if="isAdmin" class="nav-link" to="/settings">Налаштування</router-link>
     </nav>
 
     <div class="tb-right">
@@ -41,6 +41,7 @@ const initials = computed(() => {
   const name = authStore.user?.username || ''
   return name.slice(0, 2).toUpperCase()
 })
+const isAdmin = computed(() => authStore.user?.role === 'admin')
 </script>
 
 <style scoped>

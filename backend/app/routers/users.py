@@ -58,6 +58,7 @@ def create_user(
         hashed_password=_hash(payload.password),
         role=payload.role,
         is_active=payload.is_active,
+        person_id=payload.person_id,
     )
     db.add(user)
     db.commit()
@@ -99,6 +100,10 @@ def update_user(
             if _count_active_admins(db, exclude_id=user.id) == 0:
                 raise HTTPException(400, "У системі має лишитися щонайменше один активний admin")
         user.is_active = payload.is_active
+
+    if payload.person_id is not None:
+        # None → unset; positive → link. Explicit 0 or -1 treated as unset.
+        user.person_id = payload.person_id or None
 
     db.commit()
     db.refresh(user)

@@ -72,6 +72,39 @@ test.describe('Users API', () => {
     expect(resp.status()).toBe(400)
   })
 
+  test('user linked to a person exposes person_id + person_unit in /auth/me', async ({ request }) => {
+    // Seed a person with a unit
+    const tag = `pu-${Date.now()}`
+    const person = await postJson(api, '/api/settings/persons', {
+      first_name: 'Petro', last_name: 'Test', position: 'МВО', unit: `Unit-${tag}`,
+    })
+    extraCleanup.push(`/api/settings/persons/${person.id}`)
+
+    // Create an operator user linked to that person
+    const username = `op-me-${tag}`, password = 'op-pw-strong'
+    const created = await postJson(api, '/api/users', {
+      username, password, role: 'operator', is_active: true, person_id: person.id,
+    })
+    extraCleanup.push(`/api/users/${created.id}`)
+    expect(created.person_id).toBe(person.id)
+    expect(created.person_unit).toBe(`Unit-${tag}`)
+
+    // Log in as them and check /auth/me
+    const opToken = await getToken(request, { user: username, pass: password })
+    const opApi = await pwRequest.newContext({
+      baseURL: API,
+      extraHTTPHeaders: { Authorization: `Bearer ${opToken}` },
+    })
+    try {
+      const me = await opApi.get('/api/auth/me').then(r => r.json())
+      expect(me.person_id).toBe(person.id)
+      expect(me.person_unit).toBe(`Unit-${tag}`)
+      expect(me.role).toBe('operator')
+    } finally {
+      await opApi.dispose()
+    }
+  })
+
   test('non-admin user gets 403 on /api/users', async ({ request }) => {
     // Create an operator via admin api
     const username = `op-${Date.now()}`

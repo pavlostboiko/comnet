@@ -734,6 +734,18 @@
               <span>Активний</span>
             </label>
           </div>
+          <div class="form-group">
+            <label class="form-label">Пов'язати з особою</label>
+            <select v-model.number="uForm.person_id" class="form-input">
+              <option :value="null">— не пов'язано —</option>
+              <option v-for="p in persons" :key="p.id" :value="p.id">
+                {{ personDisplayLabel(p) }}
+              </option>
+            </select>
+            <div class="form-hint">
+              МВО login → показує «Залишки» тільки свого підрозділу (persons.unit).
+            </div>
+          </div>
           <div v-if="userError" class="form-error">{{ userError }}</div>
         </div>
         <div class="modal-foot">
@@ -828,7 +840,13 @@ const isAdmin = computed(() => currentUser.value?.role === 'admin')
 const users = ref([])
 const userModalOpen = ref(false)
 const editingUser = ref(null)
-const uForm = reactive({ username: '', password: '', role: 'admin', is_active: true })
+const uForm = reactive({ username: '', password: '', role: 'admin', is_active: true, person_id: null })
+
+function personDisplayLabel(p) {
+  const name = [p.last_name, p.first_name].filter(Boolean).join(' ')
+  const label = name || p.search_name || `#${p.id}`
+  return p.unit ? `${label} — ${p.unit}` : label
+}
 const userError = ref('')
 const savingUser = ref(false)
 const passwordModalOpen = ref(false)
@@ -1083,9 +1101,15 @@ function openUserModal(u = null) {
   editingUser.value = u
   userError.value = ''
   if (u) {
-    Object.assign(uForm, { username: u.username, password: '', role: u.role, is_active: u.is_active })
+    Object.assign(uForm, {
+      username: u.username, password: '', role: u.role,
+      is_active: u.is_active, person_id: u.person_id ?? null,
+    })
   } else {
-    Object.assign(uForm, { username: '', password: '', role: 'admin', is_active: true })
+    Object.assign(uForm, {
+      username: '', password: '', role: 'admin',
+      is_active: true, person_id: null,
+    })
   }
   userModalOpen.value = true
 }
@@ -1100,6 +1124,7 @@ async function saveUser() {
         username: uForm.username,
         role: uForm.role,
         is_active: uForm.is_active,
+        person_id: uForm.person_id,
       })
       showToast('Користувача оновлено')
     } else {
@@ -1108,6 +1133,7 @@ async function saveUser() {
         password: uForm.password,
         role: uForm.role,
         is_active: uForm.is_active,
+        person_id: uForm.person_id,
       })
       showToast('Користувача створено')
     }

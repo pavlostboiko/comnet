@@ -38,6 +38,8 @@ class UserOut(BaseModel):
     username: str
     role: str
     is_active: bool
+    person_id: Optional[int] = None
+    person_unit: Optional[str] = None  # persons.unit via property
 
     model_config = {"from_attributes": True}
 
@@ -47,14 +49,16 @@ class UserOut(BaseModel):
 class UserAdminCreate(BaseModel):
     username: str
     password: str
-    role: str = "admin"          # 'admin' | 'operator' (operator role currently unused)
+    role: str = "admin"          # 'admin' | 'operator'
     is_active: bool = True
+    person_id: Optional[int] = None
 
 
 class UserAdminUpdate(BaseModel):
     username: Optional[str] = None
     role: Optional[str] = None
     is_active: Optional[bool] = None
+    person_id: Optional[int] = None
 
 
 class PasswordSet(BaseModel):

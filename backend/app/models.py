@@ -55,6 +55,13 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     role = Column(String, nullable=False, default="operator")
     is_active = Column(Boolean, nullable=False, default=True)
+    person_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
+
+    person = relationship("Person", foreign_keys=[person_id])
+
+    @property
+    def person_unit(self):
+        return self.person.unit if self.person else None
 
 
 class Person(Base):

@@ -42,7 +42,7 @@
         <!-- Detail: items of selected unit -->
         <div v-else class="detail">
           <div class="detail-head">
-            <button class="btn-back" @click="closeUnit">← Всі підрозділи</button>
+            <button v-if="canGoBack" class="btn-back" @click="closeUnit">← Всі підрозділи</button>
             <div class="detail-title">Майно у: <b>{{ selectedUnit }}</b></div>
             <div class="detail-summary">{{ detail?.items?.length || 0 }} позицій</div>
           </div>
@@ -87,12 +87,19 @@ import { ref, computed, onMounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import { getResiduesByUnit, getResiduesByUnitDetail } from '../../api/residues.js'
 import { useSort } from '../../composables/useSort.js'
+import { useAuthStore } from '../../stores/auth.js'
+
+const auth = useAuthStore()
 
 const rows = ref([])
 const loading = ref(false)
 const selectedUnit = ref(null)
 const detail = ref(null)
 const detailLoading = ref(false)
+
+// Admins can navigate back to the master list; a scoped operator is stuck
+// on their unit and shouldn't see the button.
+const canGoBack = computed(() => auth.user?.role === 'admin')
 
 // Enrich with numeric shadow fields for sort (backend sends strings)
 const enriched = computed(() => rows.value.map(r => ({
@@ -109,7 +116,27 @@ async function load() {
     rows.value = data
   } finally { loading.value = false }
 }
-onMounted(load)
+
+// Non-admins with a linked person land directly on their unit's detail.
+async function bootstrap() {
+  // Ensure /auth/me is loaded (router guard usually did this already)
+  if (!auth.user && auth.token) {
+    try { await auth.fetchMe() } catch (_e) { /* handled elsewhere */ }
+  }
+  const user = auth.user
+  if (user && user.role !== 'admin' && user.person_unit) {
+    selectedUnit.value = user.person_unit
+    detail.value = null
+    detailLoading.value = true
+    try {
+      const { data } = await getResiduesByUnitDetail(user.person_unit)
+      detail.value = data
+    } finally { detailLoading.value = false }
+    return
+  }
+  await load()
+}
+onMounted(bootstrap)
 
 async function openUnit(u) {
   selectedUnit.value = u.unit
