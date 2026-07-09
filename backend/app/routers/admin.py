@@ -321,6 +321,8 @@ def import_movements(
     created, skipped, errors, unmatched_persons = 0, 0, [], set()
     orphan_card_nums: set[str] = set()   # values in file's X column that
                                          # don't match any items.number
+    auto_balanced: list[dict] = []       # rows we auto-mirrored qty_in↔qty_out
+                                         # for internal transfers
 
     # Pass 1: collect document keys, create / dedupe Document rows
     doc_id_map = {}  # (op, form, doc_number, doc_date) → document.id
@@ -391,6 +393,21 @@ def import_movements(
                 orphan_card_nums.add(card_num)
             item_card_num = card_num if card_num in items_card_nums else None
 
+            qty_in  = _parse_decimal(_col(row, MV_COLS["qty_in"]))
+            qty_out = _parse_decimal(_col(row, MV_COLS["qty_out"]))
+            # Auto-balance internal transfers: file conventions have only one
+            # of qty_in/qty_out set for a внутрішнє переміщення row, but the
+            # balance formula per (unit) is SUM(in) − SUM(out), so we need
+            # BOTH sides set for the receiving unit to show a positive balance.
+            # Mirror only when op is «переміщення» and exactly one side is set.
+            if op == "переміщення":
+                if qty_in and not qty_out:
+                    qty_out = qty_in
+                    auto_balanced.append({"row": i, "item": _clean(_col(row, MV_COLS["item_name"])), "qty": str(qty_in), "mirrored": "in→out"})
+                elif qty_out and not qty_in:
+                    qty_in = qty_out
+                    auto_balanced.append({"row": i, "item": _clean(_col(row, MV_COLS["item_name"])), "qty": str(qty_out), "mirrored": "out→in"})
+
             db.add(Movement(
                 document_id       = doc_id,
                 entry_date        = _parse_date(_col(row, MV_COLS["entry_date"])),
@@ -398,8 +415,8 @@ def import_movements(
                 item_card_num     = item_card_num,
                 unit_of_measure   = _clean(_col(row, MV_COLS["unit_of_measure"])),
                 category          = _clean(_col(row, MV_COLS["category"])),
-                qty_in            = _parse_decimal(_col(row, MV_COLS["qty_in"])),
-                qty_out           = _parse_decimal(_col(row, MV_COLS["qty_out"])),
+                qty_in            = qty_in,
+                qty_out           = qty_out,
                 from_unit         = _clean(_col(row, MV_COLS["from_unit"])),
                 to_unit           = _clean(_col(row, MV_COLS["to_unit"])),
                 mvo_from_id       = mvo_from_id,
@@ -426,6 +443,8 @@ def import_movements(
         "errors": errors,
         "unmatched_persons": sorted(unmatched_persons),
         "orphan_card_nums": sorted(orphan_card_nums),
+        "auto_balanced": auto_balanced,
+        "auto_balanced_count": len(auto_balanced),
         "documents_created": len(doc_id_map),
     }
 

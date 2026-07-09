@@ -136,3 +136,17 @@ def test_movements_response_shape_includes_orphans_key():
     assert '"orphan_card_nums"' in src
     assert '"unmatched_persons"' in src
     assert '"documents_created"' in src
+    assert '"auto_balanced"' in src
+    assert '"auto_balanced_count"' in src
+
+
+def test_auto_balance_logic_present_for_internal_transfers():
+    # The auto-balance branch: for op=="переміщення" rows with only one of
+    # qty_in/qty_out set, we mirror to the other side so the receiving
+    # unit's SUM(qty_in) matches the sending unit's SUM(qty_out).
+    import inspect
+    from app.routers import admin as admin_mod
+    src = inspect.getsource(admin_mod.import_movements)
+    assert 'op == "переміщення"' in src
+    assert 'in→out' in src
+    assert 'out→in' in src
