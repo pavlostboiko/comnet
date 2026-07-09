@@ -16,7 +16,7 @@ from openpyxl import Workbook  # noqa: E402
 from app.routers.admin import (  # noqa: E402
     ITEMS_COLUMN_MAP, OP_TYPE_MAP, RECIPIENT_SKIP_VALUES, SERIAL_NONE_TOKENS,
     _find_items_header_row, _build_items_col_map, _parse_decimal,
-    _normalize_serial,
+    _normalize_serial, _build_person_lookup, _resolve_person,
 )
 
 
@@ -92,3 +92,33 @@ def test_normalize_serial_preserves_real_values():
     assert _normalize_serial(" ABC123 ") == "ABC123"  # trimmed
     assert _normalize_serial("б/н X") == "б/н X"      # only exact placeholder normalizes
     assert _normalize_serial(42) == "42"
+
+
+class _FakePerson:
+    """Duck-typed stand-in for models.Person — models pulling SQLAlchemy
+    require DATABASE_URL at import time, and we've already stubbed env
+    higher up; this keeps the helper pure."""
+    def __init__(self, pid, first_name="", last_name="", search_name=None):
+        self.id = pid
+        self.first_name = first_name
+        self.last_name = last_name
+        self.search_name = search_name
+
+
+def test_person_lookup_matches_first_last_case_insensitive():
+    p = _FakePerson(1, first_name="Petro", last_name="Ivanenko", search_name="Ivanenko P.")
+    lookup = _build_person_lookup([p])
+
+    assert _resolve_person("Petro Ivanenko", lookup) == 1
+    assert _resolve_person("PETRO IVANENKO", lookup) == 1
+    assert _resolve_person("petro ivanenko", lookup) == 1
+    assert _resolve_person("Ivanenko Petro", lookup) == 1   # swapped order
+    assert _resolve_person("Ivanenko P.", lookup) == 1       # existing search_name
+    assert _resolve_person("Nobody", lookup) is None
+
+
+def test_person_lookup_last_name_alone():
+    p = _FakePerson(2, last_name="Petrenko")
+    lookup = _build_person_lookup([p])
+    assert _resolve_person("Petrenko", lookup) == 2
+    assert _resolve_person("PETRENKO", lookup) == 2

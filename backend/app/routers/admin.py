@@ -111,6 +111,44 @@ RECIPIENT_SKIP_VALUES = {"склад", ""}
 SERIAL_NONE_TOKENS = {"б/н", "бн", "б\\н", "н/д", "нд", "-", "—", "–", ""}
 
 
+def _build_person_lookup(persons) -> dict:
+    """Case-insensitive many-key → person.id map.
+
+    Registers every reasonable spelling of a person so the movements import
+    can match values like «Petro Ivanenko», «PETRO IVANENKO»,
+    «Ivanenko Petro», or the existing search_name.
+    """
+    lookup: dict[str, int] = {}
+    for p in persons:
+        first = (p.first_name or "").strip().lower()
+        last  = (p.last_name  or "").strip().lower()
+        keys = set()
+        if p.search_name:
+            keys.add(p.search_name.strip().lower())
+        if first and last:
+            keys.add(f"{first} {last}")   # «petro ivanenko»
+            keys.add(f"{last} {first}")   # «ivanenko petro»
+        elif last:
+            keys.add(last)
+        elif first:
+            keys.add(first)
+        for k in keys:
+            # First one wins if there's a collision — we simply skip later
+            # persons with the same spelling. In practice search_name is
+            # unique, and duplicate first+last is rare.
+            lookup.setdefault(k, p.id)
+    return lookup
+
+
+def _resolve_person(raw: Optional[str], lookup: dict) -> Optional[int]:
+    if not raw:
+        return None
+    key = raw.strip().lower()
+    if not key:
+        return None
+    return lookup.get(key)
+
+
 def _normalize_serial(val) -> Optional[str]:
     s = _clean(val)
     if s is None:
@@ -275,12 +313,9 @@ def import_movements(
     wb = _read_workbook(file)
     ws = wb.active
 
-    # Persons map for МВО lookup (lowercase search_name → id)
-    persons_by_name = {
-        (p.search_name or "").lower(): p.id
-        for p in db.query(Person).all()
-        if p.search_name
-    }
+    # Persons lookup — case-insensitive, matches «first last», «last first»,
+    # search_name, or just last name. See _build_person_lookup.
+    persons_by_name = _build_person_lookup(db.query(Person).all())
     items_card_nums = set(n for (n,) in db.query(Item.number).all())
 
     created, skipped, errors, unmatched_persons = 0, 0, [], set()
@@ -342,8 +377,8 @@ def import_movements(
 
             mvo_from_name = _clean(_col(row, MV_COLS["mvo_from_name"]))
             mvo_to_name   = _clean(_col(row, MV_COLS["mvo_to_name"]))
-            mvo_from_id = persons_by_name.get(mvo_from_name.lower()) if mvo_from_name else None
-            mvo_to_id   = persons_by_name.get(mvo_to_name.lower())   if mvo_to_name   else None
+            mvo_from_id = _resolve_person(mvo_from_name, persons_by_name)
+            mvo_to_id   = _resolve_person(mvo_to_name,   persons_by_name)
             if mvo_from_name and not mvo_from_id:
                 unmatched_persons.add(mvo_from_name)
             if mvo_to_name and not mvo_to_id:
