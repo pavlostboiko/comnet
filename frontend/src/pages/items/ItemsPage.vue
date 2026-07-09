@@ -70,17 +70,17 @@
           <table>
             <thead>
               <tr>
-                <th class="sortable" style="width:70px" @click="cardsToggleSort('number')">№ картки <span class="sort-arrow">{{ cardsSortIcon('number') }}</span></th>
-                <th class="sortable" @click="cardsToggleSort('name')">Найменування <span class="sort-arrow">{{ cardsSortIcon('name') }}</span></th>
-                <th class="sortable" style="width:150px" @click="cardsToggleSort('item_type')">Тип <span class="sort-arrow">{{ cardsSortIcon('item_type') }}</span></th>
-                <th class="sortable" style="width:130px" @click="cardsToggleSort('serial_number')">Серійний № <span class="sort-arrow">{{ cardsSortIcon('serial_number') }}</span></th>
-                <th class="sortable" style="width:80px" @click="cardsToggleSort('category')">Категорія <span class="sort-arrow">{{ cardsSortIcon('category') }}</span></th>
-                <th class="sortable" style="width:50px;text-align:center" @click="cardsToggleSort('unit_of_measure')">Од. <span class="sort-arrow">{{ cardsSortIcon('unit_of_measure') }}</span></th>
-                <th class="sortable" style="width:80px;text-align:right" @click="cardsToggleSort('quantity')">К-сть <span class="sort-arrow">{{ cardsSortIcon('quantity') }}</span></th>
-                <th class="sortable" style="width:120px;text-align:right" @click="cardsToggleSort('price')">Вартість, грн <span class="sort-arrow">{{ cardsSortIcon('price') }}</span></th>
-                <th class="sortable" style="width:150px" @click="cardsToggleSort('issued_to_name')">Видане <span class="sort-arrow">{{ cardsSortIcon('issued_to_name') }}</span></th>
-                <th class="sortable" style="width:200px" @click="cardsToggleSort('notes')">Примітки <span class="sort-arrow">{{ cardsSortIcon('notes') }}</span></th>
-                <th></th>
+                <th class="sortable col-number" @click="cardsToggleSort('number')">№ картки <span class="sort-arrow">{{ cardsSortIcon('number') }}</span></th>
+                <th class="sortable col-name" @click="cardsToggleSort('name')">Найменування <span class="sort-arrow">{{ cardsSortIcon('name') }}</span></th>
+                <th class="sortable col-type" @click="cardsToggleSort('item_type')">Тип <span class="sort-arrow">{{ cardsSortIcon('item_type') }}</span></th>
+                <th class="sortable col-serial" @click="cardsToggleSort('serial_number')">Серійний № <span class="sort-arrow">{{ cardsSortIcon('serial_number') }}</span></th>
+                <th class="sortable col-cat" @click="cardsToggleSort('category')">Категорія <span class="sort-arrow">{{ cardsSortIcon('category') }}</span></th>
+                <th class="sortable col-unit" @click="cardsToggleSort('unit_of_measure')">Од. <span class="sort-arrow">{{ cardsSortIcon('unit_of_measure') }}</span></th>
+                <th class="sortable col-qty" @click="cardsToggleSort('quantity')">К-сть <span class="sort-arrow">{{ cardsSortIcon('quantity') }}</span></th>
+                <th class="sortable col-price" @click="cardsToggleSort('price')">Вартість, грн <span class="sort-arrow">{{ cardsSortIcon('price') }}</span></th>
+                <th class="sortable col-issued" @click="cardsToggleSort('issued_to_name')">Видане <span class="sort-arrow">{{ cardsSortIcon('issued_to_name') }}</span></th>
+                <th class="sortable col-notes" @click="cardsToggleSort('notes')">Примітки <span class="sort-arrow">{{ cardsSortIcon('notes') }}</span></th>
+                <th class="col-acts"></th>
               </tr>
             </thead>
             <tbody>
@@ -139,13 +139,13 @@
           <table>
             <thead>
               <tr>
-                <th style="width:50px;text-align:center">№</th>
-                <th class="sortable" @click="groupsToggleSort('name')">Найменування <span class="sort-arrow">{{ groupsSortIcon('name') }}</span></th>
-                <th class="sortable" style="width:80px" @click="groupsToggleSort('category')">Категорія <span class="sort-arrow">{{ groupsSortIcon('category') }}</span></th>
-                <th class="sortable" style="width:60px;text-align:center" @click="groupsToggleSort('unit_of_measure')">Од. <span class="sort-arrow">{{ groupsSortIcon('unit_of_measure') }}</span></th>
-                <th class="sortable" style="width:120px;text-align:right" @click="groupsToggleSort('price')">Вартість, грн <span class="sort-arrow">{{ groupsSortIcon('price') }}</span></th>
-                <th class="sortable" style="width:80px;text-align:right" @click="groupsToggleSort('total_quantity')">К-сть <span class="sort-arrow">{{ groupsSortIcon('total_quantity') }}</span></th>
-                <th class="sortable" style="width:130px;text-align:right" @click="groupsToggleSort('total_amount')">Сума, грн <span class="sort-arrow">{{ groupsSortIcon('total_amount') }}</span></th>
+                <th class="col-idx">№</th>
+                <th class="sortable col-name" @click="groupsToggleSort('name')">Найменування <span class="sort-arrow">{{ groupsSortIcon('name') }}</span></th>
+                <th class="sortable col-cat" @click="groupsToggleSort('category')">Категорія <span class="sort-arrow">{{ groupsSortIcon('category') }}</span></th>
+                <th class="sortable col-unit" @click="groupsToggleSort('unit_of_measure')">Од. <span class="sort-arrow">{{ groupsSortIcon('unit_of_measure') }}</span></th>
+                <th class="sortable col-price" @click="groupsToggleSort('price')">Вартість, грн <span class="sort-arrow">{{ groupsSortIcon('price') }}</span></th>
+                <th class="sortable col-qty" @click="groupsToggleSort('total_quantity')">К-сть <span class="sort-arrow">{{ groupsSortIcon('total_quantity') }}</span></th>
+                <th class="sortable col-sum" @click="groupsToggleSort('total_amount')">Сума, грн <span class="sort-arrow">{{ groupsSortIcon('total_amount') }}</span></th>
               </tr>
             </thead>
             <tbody>
@@ -930,7 +930,24 @@ th.sortable:hover .sort-arrow { opacity:1; }
 .table-wrap { overflow-x:auto; }
 .table-wrap::-webkit-scrollbar { height:6px; }
 .table-wrap::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
-table { width:100%; border-collapse:collapse; min-width:900px; }
+table { width:100%; border-collapse:collapse; min-width:900px; table-layout:auto; }
+
+/* Cards view column min-widths — narrow columns don't shrink below these
+   values, but wider ones (Найменування, Примітки) absorb extra space on
+   large monitors so we get a natural fluid layout. */
+.col-number { min-width:70px;  width:70px; }
+.col-name   { min-width:220px; }
+.col-type   { min-width:120px; width:150px; }
+.col-serial { min-width:110px; width:130px; }
+.col-cat    { min-width:80px;  width:80px; }
+.col-unit   { min-width:50px;  width:50px; text-align:center; }
+.col-qty    { min-width:70px;  width:80px; text-align:right; }
+.col-price  { min-width:100px; width:120px; text-align:right; }
+.col-issued { min-width:110px; width:140px; }
+.col-notes  { min-width:150px; }
+.col-acts   { min-width:70px;  width:70px; }
+.col-idx    { min-width:50px;  width:50px; text-align:center; }
+.col-sum    { min-width:110px; width:130px; text-align:right; }
 thead tr { background:var(--bg); }
 th { padding:9px 12px; text-align:left; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-light); border-bottom:1px solid var(--border); white-space:nowrap; }
 th:first-child { padding-left:20px; }

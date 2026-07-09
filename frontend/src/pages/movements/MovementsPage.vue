@@ -54,21 +54,21 @@
           <table>
             <thead>
               <tr>
-                <th class="sortable" style="width:44px" @click="toggleSort('id')">#  <span class="sort-arrow">{{ sortIcon('id') }}</span></th>
-                <th class="sortable" style="width:100px" @click="toggleSort('entry_date')">Дата <span class="sort-arrow">{{ sortIcon('entry_date') }}</span></th>
-                <th class="sortable" style="width:130px" @click="toggleSort('doc_type')">Тип документа <span class="sort-arrow">{{ sortIcon('doc_type') }}</span></th>
-                <th class="sortable" style="width:110px" @click="toggleSort('doc_number')">№ документа <span class="sort-arrow">{{ sortIcon('doc_number') }}</span></th>
-                <th class="sortable" style="width:130px" @click="toggleSort('from_unit')">Звідки <span class="sort-arrow">{{ sortIcon('from_unit') }}</span></th>
-                <th class="sortable" style="width:110px" @click="toggleSort('mvo_from_name')">МВО звідки <span class="sort-arrow">{{ sortIcon('mvo_from_name') }}</span></th>
-                <th class="sortable" style="width:130px" @click="toggleSort('to_unit')">Куди <span class="sort-arrow">{{ sortIcon('to_unit') }}</span></th>
-                <th class="sortable" style="width:110px" @click="toggleSort('mvo_to_name')">МВО куди <span class="sort-arrow">{{ sortIcon('mvo_to_name') }}</span></th>
-                <th class="sortable" style="width:80px" @click="toggleSort('category')">Категорія <span class="sort-arrow">{{ sortIcon('category') }}</span></th>
-                <th class="sortable" @click="toggleSort('item_name')">Найменування <span class="sort-arrow">{{ sortIcon('item_name') }}</span></th>
-                <th class="sortable" style="width:50px;text-align:right" @click="toggleSort('unit_of_measure')">Од. <span class="sort-arrow">{{ sortIcon('unit_of_measure') }}</span></th>
-                <th class="sortable" style="width:90px;text-align:right" @click="toggleSort('qty_in')">Надійшло <span class="sort-arrow">{{ sortIcon('qty_in') }}</span></th>
-                <th class="sortable" style="width:90px;text-align:right" @click="toggleSort('qty_out')">Вибуло <span class="sort-arrow">{{ sortIcon('qty_out') }}</span></th>
-                <th class="sortable" style="width:110px;text-align:right" @click="toggleSort('price')">Ціна, грн <span class="sort-arrow">{{ sortIcon('price') }}</span></th>
-                <th></th>
+                <th class="sortable col-id" @click="toggleSort('id')">#  <span class="sort-arrow">{{ sortIcon('id') }}</span></th>
+                <th class="sortable col-date" @click="toggleSort('entry_date')">Дата <span class="sort-arrow">{{ sortIcon('entry_date') }}</span></th>
+                <th class="sortable col-doctype" @click="toggleSort('doc_type')">Тип документа <span class="sort-arrow">{{ sortIcon('doc_type') }}</span></th>
+                <th class="sortable col-docnum" @click="toggleSort('doc_number')">№ документа <span class="sort-arrow">{{ sortIcon('doc_number') }}</span></th>
+                <th class="sortable col-unit-cell" @click="toggleSort('from_unit')">Звідки <span class="sort-arrow">{{ sortIcon('from_unit') }}</span></th>
+                <th class="sortable col-mvo" @click="toggleSort('mvo_from_name')">МВО звідки <span class="sort-arrow">{{ sortIcon('mvo_from_name') }}</span></th>
+                <th class="sortable col-unit-cell" @click="toggleSort('to_unit')">Куди <span class="sort-arrow">{{ sortIcon('to_unit') }}</span></th>
+                <th class="sortable col-mvo" @click="toggleSort('mvo_to_name')">МВО куди <span class="sort-arrow">{{ sortIcon('mvo_to_name') }}</span></th>
+                <th class="sortable col-cat" @click="toggleSort('category')">Категорія <span class="sort-arrow">{{ sortIcon('category') }}</span></th>
+                <th class="sortable col-item" @click="toggleSort('item_name')">Найменування <span class="sort-arrow">{{ sortIcon('item_name') }}</span></th>
+                <th class="sortable col-um" @click="toggleSort('unit_of_measure')">Од. <span class="sort-arrow">{{ sortIcon('unit_of_measure') }}</span></th>
+                <th class="sortable col-num" @click="toggleSort('qty_in')">Надійшло <span class="sort-arrow">{{ sortIcon('qty_in') }}</span></th>
+                <th class="sortable col-num" @click="toggleSort('qty_out')">Вибуло <span class="sort-arrow">{{ sortIcon('qty_out') }}</span></th>
+                <th class="sortable col-price" @click="toggleSort('price')">Ціна, грн <span class="sort-arrow">{{ sortIcon('price') }}</span></th>
+                <th class="col-acts"></th>
               </tr>
             </thead>
             <tbody>
@@ -588,7 +588,19 @@ th.sortable { cursor:pointer; user-select:none; transition:background 0.1s; whit
 th.sortable:hover { background:var(--bg); }
 .sort-arrow { color:var(--text-light); font-size:10px; margin-left:3px; opacity:0.5; }
 th.sortable:hover .sort-arrow { opacity:1; }
-table { width:100%; border-collapse:collapse; min-width:1260px; }
+table { width:100%; border-collapse:collapse; min-width:1260px; table-layout:auto; }
+.col-id      { min-width:44px;  width:44px; }
+.col-date    { min-width:90px;  width:100px; }
+.col-doctype { min-width:110px; width:130px; }
+.col-docnum  { min-width:100px; width:110px; }
+.col-unit-cell { min-width:110px; width:130px; }
+.col-mvo     { min-width:100px; width:110px; }
+.col-cat     { min-width:70px;  width:80px; }
+.col-item    { min-width:180px; }
+.col-um      { min-width:50px;  width:50px; text-align:right; }
+.col-num     { min-width:80px;  width:90px; text-align:right; }
+.col-price   { min-width:90px;  width:110px; text-align:right; }
+.col-acts    { min-width:70px;  width:70px; }
 thead tr { background:var(--bg); }
 th { padding:9px 12px; text-align:left; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-light); border-bottom:1px solid var(--border); white-space:nowrap; }
 th:first-child { padding-left:20px; }
