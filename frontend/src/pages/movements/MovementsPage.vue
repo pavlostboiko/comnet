@@ -588,19 +588,21 @@ th.sortable { cursor:pointer; user-select:none; transition:background 0.1s; whit
 th.sortable:hover { background:var(--bg); }
 .sort-arrow { color:var(--text-light); font-size:10px; margin-left:3px; opacity:0.5; }
 th.sortable:hover .sort-arrow { opacity:1; }
-table { width:100%; border-collapse:collapse; min-width:1260px; table-layout:auto; }
-.col-id      { min-width:44px;  width:44px; }
-.col-date    { min-width:90px;  width:100px; }
-.col-doctype { min-width:110px; width:130px; }
-.col-docnum  { min-width:100px; width:110px; }
-.col-unit-cell { min-width:110px; width:130px; }
-.col-mvo     { min-width:100px; width:110px; }
-.col-cat     { min-width:70px;  width:80px; }
-.col-item    { min-width:180px; }
-.col-um      { min-width:50px;  width:50px; text-align:right; }
-.col-num     { min-width:80px;  width:90px; text-align:right; }
-.col-price   { min-width:90px;  width:110px; text-align:right; }
-.col-acts    { min-width:70px;  width:70px; }
+table { width:100%; border-collapse:collapse; min-width:1260px; table-layout:fixed; }
+/* Fixed widths for narrow columns, percents for wide ones. Free space on
+   large monitors goes proportionally to the % columns. */
+.col-id        { width:44px; }
+.col-date      { width:100px; }
+.col-doctype   { width:9%; min-width:110px; }
+.col-docnum    { width:8%; min-width:100px; }
+.col-unit-cell { width:9%; min-width:110px; }
+.col-mvo       { width:8%; min-width:100px; }
+.col-cat       { width:80px; }
+.col-item      { width:20%; min-width:180px; }
+.col-um        { width:50px; text-align:right; }
+.col-num       { width:90px; text-align:right; }
+.col-price     { width:110px; text-align:right; }
+.col-acts      { width:70px; }
 thead tr { background:var(--bg); }
 th { padding:9px 12px; text-align:left; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-light); border-bottom:1px solid var(--border); white-space:nowrap; }
 th:first-child { padding-left:20px; }

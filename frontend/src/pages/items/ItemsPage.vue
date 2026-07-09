@@ -930,24 +930,29 @@ th.sortable:hover .sort-arrow { opacity:1; }
 .table-wrap { overflow-x:auto; }
 .table-wrap::-webkit-scrollbar { height:6px; }
 .table-wrap::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
-table { width:100%; border-collapse:collapse; min-width:900px; table-layout:auto; }
+table { width:100%; border-collapse:collapse; min-width:900px; table-layout:fixed; }
 
-/* Cards view column min-widths — narrow columns don't shrink below these
-   values, but wider ones (Найменування, Примітки) absorb extra space on
-   large monitors so we get a natural fluid layout. */
-.col-number { min-width:70px;  width:70px; }
-.col-name   { min-width:220px; }
-.col-type   { min-width:120px; width:150px; }
-.col-serial { min-width:110px; width:130px; }
-.col-cat    { min-width:80px;  width:80px; }
-.col-unit   { min-width:50px;  width:50px; text-align:center; }
-.col-qty    { min-width:70px;  width:80px; text-align:right; }
-.col-price  { min-width:100px; width:120px; text-align:right; }
-.col-issued { min-width:110px; width:140px; }
-.col-notes  { min-width:150px; }
-.col-acts   { min-width:70px;  width:70px; }
-.col-idx    { min-width:50px;  width:50px; text-align:center; }
-.col-sum    { min-width:110px; width:130px; text-align:right; }
+/* Cards view: fixed layout so browser distributes free space by the
+   ratios in `width`, not by content. Use percent for growing columns
+   and fixed px for narrow ones — you get proportional expansion on
+   wide monitors and predictable minimums on narrow ones. */
+.col-number { width:70px; }
+.col-name   { width:26%; min-width:180px; }
+.col-type   { width:12%; min-width:110px; }
+.col-serial { width:10%; min-width:100px; }
+.col-cat    { width:80px; text-align:center; }
+.col-unit   { width:50px; text-align:center; }
+.col-qty    { width:80px; text-align:right; }
+.col-price  { width:110px; text-align:right; }
+.col-issued { width:12%; min-width:100px; }
+.col-notes  { width:20%; min-width:130px; }
+.col-acts   { width:80px; }
+.col-idx    { width:50px; text-align:center; }
+.col-sum    { width:130px; text-align:right; }
+
+/* With table-layout:fixed, long text will wrap unless we clip. Existing
+   .td-name / .td-notes / .td-issued classes handle their own overflow. */
+.td-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; }
 thead tr { background:var(--bg); }
 th { padding:9px 12px; text-align:left; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-light); border-bottom:1px solid var(--border); white-space:nowrap; }
 th:first-child { padding-left:20px; }
