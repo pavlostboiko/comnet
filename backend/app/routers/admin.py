@@ -19,8 +19,8 @@ from sqlalchemy.orm import Session
 from app.auth import require_admin
 from app.database import get_db
 from app.models import (
-    AssetDocument, Document, DocumentItem, Item, ItemDocument, Movement,
-    OpType, Person, Recipient, User,
+    AssetDocument, Document, DocumentItem, Item, ItemDocument, ItemSplit,
+    Movement, OpType, Person, Recipient, User,
 )
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -34,6 +34,9 @@ def wipe_inventory(db: Session = Depends(get_db), _: User = Depends(require_admi
     /services/op_types/unit_settings survive."""
     # Order: leaf rows first, then dependents
     counts = {
+        # Explicit delete for the counter — item_splits would CASCADE via
+        # items, but we want to report the number that was removed.
+        "item_splits":    db.query(ItemSplit).delete(synchronize_session=False),
         "document_items": db.query(DocumentItem).delete(synchronize_session=False),
         "item_documents": db.query(ItemDocument).delete(synchronize_session=False),
         "asset_documents": db.query(AssetDocument).delete(synchronize_session=False),
@@ -371,3 +374,147 @@ def import_movements(
         "unmatched_persons": sorted(unmatched_persons),
         "documents_created": len(doc_id_map),
     }
+
+
+# ── Merge duplicates for non-serial items ────────────────────────────────
+
+def _merge_key(item: Item) -> tuple:
+    """Group items by (name, price, category, unit_of_measure). Serial items
+    (with a serial_number) are excluded from merging by the caller."""
+    return (
+        (item.name or "").strip(),
+        str(item.price) if item.price is not None else "",
+        (item.category or "").strip(),
+        (item.unit_of_measure or "").strip(),
+    )
+
+
+def _natural_key(number: str) -> tuple:
+    """Sort key so pure-numeric numbers sort by value ('2' < '10')."""
+    if number and number.isdigit():
+        return (0, int(number))
+    return (1, number or "")
+
+
+def _group_nonserial_duplicates(db: Session) -> list[dict]:
+    """Return list of merge candidates. Each group has ≥2 non-serial items
+    sharing (name, price, category, unit)."""
+    items = db.query(Item).filter(Item.serial_number.is_(None)).all()
+    buckets: dict[tuple, list[Item]] = {}
+    for it in items:
+        buckets.setdefault(_merge_key(it), []).append(it)
+
+    groups = []
+    for key, cards in buckets.items():
+        if len(cards) < 2:
+            continue
+        cards.sort(key=lambda c: _natural_key(c.number))
+        winner = cards[0]
+        losers = cards[1:]
+        groups.append({
+            "key": {
+                "name": key[0],
+                "price": key[1],
+                "category": key[2],
+                "unit_of_measure": key[3],
+            },
+            "winner_id": winner.id,
+            "winner_number": winner.number,
+            "loser_ids": [c.id for c in losers],
+            "loser_numbers": [c.number for c in losers],
+            "cards_count": len(cards),
+            "total_quantity": str(sum((Decimal(c.quantity or 0) for c in cards), Decimal(0))),
+        })
+    # Sort by name for a stable preview
+    groups.sort(key=lambda g: g["key"]["name"])
+    return groups
+
+
+@router.get("/merge-nonserial-duplicates/preview")
+def merge_nonserial_preview(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    groups = _group_nonserial_duplicates(db)
+    total_cards_to_remove = sum(len(g["loser_ids"]) for g in groups)
+    return {
+        "groups_found": len(groups),
+        "cards_to_remove": total_cards_to_remove,
+        "groups": groups[:100],  # preview cap
+    }
+
+
+@router.post("/merge-nonserial-duplicates")
+def merge_nonserial_apply(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    groups = _group_nonserial_duplicates(db)
+    merged_groups = 0
+    removed_cards = 0
+
+    for group in groups:
+        winner = db.get(Item, group["winner_id"])
+        losers = [db.get(Item, lid) for lid in group["loser_ids"]]
+        losers = [l for l in losers if l is not None]
+        if not losers:
+            continue
+
+        # Sum quantity
+        total = Decimal(winner.quantity or 0)
+        for l in losers:
+            total += Decimal(l.quantity or 0)
+        winner.quantity = total
+
+        # Merge notes with `; `
+        notes_parts = [winner.notes.strip()] if winner.notes and winner.notes.strip() else []
+        for l in losers:
+            if l.notes and l.notes.strip() and l.notes.strip() not in notes_parts:
+                notes_parts.append(l.notes.strip())
+        if notes_parts:
+            winner.notes = "; ".join(notes_parts)
+
+        # Merge issued_to: keep winner's if set, else first non-null loser
+        if winner.issued_to_recipient_id is None:
+            for l in losers:
+                if l.issued_to_recipient_id is not None:
+                    winner.issued_to_recipient_id = l.issued_to_recipient_id
+                    break
+
+        # Reassign related rows
+        loser_ids = [l.id for l in losers]
+        loser_numbers = [l.number for l in losers]
+
+        # movements.item_card_num → winner.number (references items.number)
+        db.query(Movement).filter(Movement.item_card_num.in_(loser_numbers)).update(
+            {"item_card_num": winner.number}, synchronize_session=False,
+        )
+        # document_items.item_id → winner.id
+        db.query(DocumentItem).filter(DocumentItem.item_id.in_(loser_ids)).update(
+            {"item_id": winner.id}, synchronize_session=False,
+        )
+        # item_splits.item_id → winner.id
+        db.query(ItemSplit).filter(ItemSplit.item_id.in_(loser_ids)).update(
+            {"item_id": winner.id}, synchronize_session=False,
+        )
+        # item_documents links: move to winner if not already linked, else drop
+        existing_doc_ids = {
+            r.doc_id for r in db.query(ItemDocument).filter(ItemDocument.item_id == winner.id).all()
+        }
+        for lid in loser_ids:
+            links = db.query(ItemDocument).filter(ItemDocument.item_id == lid).all()
+            for lnk in links:
+                if lnk.doc_id in existing_doc_ids:
+                    db.delete(lnk)
+                else:
+                    lnk.item_id = winner.id
+                    existing_doc_ids.add(lnk.doc_id)
+
+        # Now safe to delete losers
+        for l in losers:
+            db.delete(l)
+        removed_cards += len(losers)
+        merged_groups += 1
+
+    db.commit()
+    return {"merged_groups": merged_groups, "removed_cards": removed_cards}

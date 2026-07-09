@@ -111,4 +111,61 @@ test.describe('Admin API', () => {
     const resp = await api.post('/api/admin/import/movements', { multipart: {} })
     expect([400, 422]).toContain(resp.status())
   })
+
+  test('merge-nonserial-duplicates: preview + apply combines cards', async () => {
+    const tag = `mg-${Date.now()}`
+
+    // Seed 3 non-serial cards with the same merge key (name, price, category, unit)
+    const a = await postJson(api, '/api/items', {
+      number: `${tag}-01`, name: `Socks ${tag}`, unit_of_measure: 'шт',
+      price: 10, quantity: 5, category: '1', is_official: false,
+      notes: 'from batch A',
+    })
+    const b = await postJson(api, '/api/items', {
+      number: `${tag}-02`, name: `Socks ${tag}`, unit_of_measure: 'шт',
+      price: 10, quantity: 3, category: '1', is_official: false,
+      notes: 'from batch B',
+    })
+    const c = await postJson(api, '/api/items', {
+      number: `${tag}-03`, name: `Socks ${tag}`, unit_of_measure: 'шт',
+      price: 10, quantity: 2, category: '1', is_official: false,
+    })
+    // A different card that shouldn't match (different price)
+    const d = await postJson(api, '/api/items', {
+      number: `${tag}-04`, name: `Socks ${tag}`, unit_of_measure: 'шт',
+      price: 99, quantity: 1, category: '1', is_official: false,
+    })
+    cleanup.push(`/api/items/${a.id}`, `/api/items/${b.id}`, `/api/items/${c.id}`, `/api/items/${d.id}`)
+
+    // Preview should find one group of 3 → 2 cards to remove (winner stays)
+    const preview = await api.get('/api/admin/merge-nonserial-duplicates/preview')
+      .then(r => r.json())
+    const ourGroup = preview.groups.find(g => g.winner_number === `${tag}-01`)
+    expect(ourGroup).toBeTruthy()
+    expect(ourGroup.cards_count).toBe(3)
+    expect(ourGroup.loser_numbers).toEqual([`${tag}-02`, `${tag}-03`])
+
+    // Apply
+    const result = await api.post('/api/admin/merge-nonserial-duplicates').then(r => r.json())
+    expect(result.merged_groups).toBeGreaterThanOrEqual(1)
+    expect(result.removed_cards).toBeGreaterThanOrEqual(2)
+
+    // Winner survives with summed quantity + merged notes
+    const winner = await api.get(`/api/items/${a.id}`).then(r => r.json())
+    expect(Number(winner.quantity)).toBe(10)   // 5 + 3 + 2
+    expect(winner.notes).toContain('from batch A')
+    expect(winner.notes).toContain('from batch B')
+
+    // Losers gone
+    const bResp = await api.get(`/api/items/${b.id}`)
+    expect(bResp.status()).toBe(404)
+    const cResp = await api.get(`/api/items/${c.id}`)
+    expect(cResp.status()).toBe(404)
+
+    // Different-price card untouched
+    const other = await api.get(`/api/items/${d.id}`).then(r => r.json())
+    expect(Number(other.quantity)).toBe(1)
+
+    // Cleanup already-removed pushed entries — bestEffort swallows 404s
+  })
 })

@@ -452,13 +452,34 @@
             <div class="danger-title">Очистити базу майна та документів</div>
             <div class="danger-hint">
               Видалить ВСІ записи: майно (items), накладні/документи, переміщення,
-              прив'язані документи. Налаштування (особи, отримувачі, користувачі, служби,
-              типи операцій, підрозділ) — лишаються.
+              прив'язані документи, видачі. Налаштування (особи, отримувачі, користувачі,
+              служби, типи операцій, підрозділ) — лишаються.
             </div>
             <button class="btn-danger" :disabled="importing || wiping" @click="doWipe">
               {{ wiping ? 'Очищення…' : '⚠ Очистити базу' }}
             </button>
             <pre v-if="wipeResult" class="import-result">{{ wipeResult }}</pre>
+          </div>
+
+          <!-- Merge duplicates: 2-step (preview → confirm) -->
+          <div class="merge-zone">
+            <div class="merge-title">Об'єднати дублі несерійних карток</div>
+            <div class="merge-hint">
+              Групує картки за (назва, ціна, категорія, од.вим.) з порожнім серійним номером.
+              Об'єднує кількості, склеює нотатки через «;», переносить видачі й переміщення
+              на картку з найменшим №. Серійне майно не чіпає.
+            </div>
+            <div class="merge-actions">
+              <button class="btn-outline" :disabled="mergeBusy" @click="doMergePreview">
+                {{ mergeBusy === 'preview' ? 'Пошук…' : '🔍 Знайти дублі' }}
+              </button>
+              <button v-if="mergePreview" class="btn-warning" :disabled="mergeBusy || !mergePreview.groups_found"
+                @click="doMergeApply">
+                {{ mergeBusy === 'apply' ? 'Мерж…' : `⚠ Об'єднати (видалить ${mergePreview.cards_to_remove} карток)` }}
+              </button>
+            </div>
+            <pre v-if="mergePreview" class="import-result">{{ JSON.stringify(mergePreview, null, 2) }}</pre>
+            <pre v-if="mergeResult" class="import-result">{{ JSON.stringify(mergeResult, null, 2) }}</pre>
           </div>
         </div>
       </div>
@@ -774,6 +795,7 @@ import {
 } from '../../api/recipients.js'
 import {
   wipeInventory, importItems, importMovements,
+  mergeNonserialPreview, mergeNonserialApply,
 } from '../../api/admin.js'
 import { useAuthStore } from '../../stores/auth.js'
 
@@ -822,6 +844,9 @@ const movementsResult = ref('')
 const wipeResult = ref('')
 const importing = ref(null)   // null | 'items' | 'movements'
 const wiping = ref(false)
+const mergePreview = ref(null)
+const mergeResult = ref(null)
+const mergeBusy = ref(null)   // null | 'preview' | 'apply'
 
 function onItemsFile(e)     { itemsFile.value     = e.target.files[0] || null; itemsResult.value = '' }
 function onMovementsFile(e) { movementsFile.value = e.target.files[0] || null; movementsResult.value = '' }
@@ -854,6 +879,36 @@ async function doImportMovements() {
   } finally {
     importing.value = null
   }
+}
+
+async function doMergePreview() {
+  if (mergeBusy.value) return
+  mergeBusy.value = 'preview'
+  mergeResult.value = null
+  try {
+    const { data } = await mergeNonserialPreview()
+    mergePreview.value = data
+    if (data.groups_found === 0) showToast('Дублів не знайдено')
+    else showToast(`Знайдено ${data.groups_found} груп`)
+  } catch (e) {
+    mergePreview.value = null
+    alert(e?.response?.data?.detail || 'Помилка')
+  } finally { mergeBusy.value = null }
+}
+
+async function doMergeApply() {
+  if (mergeBusy.value || !mergePreview.value) return
+  const n = mergePreview.value.cards_to_remove
+  if (!confirm(`Об'єднати дублі: буде видалено ${n} карток.\nЦе необоротно.\nПродовжити?`)) return
+  mergeBusy.value = 'apply'
+  try {
+    const { data } = await mergeNonserialApply()
+    mergeResult.value = data
+    mergePreview.value = null
+    showToast(`Об'єднано ${data.merged_groups} груп`)
+  } catch (e) {
+    alert(e?.response?.data?.detail || 'Помилка')
+  } finally { mergeBusy.value = null }
 }
 
 async function doWipe() {
@@ -1396,6 +1451,13 @@ function showToast(msg) {
 .btn-danger { padding:8px 18px; background:#dc2626; color:#fff; border:none; border-radius:var(--radius-sm); font-family:inherit; font-size:13.5px; font-weight:600; cursor:pointer; align-self:flex-start; }
 .btn-danger:hover:not(:disabled) { background:#b91c1c; }
 .btn-danger:disabled { opacity:0.5; cursor:not-allowed; }
+.merge-zone { margin:20px; padding:16px; border:1px solid #fbbf24; background:#fffbeb; border-radius:var(--radius-sm); display:flex; flex-direction:column; gap:10px; }
+.merge-title { font-weight:700; color:#92400e; font-size:14px; }
+.merge-hint { font-size:12.5px; color:#78350f; line-height:1.45; }
+.merge-actions { display:flex; gap:10px; }
+.btn-warning { padding:8px 18px; background:#f59e0b; color:#fff; border:none; border-radius:var(--radius-sm); font-family:inherit; font-size:13.5px; font-weight:600; cursor:pointer; }
+.btn-warning:hover:not(:disabled) { background:#d97706; }
+.btn-warning:disabled { opacity:0.5; cursor:not-allowed; }
 
 .tile-actions {
   margin-left: auto;

@@ -10,3 +10,6 @@ function uploadXlsx(path, file) {
 
 export const importItems     = (file) => uploadXlsx('/admin/import/items',     file)
 export const importMovements = (file) => uploadXlsx('/admin/import/movements', file)
+
+export const mergeNonserialPreview = () => http.get('/admin/merge-nonserial-duplicates/preview')
+export const mergeNonserialApply   = () => http.post('/admin/merge-nonserial-duplicates')
