@@ -256,6 +256,76 @@
             <div class="card-section-title">Примітки</div>
             <p style="font-size:14px;color:var(--text-mid);line-height:1.5">{{ cardItem.notes }}</p>
           </div>
+          <!-- «Видано» — тільки для несерійних. Серійні (qty=1) міняють
+               одержувача через поле «Видане (прізвище)» у формі. -->
+          <div v-if="showSplitsSection">
+            <hr class="card-divider">
+            <div class="card-section-title splits-header">
+              <span>Видано</span>
+              <span class="splits-counts">
+                Загалом <b>{{ fmtQty(cardItem.quantity) }}</b> ·
+                Видано <b class="issued">{{ fmtQty(splitsTotal) }}</b> ·
+                Вільно <b class="free" :class="{ 'over': splitsFree < 0 }">{{ fmtQty(splitsFree) }}</b>
+              </span>
+            </div>
+
+            <!-- Add new split -->
+            <div v-if="!splitAddOpen" class="split-add-toggle">
+              <button class="btn-add-split" :disabled="splitsFree <= 0" @click="openSplitAdd">
+                + Видати
+              </button>
+              <span v-if="splitsFree <= 0" class="split-add-hint">немає вільного</span>
+            </div>
+            <div v-else class="split-add-form">
+              <div class="split-add-row">
+                <RecipientAutocomplete
+                  v-model="splitForm.recipient_id"
+                  :recipients="recipients"
+                  placeholder="прізвище"
+                  @created="onRecipientCreated" />
+                <input v-model.number="splitForm.qty" type="number" min="0.0001" step="0.0001"
+                  class="split-qty" placeholder="к-сть" />
+                <input v-model="splitForm.notes" class="split-notes" placeholder="нотатки (опц.)" />
+                <button class="btn-primary-sm" :disabled="!splitCanSave || splitBusy" @click="saveSplit">
+                  Видати
+                </button>
+                <button class="btn-cancel-sm" :disabled="splitBusy" @click="closeSplitAdd">×</button>
+              </div>
+              <div v-if="splitError" class="split-error">{{ splitError }}</div>
+            </div>
+
+            <!-- Active splits -->
+            <div v-if="activeSplits.length" class="splits-list">
+              <div v-for="s in activeSplits" :key="s.id" class="split-row">
+                <span class="split-recipient">{{ s.recipient_callsign || '(видалено)' }}</span>
+                <span class="split-qty-cell">{{ fmtQty(s.qty) }}</span>
+                <span class="split-date">{{ s.issued_at }}</span>
+                <span class="split-note-cell" :title="s.notes || ''">{{ s.notes || '' }}</span>
+                <button class="split-btn return" title="Повернути" @click="doReturnSplit(s)">↩</button>
+                <button class="split-btn del" title="Видалити" @click="doDeleteSplit(s)">🗑</button>
+              </div>
+            </div>
+            <div v-else class="splits-empty">Не видано нікому</div>
+
+            <!-- Returned splits (collapsed) -->
+            <div v-if="returnedSplits.length">
+              <button class="splits-toggle" @click="showReturned = !showReturned">
+                {{ showReturned ? '▼' : '▶' }} Повернуті ({{ returnedSplits.length }})
+              </button>
+              <div v-if="showReturned" class="splits-list muted">
+                <div v-for="s in returnedSplits" :key="s.id" class="split-row">
+                  <span class="split-recipient">{{ s.recipient_callsign || '(видалено)' }}</span>
+                  <span class="split-qty-cell">{{ fmtQty(s.qty) }}</span>
+                  <span class="split-date">{{ s.issued_at }} → {{ s.returned_at }}</span>
+                  <span class="split-note-cell" :title="s.return_notes || s.notes || ''">
+                    {{ s.return_notes || s.notes || '' }}
+                  </span>
+                  <button class="split-btn del" title="Видалити запис" @click="doDeleteSplit(s)">🗑</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div>
             <hr class="card-divider">
             <div class="card-section-title">Прикріплені документи</div>
@@ -429,6 +499,7 @@ import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import { createItem, deleteItem as apiDelete, getItem, getItems, updateItem } from '../../api/items.js'
 import { getRecipients } from '../../api/recipients.js'
+import { listSplits, createSplit, returnSplit, deleteSplit } from '../../api/splits.js'
 import { useSort } from '../../composables/useSort.js'
 import RecipientAutocomplete from '../../components/RecipientAutocomplete.vue'
 
@@ -452,6 +523,90 @@ const selectedType = ref(null)
 // Card
 const cardVisible = ref(false)
 const cardItem    = ref(null)
+
+// Splits (per-recipient issuances for non-serial items)
+const splits = ref([])
+const showReturned = ref(false)
+const splitAddOpen = ref(false)
+const splitBusy = ref(false)
+const splitError = ref('')
+const splitForm = reactive({ recipient_id: null, qty: 1, notes: '' })
+
+const showSplitsSection = computed(() => {
+  if (!cardItem.value) return false
+  // Show only for non-serial items with a quantity — that's the case splits
+  // are designed for. Serial items use the quick issued_to_recipient_id field.
+  if (cardItem.value.serial_number) return false
+  return Number(cardItem.value.quantity || 0) > 0
+})
+const activeSplits   = computed(() => splits.value.filter(s => s.is_active))
+const returnedSplits = computed(() => splits.value.filter(s => !s.is_active))
+const splitsTotal    = computed(() => activeSplits.value.reduce((sum, s) => sum + Number(s.qty || 0), 0))
+const splitsFree     = computed(() => Number(cardItem.value?.quantity || 0) - splitsTotal.value)
+const splitCanSave   = computed(() =>
+  splitForm.recipient_id != null && Number(splitForm.qty) > 0 && Number(splitForm.qty) <= splitsFree.value,
+)
+
+function openSplitAdd() {
+  splitForm.recipient_id = null
+  splitForm.qty = 1
+  splitForm.notes = ''
+  splitError.value = ''
+  splitAddOpen.value = true
+}
+function closeSplitAdd() {
+  splitAddOpen.value = false
+  splitError.value = ''
+}
+
+async function loadSplits(itemId) {
+  try {
+    const { data } = await listSplits(itemId)
+    splits.value = data
+  } catch (_e) { splits.value = [] }
+}
+
+async function saveSplit() {
+  if (!splitCanSave.value || splitBusy.value) return
+  splitBusy.value = true
+  splitError.value = ''
+  try {
+    await createSplit(cardItem.value.id, {
+      recipient_id: splitForm.recipient_id,
+      qty: Number(splitForm.qty),
+      notes: splitForm.notes || null,
+    })
+    await loadSplits(cardItem.value.id)
+    splitAddOpen.value = false
+    showToast('Видано')
+  } catch (e) {
+    splitError.value = e?.response?.data?.detail || 'Помилка'
+  } finally {
+    splitBusy.value = false
+  }
+}
+
+async function doReturnSplit(s) {
+  if (!confirm(`Позначити повернення ${s.qty} шт від ${s.recipient_callsign || '—'}?`)) return
+  try {
+    await returnSplit(cardItem.value.id, s.id)
+    await loadSplits(cardItem.value.id)
+    showToast('Повернуто')
+  } catch (e) {
+    alert(e?.response?.data?.detail || 'Помилка')
+  }
+}
+
+async function doDeleteSplit(s) {
+  if (!confirm(`Видалити запис видачі ${s.qty} шт (${s.recipient_callsign || '—'})?`)) return
+  try {
+    await deleteSplit(cardItem.value.id, s.id)
+    await loadSplits(cardItem.value.id)
+    showToast('Видалено')
+  } catch (e) {
+    alert(e?.response?.data?.detail || 'Помилка')
+  }
+}
 
 // Form
 const formVisible = ref(false)
@@ -606,7 +761,13 @@ async function fetchItems() {
 async function openCard(item) {
   cardItem.value = null
   cardVisible.value = true
+  splits.value = []
+  splitAddOpen.value = false
+  showReturned.value = false
   cardItem.value = await getItem(item.id)
+  if (cardItem.value && !cardItem.value.serial_number) {
+    await loadSplits(cardItem.value.id)
+  }
 }
 
 // ── Form ───────────────────────────────────────────────────────
@@ -842,6 +1003,41 @@ tbody tr:hover .acts { opacity:1; }
 .card-field-value.mono { font-family:'DM Mono',monospace; font-size:13px; }
 .card-field-value.dim { color:var(--text-light); font-style:italic; }
 .card-divider { border:none; border-top:1px solid var(--border-light); }
+
+/* Splits ledger */
+.splits-header { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:12px; }
+.splits-counts { font-size:12.5px; color:var(--text-mid); text-transform:none; letter-spacing:0; font-weight:400; }
+.splits-counts b { font-family:'DM Mono',monospace; color:var(--text); }
+.splits-counts b.issued { color:#b45309; }
+.splits-counts b.free { color:#16a34a; }
+.splits-counts b.free.over { color:#dc2626; }
+.split-add-toggle { display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+.btn-add-split { padding:6px 14px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-family:inherit; font-size:13px; font-weight:500; cursor:pointer; }
+.btn-add-split:hover:not(:disabled) { background:var(--accent-hover, #1e40af); }
+.btn-add-split:disabled { opacity:0.4; cursor:not-allowed; background:var(--border); }
+.split-add-hint { font-size:12px; color:var(--text-light); font-style:italic; }
+.split-add-form { background:var(--bg); padding:10px; border-radius:var(--radius-sm); margin-bottom:12px; }
+.split-add-row { display:flex; gap:8px; align-items:center; }
+.split-qty { width:80px; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:'DM Mono',monospace; font-size:13px; }
+.split-notes { flex:1; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13px; }
+.btn-primary-sm { padding:6px 12px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-size:13px; font-weight:500; cursor:pointer; }
+.btn-primary-sm:disabled { opacity:0.4; cursor:not-allowed; }
+.btn-cancel-sm { padding:6px 10px; background:transparent; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:16px; color:var(--text-mid); cursor:pointer; }
+.split-error { margin-top:8px; padding:6px 10px; background:#fef2f2; border:1px solid #fca5a5; border-radius:var(--radius-sm); color:#dc2626; font-size:12.5px; }
+.splits-list { display:flex; flex-direction:column; gap:2px; }
+.splits-list.muted .split-row { opacity:0.7; }
+.split-row { display:grid; grid-template-columns: 1fr 70px 130px 1fr auto auto; gap:10px; align-items:center; padding:7px 10px; background:var(--bg); border-radius:var(--radius-sm); font-size:13px; }
+.split-recipient { font-weight:500; color:var(--text); }
+.split-qty-cell { font-family:'DM Mono',monospace; text-align:right; }
+.split-date { font-family:'DM Mono',monospace; color:var(--text-light); font-size:11.5px; }
+.split-note-cell { color:var(--text-mid); font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.split-btn { background:transparent; border:none; cursor:pointer; padding:3px 6px; border-radius:3px; font-size:14px; color:var(--text-light); }
+.split-btn:hover { background:var(--surface); color:var(--text); }
+.split-btn.del:hover { color:#dc2626; }
+.split-btn.return:hover { color:#16a34a; }
+.splits-empty { padding:10px; color:var(--text-light); font-style:italic; font-size:13px; text-align:center; }
+.splits-toggle { margin-top:8px; background:none; border:none; color:var(--text-light); font-size:12px; cursor:pointer; padding:4px 0; }
+.splits-toggle:hover { color:var(--text); }
 .doc-list { display:flex; flex-wrap:wrap; gap:8px; }
 .doc-card { padding:10px 14px; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-sm); min-width:160px; }
 .doc-card-type { font-size:10.5px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-light); margin-bottom:4px; }

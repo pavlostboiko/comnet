@@ -209,6 +209,8 @@ class ItemListRead(BaseModel):
     is_official: bool
     issued_to_recipient_id: Optional[int] = None
     issued_to_name: Optional[str] = None  # populated via Item.issued_to_name @property
+    total_issued: Optional[Decimal] = None  # SUM(active splits.qty)
+    free_qty: Optional[Decimal] = None      # quantity − total_issued
 
     model_config = {"from_attributes": True}
 
@@ -229,6 +231,8 @@ class ItemRead(BaseModel):
     is_official: bool
     issued_to_recipient_id: Optional[int] = None
     issued_to_name: Optional[str] = None
+    total_issued: Optional[Decimal] = None
+    free_qty: Optional[Decimal] = None
     documents: List[AssetDocumentRead] = []
 
     model_config = {"from_attributes": True}
@@ -286,6 +290,35 @@ class RecipientCreate(BaseModel):
 class RecipientUpdate(BaseModel):
     callsign: Optional[str] = None
     is_active: Optional[bool] = None
+
+
+# --- Item splits (per-recipient issuance) ---
+
+class ItemSplitRead(BaseModel):
+    id: int
+    item_id: int
+    recipient_id: Optional[int] = None
+    recipient_callsign: Optional[str] = None  # denormalized for display
+    qty: Decimal
+    issued_at: str
+    returned_at: Optional[str] = None
+    notes: Optional[str] = None
+    return_notes: Optional[str] = None
+    is_active: bool
+
+    model_config = {"from_attributes": True}
+
+
+class ItemSplitCreate(BaseModel):
+    recipient_id: int
+    qty: Decimal
+    issued_at: Optional[str] = None  # default = today
+    notes: Optional[str] = None
+
+
+class ItemSplitReturn(BaseModel):
+    returned_at: Optional[str] = None  # default = today
+    return_notes: Optional[str] = None
 
 
 # --- Movements ---

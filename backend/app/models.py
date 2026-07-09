@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy import (
-    Boolean, Column, DateTime, ForeignKey, Integer, Numeric,
+    Boolean, Column, Date, DateTime, ForeignKey, Integer, Numeric,
     String, Text, UniqueConstraint, JSON
 )
 from sqlalchemy.orm import relationship
@@ -116,6 +116,27 @@ class Item(Base):
         # (Pydantic treats this property the same as a column).
         return self.issued_to.callsign if self.issued_to else None
 
+    splits = relationship(
+        "ItemSplit",
+        primaryjoin="Item.id == foreign(ItemSplit.item_id)",
+        viewonly=True,
+    )
+
+    @property
+    def total_issued(self):
+        """SUM of qty for active (not-yet-returned) splits."""
+        if not self.splits:
+            return Decimal(0)
+        total = Decimal(0)
+        for s in self.splits:
+            if s.returned_at is None:
+                total += Decimal(s.qty or 0)
+        return total
+
+    @property
+    def free_qty(self):
+        return Decimal(self.quantity or 0) - self.total_issued
+
 
 class AssetDocument(Base):
     __tablename__ = "asset_documents"
@@ -217,3 +238,29 @@ class DocumentItem(Base):
     notes = Column(Text, nullable=True)
 
     document = relationship("Document", back_populates="items")
+
+
+class ItemSplit(Base):
+    """Per-recipient issuance of a non-serial item's qty.
+
+    Free-on-hand for an item = item.quantity - SUM(qty WHERE returned_at IS NULL).
+    """
+    __tablename__ = "item_splits"
+
+    id = Column(Integer, primary_key=True)
+    item_id = Column(Integer, ForeignKey("items.id", ondelete="CASCADE"), nullable=False)
+    recipient_id = Column(Integer, ForeignKey("recipients.id", ondelete="SET NULL"), nullable=True)
+    qty = Column(Numeric(15, 4), nullable=False)
+    issued_at = Column(Date, nullable=False)
+    returned_at = Column(Date, nullable=True)
+    notes = Column(Text, nullable=True)
+    return_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    item = relationship("Item")
+    recipient = relationship("Recipient")
+
+    @property
+    def is_active(self) -> bool:
+        return self.returned_at is None

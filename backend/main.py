@@ -15,6 +15,7 @@ from app.routers import movements as movements_router
 from app.routers import settings as settings_router
 from app.routers import admin as admin_router
 from app.routers import recipients as recipients_router
+from app.routers import splits as splits_router
 from app.routers import users as users_router
 
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -59,6 +60,7 @@ app.include_router(movements_router.router)
 app.include_router(settings_router.router)
 app.include_router(documents_router.router)
 app.include_router(recipients_router.router)
+app.include_router(splits_router.router)
 app.include_router(users_router.router)
 app.include_router(admin_router.router)
 
