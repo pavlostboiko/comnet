@@ -351,10 +351,18 @@ def sign_document(doc_id: int, db: Session = Depends(get_db), user=Depends(get_c
     is_incoming = (doc.operation == "надходження")
     label = MOVEMENT_DOC_LABEL.get(doc.form, doc.form)
     for it in _sorted_items(doc):
+        # Resolve items.number for the movement's FK — needed for residues
+        # to trace an item card between units.
+        card_num = None
+        if it.item_id:
+            ref_item = db.get(Item, it.item_id)
+            if ref_item:
+                card_num = ref_item.number
         m = Movement(
             document_id=doc.id,
             entry_date=doc.doc_date,
             item_name=it.item_name,
+            item_card_num=card_num,
             unit_of_measure=it.unit_of_measure,
             category=it.category,
             nomenclature_code=it.nomenclature_code,

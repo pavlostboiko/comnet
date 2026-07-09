@@ -18,7 +18,7 @@ const routes = [
   },
   {
     path: '/residues',
-    component: () => import('../pages/PlaceholderPage.vue'),
+    component: () => import('../pages/residues/ResiduesPage.vue'),
     meta: { requiresAuth: true, label: 'Залишки' },
   },
   {

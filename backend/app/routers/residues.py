@@ -1,0 +1,123 @@
+"""Залишки — «яке майно де знаходиться».
+
+Balance per (unit, item_card_num) = SUM(qty_in) − SUM(qty_out) computed
+from movements. Only positive balances are surfaced.
+
+Phase 1 endpoints:
+- GET /api/residues/by-unit                → summary per unit
+- GET /api/residues/by-unit/{unit}         → items detail for one unit
+
+Later phases will add /by-recipient and /me (MOV личный кабинет).
+"""
+from decimal import Decimal
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func, case
+from sqlalchemy.orm import Session
+
+from app.auth import get_current_user
+from app.database import get_db
+from app.models import Item, Movement, User
+
+router = APIRouter(prefix="/api/residues", tags=["residues"])
+
+
+def _positive_balances_by_unit(db: Session):
+    """Yield (to_unit, item_card_num, balance) rows where balance > 0."""
+    q = (
+        db.query(
+            Movement.to_unit.label("unit"),
+            Movement.item_card_num.label("card"),
+            func.coalesce(func.sum(Movement.qty_in), 0).label("qty_in_total"),
+        )
+        .filter(Movement.to_unit.isnot(None), Movement.item_card_num.isnot(None))
+        .group_by(Movement.to_unit, Movement.item_card_num)
+    )
+    in_totals = {(row.unit, row.card): Decimal(row.qty_in_total) for row in q.all()}
+
+    q2 = (
+        db.query(
+            Movement.from_unit.label("unit"),
+            Movement.item_card_num.label("card"),
+            func.coalesce(func.sum(Movement.qty_out), 0).label("qty_out_total"),
+        )
+        .filter(Movement.from_unit.isnot(None), Movement.item_card_num.isnot(None))
+        .group_by(Movement.from_unit, Movement.item_card_num)
+    )
+    out_totals = {(row.unit, row.card): Decimal(row.qty_out_total) for row in q2.all()}
+
+    # Combine: for each unit find every card that ever came in, subtract
+    # anything that ever left from that unit.
+    result: dict[tuple[str, str], Decimal] = {}
+    for key, qty in in_totals.items():
+        result[key] = result.get(key, Decimal(0)) + qty
+    for key, qty in out_totals.items():
+        result[key] = result.get(key, Decimal(0)) - qty
+    return [(unit, card, bal) for (unit, card), bal in result.items() if bal > 0]
+
+
+@router.get("/by-unit")
+def residues_by_unit(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Summary per unit: card count + total amount (using items.price)."""
+    balances = _positive_balances_by_unit(db)
+
+    # Fetch item prices in one round-trip
+    card_nums = {card for _, card, _ in balances}
+    price_by_card = {}
+    if card_nums:
+        for it in db.query(Item.number, Item.price).filter(Item.number.in_(card_nums)).all():
+            price_by_card[it.number] = Decimal(it.price or 0)
+
+    by_unit: dict[str, dict] = {}
+    for unit, card, bal in balances:
+        agg = by_unit.setdefault(unit, {"unit": unit, "items_count": 0, "total_qty": Decimal(0), "total_amount": Decimal(0)})
+        agg["items_count"] += 1
+        agg["total_qty"] += bal
+        agg["total_amount"] += bal * price_by_card.get(card, Decimal(0))
+
+    result = list(by_unit.values())
+    result.sort(key=lambda x: x["unit"])
+    for r in result:
+        r["total_qty"] = str(r["total_qty"])
+        r["total_amount"] = str(r["total_amount"])
+    return result
+
+
+@router.get("/by-unit/{unit:path}")
+def residues_by_unit_detail(
+    unit: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Items list for a specific unit with current balance ≥ 1."""
+    all_balances = _positive_balances_by_unit(db)
+    unit_balances = [(card, bal) for u, card, bal in all_balances if u == unit]
+
+    if not unit_balances:
+        return {"unit": unit, "items": []}
+
+    card_nums = [c for c, _ in unit_balances]
+    items_by_number = {
+        it.number: it for it in db.query(Item).filter(Item.number.in_(card_nums)).all()
+    }
+
+    items = []
+    for card, bal in unit_balances:
+        it = items_by_number.get(card)
+        items.append({
+            "item_card_num": card,
+            "item_id": it.id if it else None,
+            "name": it.name if it else None,
+            "category": it.category if it else None,
+            "unit_of_measure": it.unit_of_measure if it else None,
+            "serial_number": it.serial_number if it else None,
+            "price": str(it.price) if it and it.price is not None else None,
+            "qty": str(bal),
+            "amount": str(bal * Decimal(it.price or 0)) if it else None,
+        })
+    items.sort(key=lambda x: (x["name"] or "", x["item_card_num"]))
+    return {"unit": unit, "items": items}
