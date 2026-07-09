@@ -122,3 +122,17 @@ def test_person_lookup_last_name_alone():
     lookup = _build_person_lookup([p])
     assert _resolve_person("Petrenko", lookup) == 2
     assert _resolve_person("PETRENKO", lookup) == 2
+
+
+def test_movements_response_shape_includes_orphans_key():
+    # The endpoint contract: response dict has these keys so the UI can
+    # surface orphan card numbers separately from unmatched persons.
+    # Pure-logic assertion via the router module's constant/key layout —
+    # no live DB. If a future refactor renames the key, this test breaks
+    # visibly before the UI breaks silently.
+    import inspect
+    from app.routers import admin as admin_mod
+    src = inspect.getsource(admin_mod.import_movements)
+    assert '"orphan_card_nums"' in src
+    assert '"unmatched_persons"' in src
+    assert '"documents_created"' in src

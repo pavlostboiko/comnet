@@ -319,6 +319,8 @@ def import_movements(
     items_card_nums = set(n for (n,) in db.query(Item.number).all())
 
     created, skipped, errors, unmatched_persons = 0, 0, [], set()
+    orphan_card_nums: set[str] = set()   # values in file's X column that
+                                         # don't match any items.number
 
     # Pass 1: collect document keys, create / dedupe Document rows
     doc_id_map = {}  # (op, form, doc_number, doc_date) → document.id
@@ -385,6 +387,8 @@ def import_movements(
                 unmatched_persons.add(mvo_to_name)
 
             card_num = _clean(_col(row, MV_COLS["item_card_num"]))
+            if card_num and card_num not in items_card_nums:
+                orphan_card_nums.add(card_num)
             item_card_num = card_num if card_num in items_card_nums else None
 
             db.add(Movement(
@@ -421,6 +425,7 @@ def import_movements(
         "skipped": skipped,
         "errors": errors,
         "unmatched_persons": sorted(unmatched_persons),
+        "orphan_card_nums": sorted(orphan_card_nums),
         "documents_created": len(doc_id_map),
     }
 
