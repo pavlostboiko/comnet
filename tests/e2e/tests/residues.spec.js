@@ -93,3 +93,31 @@ test('opening a unit detail exposes an «Історія» button per row', async
   await page.locator('.modal-close').click()
   await expect(page.locator('.modal-title')).toHaveCount(0)
 })
+
+test('opening a unit detail exposes a «Видати» button per row that opens the issue modal', async ({ page }) => {
+  await uiLogin(page)
+  await page.goto(`${URL}/residues`)
+
+  const rows = page.locator('tbody .click-row')
+  if (await rows.count() === 0) {
+    test.skip()
+    return
+  }
+
+  await rows.first().click()
+  await page.waitForSelector('.detail-title')
+
+  const issueButtons = page.locator('.btn-issue')
+  if (await issueButtons.count() === 0) {
+    test.skip()
+    return
+  }
+
+  await issueButtons.first().click()
+  await expect(page.locator('.modal-title').filter({ hasText: 'Видати' })).toBeVisible()
+  // «Кому» field is present with recipient autocomplete
+  await expect(page.locator('.rc-input').first()).toBeVisible()
+  // Submit button disabled until a recipient is selected
+  await expect(page.locator('.btn-primary')).toBeDisabled()
+  await page.locator('.modal-close').click()
+})
