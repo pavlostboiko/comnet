@@ -26,7 +26,7 @@ def _xlsx_with_items_header():
     # Headers in row 1
     headers = ["№", "Товар", "Код номер", "Серійний номер",
                "Од. виміру", "Вартість", "Кіл-сть", "Категорія",
-               "Де знаходиться", "Видано"]
+               "Де знаходиться", "Видано", "Дата видачі"]
     for col, h in enumerate(headers, 1):
         ws.cell(row=1, column=col, value=h)
     ws.cell(row=2, column=1, value="K-001")

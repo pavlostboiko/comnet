@@ -429,13 +429,19 @@
                 <label class="form-label">Batch (партія надходження)</label>
                 <input class="form-input" v-model="f.batch_id" placeholder="НКЛ-001/25">
               </div>
-              <div class="form-group full">
+              <div class="form-group">
                 <label class="form-label">Видане (прізвище)</label>
                 <RecipientAutocomplete
                   v-model="f.issued_to_recipient_id"
                   :recipients="recipients"
                   placeholder="введіть прізвище або створіть нове"
                   @created="onRecipientCreated" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Дата видачі</label>
+                <input type="date" class="form-input" v-model="f.issued_at"
+                  :disabled="!f.issued_to_recipient_id"
+                  :placeholder="f.issued_to_recipient_id ? 'сьогодні за замовчуванням' : ''">
               </div>
               <div class="form-group full">
                 <label class="form-label">Примітки</label>
@@ -620,6 +626,7 @@ const f = reactive({
   quantity: '', price: '', serial_number: '', batch_id: '', notes: '',
   is_official: true,
   issued_to_recipient_id: null,
+  issued_at: '',
 })
 const docRows = ref([])
 
@@ -789,6 +796,7 @@ function populateForm(item) {
   f.notes            = item?.notes ?? ''
   f.is_official      = item?.is_official ?? true
   f.issued_to_recipient_id = item?.issued_to_recipient_id ?? null
+  f.issued_at        = ''  // transient; never surfaced from the item read
 
   docRows.value = item?.documents?.map(d => ({
     doc_type: d.doc_type ?? '',
@@ -828,6 +836,7 @@ async function submitForm() {
       notes:            f.notes || null,
       is_official:      f.is_official,
       issued_to_recipient_id: f.issued_to_recipient_id || null,
+      issued_at:        (f.issued_to_recipient_id && f.issued_at) ? f.issued_at : null,
       documents:        docRows.value.filter(d => d.doc_type || d.doc_number),
     }
     if (formMode.value === 'add') {

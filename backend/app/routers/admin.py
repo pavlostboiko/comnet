@@ -99,6 +99,7 @@ ITEMS_COLUMN_MAP = {
     "Категорія":       "item_type",
     "Де знаходиться":  "notes",
     "Видано":          "issued_recipient",  # resolved to recipient FK below
+    "Дата видачі":     "issued_at",          # optional; parsed as date, seeds split
 }
 
 # Values in the «Видано» column that are NOT a recipient and must be skipped.
@@ -255,8 +256,16 @@ def import_items(
             db.flush()
             # Same journaling path as /api/items POST — mirrors serial assignment
             # into the item_splits ledger so imported items show up in /history.
+            from datetime import date as _date
             from app.routers.items import _journal_serial_change
-            _journal_serial_change(db, item, None, recipient_id, user.id)
+            iso = _parse_date(vals.get("issued_at"))
+            issued_at = None
+            if iso:
+                try:
+                    issued_at = _date.fromisoformat(iso)
+                except ValueError:
+                    issued_at = None
+            _journal_serial_change(db, item, None, recipient_id, user.id, issued_at)
             existing_numbers.add(number)
             created += 1
         except Exception as e:

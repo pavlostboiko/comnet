@@ -144,6 +144,71 @@ test.describe('Item history & serial journaling', () => {
     if (r) cleanup.push(`/api/recipients/${r.id}`)
   })
 
+  test('admin XLSX import with «Дата видачі» column uses it as the split date', async () => {
+    const fixture = fs.readFileSync(path.join(__dirname, 'fixtures/import_items_with_date.xlsx'))
+    const impResp = await api.post('/api/admin/import/items', {
+      multipart: {
+        file: {
+          name: 'import_items_with_date.xlsx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          buffer: fixture,
+        },
+      },
+    })
+    expect([200, 201]).toContain(impResp.status())
+
+    const items = await (await api.get('/api/items')).json()
+    const imported = items.find(i => i.number === 'IMP-DATE-001')
+    expect(imported).toBeTruthy()
+    cleanup.push(`/api/items/${imported.id}`)
+
+    const history = await (await api.get(`/api/items/${imported.id}/history`)).json()
+    const issued = history.find(e => e.kind === 'issued')
+    expect(issued).toBeTruthy()
+    expect(issued.date).toBe('2025-03-15')
+
+    const rcpts = await (await api.get('/api/recipients')).json()
+    const r = rcpts.find(rc => rc.callsign === 'IMP-DATE-RCPT')
+    if (r) cleanup.push(`/api/recipients/${r.id}`)
+  })
+
+  test('PUT with issued_at seeds the new split with a historical date', async () => {
+    const item = await makeSerialItem()
+    const r = await makeRecipient('h-date')
+    const historicDate = '2025-06-15'
+
+    const resp = await api.put(`/api/items/${item.id}`, {
+      data: { issued_to_recipient_id: r.id, issued_at: historicDate },
+    })
+    expect(resp.status()).toBe(200)
+
+    const splits = await (await api.get(`/api/items/${item.id}/splits`)).json()
+    const active = splits.find(s => s.is_active)
+    expect(active).toBeTruthy()
+    expect(active.issued_at).toBe(historicDate)
+
+    // History event reflects the same date
+    const history = await (await api.get(`/api/items/${item.id}/history`)).json()
+    const issued = history.find(e => e.kind === 'issued')
+    expect(issued.date).toBe(historicDate)
+  })
+
+  test('POST with issued_at seeds initial split date', async () => {
+    const r = await makeRecipient('h-post-date')
+    const tag = `hs-p-${Date.now()}-${Math.floor(Math.random() * 9999)}`
+    const item = await postJson(api, '/api/items', {
+      number: `HP-${tag}`, name: `Post ${tag}`,
+      unit_of_measure: 'шт', price: 100, quantity: 1,
+      serial_number: `SN-${tag}`, is_official: false,
+      issued_to_recipient_id: r.id,
+      issued_at: '2024-01-05',
+    })
+    cleanup.push(`/api/items/${item.id}`)
+
+    const splits = await (await api.get(`/api/items/${item.id}/splits`)).json()
+    expect(splits[0].issued_at).toBe('2024-01-05')
+  })
+
   test('splits.return_split writes returned_by (surfaces via /history actor)', async () => {
     // Non-serial item to exercise the standard splits UI path
     const tag = `hs-nb-${Date.now()}`
