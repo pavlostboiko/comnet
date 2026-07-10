@@ -64,6 +64,61 @@ test.describe('Residues API · by-unit', () => {
     expect(ours.name).toContain(seed.tag)
   })
 
+  test('by-recipient: split creates entry; return removes it', async () => {
+    const tag = `rr-${Date.now()}`
+    // Seed an item + a recipient
+    const item = await postJson(api, '/api/items', {
+      number: `RC-${tag}`, name: `Res-rc ${tag}`, unit_of_measure: 'шт',
+      price: 100, quantity: 5, is_official: false,
+    })
+    const rcpt = await postJson(api, '/api/recipients', { callsign: `Rec-${tag}` })
+    cleanup.push(`/api/items/${item.id}`, `/api/recipients/${rcpt.id}`)
+
+    // Baseline
+    const before = await api.get('/api/residues/by-recipient').then(r => r.json())
+    expect(before.find(r => r.recipient_id === rcpt.id)).toBeFalsy()
+
+    // Issue 3 units to the recipient
+    const split = await postJson(api, `/api/items/${item.id}/splits`, {
+      recipient_id: rcpt.id, qty: 3, notes: 'first drop',
+    })
+
+    // Master list now includes recipient
+    const after = await api.get('/api/residues/by-recipient').then(r => r.json())
+    const ours = after.find(r => r.recipient_id === rcpt.id)
+    expect(ours).toBeTruthy()
+    expect(ours.splits_count).toBe(1)
+    expect(Number(ours.total_qty)).toBe(3)
+
+    // Detail shows the split row
+    const detail = await api.get(`/api/residues/by-recipient/${rcpt.id}`).then(r => r.json())
+    expect(detail.callsign).toBe(`Rec-${tag}`)
+    expect(detail.splits.length).toBe(1)
+    expect(detail.splits[0].item_number).toBe(`RC-${tag}`)
+
+    // Return the split → recipient disappears from the list
+    await api.post(`/api/items/${item.id}/splits/${split.id}/return`)
+    const afterReturn = await api.get('/api/residues/by-recipient').then(r => r.json())
+    expect(afterReturn.find(r => r.recipient_id === rcpt.id)).toBeFalsy()
+  })
+
+  test('by-recipient: serial item assignment surfaces without a split', async () => {
+    const tag = `rs-${Date.now()}`
+    const rcpt = await postJson(api, '/api/recipients', { callsign: `Ser-${tag}` })
+    const item = await postJson(api, '/api/items', {
+      number: `SR-${tag}`, name: `Res-serial ${tag}`,
+      serial_number: `SN-${tag}`, unit_of_measure: 'шт',
+      price: 50, quantity: 1, is_official: false,
+      issued_to_recipient_id: rcpt.id,
+    })
+    cleanup.push(`/api/items/${item.id}`, `/api/recipients/${rcpt.id}`)
+
+    const detail = await api.get(`/api/residues/by-recipient/${rcpt.id}`).then(r => r.json())
+    expect(detail.serial_items.length).toBe(1)
+    expect(detail.serial_items[0].item_number).toBe(`SR-${tag}`)
+    expect(detail.serial_items[0].serial_number).toBe(`SN-${tag}`)
+  })
+
   test('unsign removes the balance from the residues report', async () => {
     const seed = await seedNakladnaContext(api, 'resu')
     const doc = await postJson(api, '/api/documents', {
