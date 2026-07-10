@@ -81,10 +81,11 @@
                   <th class="sortable col-qty" @click="udToggleSort('qty_num')">К-сть <span class="sort-arrow">{{ udSortIcon('qty_num') }}</span></th>
                   <th class="sortable col-price" @click="udToggleSort('price_num')">Ціна <span class="sort-arrow">{{ udSortIcon('price_num') }}</span></th>
                   <th class="sortable col-amount" @click="udToggleSort('amount_num')">Сума <span class="sort-arrow">{{ udSortIcon('amount_num') }}</span></th>
+                  <th class="col-hist"></th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-if="!udSorted.length"><td colspan="8" class="empty">Нічого не знайдено</td></tr>
+                <tr v-if="!udSorted.length"><td colspan="9" class="empty">Нічого не знайдено</td></tr>
                 <tr v-for="it in udSorted" :key="it.item_card_num">
                   <td class="td-mono">{{ it.item_card_num }}</td>
                   <td>{{ it.name || '—' }}</td>
@@ -94,6 +95,9 @@
                   <td class="td-num">{{ fmtQty(it.qty) }}</td>
                   <td class="td-num">{{ fmtPrice(it.price) }}</td>
                   <td class="td-num">{{ fmtPrice(it.amount) }}</td>
+                  <td class="td-hist">
+                    <button v-if="it.item_id" class="btn-hist" @click="openHistory(it)" title="Історія">Історія</button>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -176,10 +180,11 @@
                     <th class="sortable col-date" @click="rdSplitsToggleSort('issued_at')">Дата видачі <span class="sort-arrow">{{ rdSplitsSortIcon('issued_at') }}</span></th>
                     <th class="sortable col-price" @click="rdSplitsToggleSort('price_num')">Ціна <span class="sort-arrow">{{ rdSplitsSortIcon('price_num') }}</span></th>
                     <th class="sortable col-amount" @click="rdSplitsToggleSort('amount_num')">Сума <span class="sort-arrow">{{ rdSplitsSortIcon('amount_num') }}</span></th>
+                    <th class="col-hist"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-if="!rdSplitsSorted.length"><td colspan="8" class="empty">Нічого не знайдено</td></tr>
+                  <tr v-if="!rdSplitsSorted.length"><td colspan="9" class="empty">Нічого не знайдено</td></tr>
                   <tr v-for="s in rdSplitsSorted" :key="s.split_id">
                     <td class="td-mono">{{ s.item_number || '—' }}</td>
                     <td>{{ s.item_name || '—' }}</td>
@@ -189,6 +194,9 @@
                     <td class="td-mono td-dim">{{ s.issued_at || '—' }}</td>
                     <td class="td-num">{{ fmtPrice(s.price) }}</td>
                     <td class="td-num">{{ fmtPrice(s.amount) }}</td>
+                    <td class="td-hist">
+                      <button v-if="s.item_id" class="btn-hist" @click="openHistory(s)" title="Історія">Історія</button>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -208,10 +216,11 @@
                     <th class="sortable col-qty" @click="rdSerialToggleSort('qty_num')">К-сть <span class="sort-arrow">{{ rdSerialSortIcon('qty_num') }}</span></th>
                     <th class="sortable col-price" @click="rdSerialToggleSort('price_num')">Ціна <span class="sort-arrow">{{ rdSerialSortIcon('price_num') }}</span></th>
                     <th class="sortable col-amount" @click="rdSerialToggleSort('amount_num')">Сума <span class="sort-arrow">{{ rdSerialSortIcon('amount_num') }}</span></th>
+                    <th class="col-hist"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-if="!rdSerialSorted.length"><td colspan="8" class="empty">Нічого не знайдено</td></tr>
+                  <tr v-if="!rdSerialSorted.length"><td colspan="9" class="empty">Нічого не знайдено</td></tr>
                   <tr v-for="it in rdSerialSorted" :key="it.item_id">
                     <td class="td-mono">{{ it.item_number }}</td>
                     <td>{{ it.item_name || '—' }}</td>
@@ -221,6 +230,9 @@
                     <td class="td-num">{{ fmtQty(it.qty) }}</td>
                     <td class="td-num">{{ fmtPrice(it.price) }}</td>
                     <td class="td-num">{{ fmtPrice(it.amount) }}</td>
+                    <td class="td-hist">
+                      <button class="btn-hist" @click="openHistory(it)" title="Історія">Історія</button>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -234,12 +246,15 @@
         </template>
       </div>
     </div>
+
+    <ItemHistoryModal :item-id="historyItemId" :item-title="historyItemTitle" @close="closeHistory" />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
+import ItemHistoryModal from '../../components/ItemHistoryModal.vue'
 import {
   getResiduesByUnit, getResiduesByUnitDetail,
   getResiduesByRecipient, getResiduesByRecipientDetail,
@@ -250,6 +265,20 @@ import { useAuthStore } from '../../stores/auth.js'
 const auth = useAuthStore()
 
 const activeTab = ref('unit')
+
+// History modal state — surfaced from either detail table
+const historyItemId = ref(null)
+const historyItemTitle = ref('')
+function openHistory(row) {
+  const id = row.item_id ?? row.item_id_
+  if (!id) return
+  historyItemId.value = id
+  historyItemTitle.value = row.name || row.item_name || row.item_card_num || row.item_number || ''
+}
+function closeHistory() {
+  historyItemId.value = null
+  historyItemTitle.value = ''
+}
 
 // unit tab state
 const rows = ref([])
@@ -518,4 +547,9 @@ th.sortable:hover .sort-arrow { opacity:1; }
 
 .t-foot { padding:10px 20px; font-size:12px; color:var(--text-light); border-top:1px solid var(--border-light); background:var(--bg); }
 .t-foot b { color:var(--text-mid); font-weight:600; }
+
+.col-hist { width:90px; }
+.td-hist  { text-align:center; }
+.btn-hist { background:transparent; border:1px solid var(--border); border-radius:var(--radius-sm); padding:3px 10px; cursor:pointer; color:var(--text-mid); font-size:12px; font-family:inherit; }
+.btn-hist:hover { background:var(--bg); color:var(--text); border-color:var(--accent); }
 </style>
