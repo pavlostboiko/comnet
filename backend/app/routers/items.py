@@ -46,6 +46,7 @@ def _journal_serial_change(
     old_recipient_id: int | None,
     new_recipient_id: int | None,
     user_id: int,
+    issued_at: date | None = None,
 ) -> None:
     """Mirror an issued_to_recipient_id change on a serial item into the
     item_splits ledger. Non-serial items already have their own splits UI —
@@ -55,6 +56,9 @@ def _journal_serial_change(
       - old is None, new set        → open new split (initial issuance)
       - old set, new None           → close previous active split (return)
       - old set, new set (different) → close previous + open new (reassignment)
+
+    `issued_at` — when the new split's issue date should be; today if omitted.
+    Return/close events always use today (that's when the return was recorded).
     """
     if not item.serial_number or old_recipient_id == new_recipient_id:
         return
@@ -73,7 +77,7 @@ def _journal_serial_change(
             item_id=item.id,
             recipient_id=new_recipient_id,
             qty=1,
-            issued_at=today,
+            issued_at=issued_at or today,
             created_by=user_id,
         ))
 
@@ -122,7 +126,8 @@ def create_item(
     )
     db.add(item)
     db.flush()
-    _journal_serial_change(db, item, None, item.issued_to_recipient_id, user.id)
+    issued_at = date.fromisoformat(payload.issued_at) if payload.issued_at else None
+    _journal_serial_change(db, item, None, item.issued_to_recipient_id, user.id, issued_at)
     _sync_documents(db, item.id, payload.documents)
     db.commit()
     db.refresh(item)
@@ -144,10 +149,13 @@ def update_item(
             raise HTTPException(status_code=409, detail="Item number already exists")
 
     old_recipient_id = item.issued_to_recipient_id
-    for field, value in payload.model_dump(exclude_unset=True, exclude={"documents"}).items():
+    # issued_at is transient — used to seed the new split, never stored on Item
+    payload_issued_at = payload.issued_at
+    for field, value in payload.model_dump(exclude_unset=True, exclude={"documents", "issued_at"}).items():
         setattr(item, field, value)
 
-    _journal_serial_change(db, item, old_recipient_id, item.issued_to_recipient_id, user.id)
+    issued_at = date.fromisoformat(payload_issued_at) if payload_issued_at else None
+    _journal_serial_change(db, item, old_recipient_id, item.issued_to_recipient_id, user.id, issued_at)
 
     if payload.documents is not None:
         _sync_documents(db, item_id, payload.documents)

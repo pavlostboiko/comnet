@@ -256,6 +256,7 @@ class ItemCreate(BaseModel):
     notes: Optional[str] = None
     is_official: bool = True
     issued_to_recipient_id: Optional[int] = None
+    issued_at: Optional[str] = None  # ISO date; used as the split's issued_at
     documents: List[AssetDocumentCreate] = []
 
 
@@ -273,6 +274,7 @@ class ItemUpdate(BaseModel):
     notes: Optional[str] = None
     is_official: Optional[bool] = None
     issued_to_recipient_id: Optional[int] = None
+    issued_at: Optional[str] = None
     documents: Optional[List[AssetDocumentCreate]] = None
 
 
