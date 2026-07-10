@@ -237,7 +237,7 @@ def import_items(
                 recipients_created += 1
 
         try:
-            db.add(Item(
+            item = Item(
                 number            = number,
                 name              = str(vals["name"]).strip(),
                 nomenclature_code = _clean(vals.get("nomenclature_code")),
@@ -250,7 +250,13 @@ def import_items(
                 is_official       = True,
                 issued_to_recipient_id = recipient_id,
                 created_by        = user.id,
-            ))
+            )
+            db.add(item)
+            db.flush()
+            # Same journaling path as /api/items POST — mirrors serial assignment
+            # into the item_splits ledger so imported items show up in /history.
+            from app.routers.items import _journal_serial_change
+            _journal_serial_change(db, item, None, recipient_id, user.id)
             existing_numbers.add(number)
             created += 1
         except Exception as e:
