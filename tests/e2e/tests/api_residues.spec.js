@@ -119,6 +119,65 @@ test.describe('Residues API · by-unit', () => {
     expect(detail.serial_items[0].serial_number).toBe(`SN-${tag}`)
   })
 
+  test('by-recipient detail: current_unit reflects the subdivision where the item lives', async () => {
+    const seed = await seedNakladnaContext(api, 'loc')
+    // Make sure the seeded item has a quantity to issue from
+    await api.put(`/api/items/${seed.item.id}`, { data: { quantity: 3 } })
+
+    // Seed + sign a переміщення so the item ends up in seed.receiver.unit
+    const doc = await postJson(api, '/api/documents', {
+      operation: 'переміщення', form: 'накладна',
+      doc_date: '2026-07-10',
+      op_type_id: seed.opType.id,
+      service_id: seed.service.id,
+      sender_id: seed.sender.id,
+      receiver_id: seed.receiver.id,
+      fin_id: seed.fin.id,
+      items: [{ item_id: seed.item.id, quantity: 3, qty_received: 3 }],
+    })
+    cleanup.push(`/api/documents/${doc.id}`, ...seed.cleanup)
+    await api.post(`/api/documents/${doc.id}/sign`)
+
+    // Issue 1 unit to a recipient
+    const rcpt = await postJson(api, '/api/recipients', { callsign: `Loc-${seed.tag}` })
+    cleanup.push(`/api/recipients/${rcpt.id}`)
+    await postJson(api, `/api/items/${seed.item.id}/splits`, {
+      recipient_id: rcpt.id, qty: 1,
+    })
+
+    const detail = await api.get(`/api/residues/by-recipient/${rcpt.id}`).then(r => r.json())
+    expect(detail.splits.length).toBe(1)
+    expect(detail.splits[0].current_unit).toBe(seed.receiver.unit)
+  })
+
+  test('serial return: PUT items with null recipient closes active split + removes from by-recipient', async () => {
+    const tag = `sret-${Date.now()}`
+    const rcpt = await postJson(api, '/api/recipients', { callsign: `Sret-${tag}` })
+    const item = await postJson(api, '/api/items', {
+      number: `SR-${tag}`, name: `Return-serial ${tag}`,
+      serial_number: `SN-${tag}`, unit_of_measure: 'шт',
+      price: 50, quantity: 1, is_official: false,
+      issued_to_recipient_id: rcpt.id,
+    })
+    cleanup.push(`/api/items/${item.id}`, `/api/recipients/${rcpt.id}`)
+
+    // Recipient has the item now
+    const before = await api.get(`/api/residues/by-recipient/${rcpt.id}`).then(r => r.json())
+    expect(before.serial_items.length).toBe(1)
+
+    // Return via PUT null
+    await api.put(`/api/items/${item.id}`, { data: { issued_to_recipient_id: null } })
+
+    // Recipient no longer holds it
+    const afterList = await api.get('/api/residues/by-recipient').then(r => r.json())
+    expect(afterList.find(r => r.recipient_id === rcpt.id)).toBeFalsy()
+
+    // History records both events
+    const history = await api.get(`/api/items/${item.id}/history`).then(r => r.json())
+    expect(history.some(e => e.kind === 'issued')).toBeTruthy()
+    expect(history.some(e => e.kind === 'returned')).toBeTruthy()
+  })
+
   test('unsign removes the balance from the residues report', async () => {
     const seed = await seedNakladnaContext(api, 'resu')
     const doc = await postJson(api, '/api/documents', {

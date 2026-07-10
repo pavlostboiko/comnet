@@ -207,6 +207,20 @@ def residues_by_recipient(
     return result
 
 
+def _current_units_by_card(db: Session, card_numbers: set[str]) -> dict[str, str]:
+    """For each item card number, return the unit(s) where it currently has
+    positive balance, comma-joined. Empty string when no movement is on record
+    for this card (e.g. the item was created directly, never «надійшло»)."""
+    if not card_numbers:
+        return {}
+    balances = _positive_balances_by_unit(db)
+    per_card: dict[str, list[str]] = {}
+    for unit, card, _bal in balances:
+        if card in card_numbers:
+            per_card.setdefault(card, []).append(unit)
+    return {card: ", ".join(sorted(units)) for card, units in per_card.items()}
+
+
 @router.get("/by-recipient/{recipient_id}")
 def residues_by_recipient_detail(
     recipient_id: int,
@@ -226,6 +240,17 @@ def residues_by_recipient_detail(
         for it in db.query(Item).filter(Item.id.in_(item_ids)).all():
             items_by_id[it.id] = it
 
+    # Compute current location per card (unit with positive movements balance).
+    card_numbers = set()
+    for s in splits:
+        it = items_by_id.get(s.item_id)
+        if it and it.number:
+            card_numbers.add(it.number)
+    for it in serial_items:
+        if it.number:
+            card_numbers.add(it.number)
+    unit_by_card = _current_units_by_card(db, card_numbers)
+
     split_rows = []
     for s in splits:
         it = items_by_id.get(s.item_id)
@@ -241,6 +266,7 @@ def residues_by_recipient_detail(
             "price": str(it.price) if it and it.price is not None else None,
             "amount": str(Decimal(s.qty or 0) * Decimal(it.price or 0)) if it else None,
             "notes": s.notes,
+            "current_unit": unit_by_card.get(it.number, "") if it else "",
         })
     split_rows.sort(key=lambda x: (x["item_name"] or "", x["item_number"] or ""))
 
@@ -256,6 +282,7 @@ def residues_by_recipient_detail(
             "qty": str(it.quantity or 1),
             "price": str(it.price) if it.price is not None else None,
             "amount": str(Decimal(it.quantity or 1) * Decimal(it.price or 0)),
+            "current_unit": unit_by_card.get(it.number, ""),
         })
     serial_rows.sort(key=lambda x: (x["item_name"] or "", x["item_number"] or ""))
 
