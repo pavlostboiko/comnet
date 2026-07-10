@@ -7,6 +7,8 @@
  *  - History endpoint merges movements + split events and sorts by date DESC.
  *  - returned_by is captured on split-return via /api/items/{id}/splits/{sid}/return.
  */
+const fs = require('fs')
+const path = require('path')
 const { test, expect } = require('@playwright/test')
 const { loginApi } = require('./helpers/login')
 const { postJson, bestEffortDelete } = require('./helpers/seed')
@@ -102,6 +104,44 @@ test.describe('Item history & serial journaling', () => {
     for (let i = 1; i < history.length; i++) {
       expect(history[i - 1].date >= history[i].date).toBeTruthy()
     }
+  })
+
+  test('admin XLSX import creates an «issued» history event for serial items with «Видано»', async () => {
+    // Read the pre-built fixture. Row: IMP-HIST-001 / SN-IMPHIST-001 / issued to «IMP-HIST-RCPT».
+    const fixture = fs.readFileSync(path.join(__dirname, 'fixtures/import_items_serial.xlsx'))
+
+    const impResp = await api.post('/api/admin/import/items', {
+      multipart: {
+        file: {
+          name: 'import_items_serial.xlsx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          buffer: fixture,
+        },
+      },
+    })
+    if (impResp.status() === 409) {
+      // Fixture may already be present from a previous run — wipe and retry
+      await api.post('/api/admin/wipe-inventory')
+      // The wipe drops items; re-import
+    }
+    expect([200, 201]).toContain(impResp.status())
+
+    // The imported item's card number is stable; look it up
+    const items = await (await api.get('/api/items')).json()
+    const imported = items.find(i => i.number === 'IMP-HIST-001')
+    expect(imported).toBeTruthy()
+    cleanup.push(`/api/items/${imported.id}`)
+
+    // History must include an «issued» event for the recipient
+    const history = await (await api.get(`/api/items/${imported.id}/history`)).json()
+    const issued = history.find(e => e.kind === 'issued')
+    expect(issued).toBeTruthy()
+    expect(issued.recipient).toBe('IMP-HIST-RCPT')
+
+    // Also clean up the auto-created recipient
+    const rcpts = await (await api.get('/api/recipients')).json()
+    const r = rcpts.find(rc => rc.callsign === 'IMP-HIST-RCPT')
+    if (r) cleanup.push(`/api/recipients/${r.id}`)
   })
 
   test('splits.return_split writes returned_by (surfaces via /history actor)', async () => {
