@@ -209,6 +209,38 @@ test.describe('Item history & serial journaling', () => {
     expect(splits[0].issued_at).toBe('2024-01-05')
   })
 
+  test('«Видати з залишків» flow: PUT/POST from a residues row surfaces in history', async () => {
+    // Serial: PUT flow — mimics the IssueModal invocation for a serial item
+    const item = await makeSerialItem()
+    const r = await makeRecipient('h-flow-s')
+    const putResp = await api.put(`/api/items/${item.id}`, {
+      data: { issued_to_recipient_id: r.id, issued_at: '2024-08-01' },
+    })
+    expect(putResp.status()).toBe(200)
+    const shist = await (await api.get(`/api/items/${item.id}/history`)).json()
+    const issued = shist.find(e => e.kind === 'issued')
+    expect(issued.date).toBe('2024-08-01')
+    expect(issued.recipient).toBe(r.callsign)
+
+    // Non-serial: POST /splits flow with issued_at
+    const tag = `hs-nb-flow-${Date.now()}`
+    const nb = await postJson(api, '/api/items', {
+      number: `HNBF-${tag}`, name: `NBF ${tag}`,
+      unit_of_measure: 'шт', price: 20, quantity: 4, is_official: false,
+    })
+    cleanup.push(`/api/items/${nb.id}`)
+    const r2 = await makeRecipient('h-flow-n')
+    const spResp = await api.post(`/api/items/${nb.id}/splits`, {
+      data: { recipient_id: r2.id, qty: 2, issued_at: '2024-08-15', notes: 'from residues' },
+    })
+    expect(spResp.status()).toBe(201)
+    const nhist = await (await api.get(`/api/items/${nb.id}/history`)).json()
+    const nIssued = nhist.find(e => e.kind === 'issued')
+    expect(nIssued.date).toBe('2024-08-15')
+    expect(nIssued.recipient).toBe(r2.callsign)
+    expect(nIssued.notes).toBe('from residues')
+  })
+
   test('splits.return_split writes returned_by (surfaces via /history actor)', async () => {
     // Non-serial item to exercise the standard splits UI path
     const tag = `hs-nb-${Date.now()}`

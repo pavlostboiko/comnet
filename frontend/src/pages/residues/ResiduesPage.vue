@@ -81,7 +81,7 @@
                   <th class="sortable col-qty" @click="udToggleSort('qty_num')">К-сть <span class="sort-arrow">{{ udSortIcon('qty_num') }}</span></th>
                   <th class="sortable col-price" @click="udToggleSort('price_num')">Ціна <span class="sort-arrow">{{ udSortIcon('price_num') }}</span></th>
                   <th class="sortable col-amount" @click="udToggleSort('amount_num')">Сума <span class="sort-arrow">{{ udSortIcon('amount_num') }}</span></th>
-                  <th class="col-hist"></th>
+                  <th class="col-acts-2"></th>
                 </tr>
               </thead>
               <tbody>
@@ -95,7 +95,8 @@
                   <td class="td-num">{{ fmtQty(it.qty) }}</td>
                   <td class="td-num">{{ fmtPrice(it.price) }}</td>
                   <td class="td-num">{{ fmtPrice(it.amount) }}</td>
-                  <td class="td-hist">
+                  <td class="td-acts-2">
+                    <button v-if="it.item_id" class="btn-issue" @click="openIssue(it)" title="Видати">Видати</button>
                     <button v-if="it.item_id" class="btn-hist" @click="openHistory(it)" title="Історія">Історія</button>
                   </td>
                 </tr>
@@ -248,6 +249,7 @@
     </div>
 
     <ItemHistoryModal :item-id="historyItemId" :item-title="historyItemTitle" @close="closeHistory" />
+    <IssueModal :item="issueTarget" @close="closeIssue" @issued="onIssued" />
   </div>
 </template>
 
@@ -255,6 +257,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import ItemHistoryModal from '../../components/ItemHistoryModal.vue'
+import IssueModal from '../../components/IssueModal.vue'
 import {
   getResiduesByUnit, getResiduesByUnitDetail,
   getResiduesByRecipient, getResiduesByRecipientDetail,
@@ -278,6 +281,28 @@ function openHistory(row) {
 function closeHistory() {
   historyItemId.value = null
   historyItemTitle.value = ''
+}
+
+// Issue modal — «Видати з залишків». Passes the row {item_id, name, serial_number, qty}
+const issueTarget = ref(null)
+function openIssue(row) {
+  if (!row.item_id) return
+  issueTarget.value = { ...row }
+}
+function closeIssue() { issueTarget.value = null }
+async function onIssued() {
+  // Refresh the currently visible detail after successful issuance
+  if (selectedUnit.value) {
+    const { data } = await getResiduesByUnitDetail(selectedUnit.value)
+    detail.value = data
+  }
+  if (selectedRecipient.value) {
+    const { data } = await getResiduesByRecipientDetail(selectedRecipient.value)
+    recipientDetail.value = data
+  }
+  // Master lists (residue totals) may shift too — refresh those in the background
+  load()
+  if (activeTab.value === 'recipient') loadRecipients()
 }
 
 // unit tab state
@@ -548,8 +573,13 @@ th.sortable:hover .sort-arrow { opacity:1; }
 .t-foot { padding:10px 20px; font-size:12px; color:var(--text-light); border-top:1px solid var(--border-light); background:var(--bg); }
 .t-foot b { color:var(--text-mid); font-weight:600; }
 
-.col-hist { width:90px; }
-.td-hist  { text-align:center; }
-.btn-hist { background:transparent; border:1px solid var(--border); border-radius:var(--radius-sm); padding:3px 10px; cursor:pointer; color:var(--text-mid); font-size:12px; font-family:inherit; }
-.btn-hist:hover { background:var(--bg); color:var(--text); border-color:var(--accent); }
+.col-hist    { width:90px; }
+.col-acts-2  { width:180px; }
+.td-hist     { text-align:center; }
+.td-acts-2   { text-align:center; white-space:nowrap; }
+.td-acts-2 button + button { margin-left:4px; }
+.btn-hist  { background:transparent; border:1px solid var(--border); border-radius:var(--radius-sm); padding:3px 10px; cursor:pointer; color:var(--text-mid); font-size:12px; font-family:inherit; }
+.btn-hist:hover  { background:var(--bg); color:var(--text); border-color:var(--accent); }
+.btn-issue { background:var(--accent); border:1px solid var(--accent); border-radius:var(--radius-sm); padding:3px 10px; cursor:pointer; color:white; font-size:12px; font-family:inherit; font-weight:500; }
+.btn-issue:hover { filter:brightness(0.9); }
 </style>
