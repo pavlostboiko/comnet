@@ -115,7 +115,7 @@ def return_split(
     split_id: int,
     payload: ItemSplitReturn | None = None,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     payload = payload or ItemSplitReturn()
     row = db.get(ItemSplit, split_id)
@@ -127,6 +127,7 @@ def return_split(
         date.fromisoformat(payload.returned_at) if payload.returned_at else date.today()
     )
     row.return_notes = payload.return_notes
+    row.returned_by = user.id
     db.commit()
     db.refresh(row)
     return _serialize(row)

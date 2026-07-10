@@ -264,6 +264,7 @@ class ItemSplit(Base):
     return_notes = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    returned_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     item = relationship("Item")
     recipient = relationship("Recipient")

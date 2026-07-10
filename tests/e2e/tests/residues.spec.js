@@ -57,3 +57,39 @@ test('«/» hotkey focuses the visible search input', async ({ page }) => {
   await page.keyboard.press('/')
   await expect(page.locator('.search-row input').first()).toBeFocused()
 })
+
+test('opening a unit detail exposes an «Історія» button per row', async ({ page }) => {
+  await uiLogin(page)
+  await page.goto(`${URL}/residues`)
+
+  const rows = page.locator('tbody .click-row')
+  if (await rows.count() === 0) {
+    test.skip()
+    return
+  }
+
+  // Open the first unit's detail
+  await rows.first().click()
+  await page.waitForSelector('.detail-title')
+
+  // Wait for either the search row (data present) or empty state
+  const anyRow = page.locator('tbody tr').filter({ hasNot: page.locator('.empty') })
+  const rowCount = await anyRow.count()
+  if (rowCount === 0) {
+    test.skip()
+    return
+  }
+
+  // At least one row has an Історія button (rows tied to a known item_id)
+  const histButtons = page.locator('.btn-hist')
+  expect(await histButtons.count()).toBeGreaterThan(0)
+
+  // Clicking opens the history modal
+  await histButtons.first().click()
+  await expect(page.locator('.modal-title')).toBeVisible()
+  await expect(page.locator('.modal-title')).toContainText('Історія')
+
+  // Close via × button
+  await page.locator('.modal-close').click()
+  await expect(page.locator('.modal-title')).toHaveCount(0)
+})
