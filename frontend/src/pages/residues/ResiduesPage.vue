@@ -15,7 +15,15 @@
         <!-- ═══ TAB: По підрозділах ═══ -->
         <template v-if="activeTab === 'unit'">
         <!-- Master: list of units -->
-        <div v-if="!selectedUnit" class="table-wrap">
+        <div v-if="!selectedUnit">
+          <div class="search-row">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            <input ref="unitSearchRef" v-model="unitSearch"
+              placeholder="Пошук за назвою підрозділу..." @keydown.esc="unitSearch = ''" />
+            <kbd v-if="!unitSearch" class="search-hint">/</kbd>
+            <button v-if="unitSearch" class="search-clear" @click="unitSearch = ''; unitSearchRef?.focus()">×</button>
+          </div>
+          <div class="table-wrap">
           <table>
             <thead>
               <tr>
@@ -28,7 +36,7 @@
             </thead>
             <tbody>
               <tr v-if="loading"><td colspan="5" class="empty">Завантаження…</td></tr>
-              <tr v-else-if="!sorted.length"><td colspan="5" class="empty">Немає підрозділів з залишками</td></tr>
+              <tr v-else-if="!sorted.length"><td colspan="5" class="empty">{{ unitSearch ? 'Нічого не знайдено' : 'Немає підрозділів з залишками' }}</td></tr>
               <tr v-for="u in sorted" :key="u.unit" class="click-row" @click="openUnit(u)">
                 <td class="td-unit-name">{{ u.unit }}</td>
                 <td class="td-num">{{ u.items_count }}</td>
@@ -40,6 +48,8 @@
               </tr>
             </tbody>
           </table>
+          </div>
+          <div class="t-foot" v-if="!loading">Показано <b>{{ sorted.length }}</b> з <b>{{ rows.length }}</b> підрозділів</div>
         </div>
 
         <!-- Detail: items of selected unit -->
@@ -51,22 +61,31 @@
           </div>
           <div v-if="detailLoading" class="empty">Завантаження…</div>
           <div v-else-if="!detail?.items?.length" class="empty">У цьому підрозділі порожньо</div>
-          <div v-else class="table-wrap">
+          <template v-else>
+            <div class="search-row">
+              <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              <input ref="unitDetailSearchRef" v-model="unitDetailSearch"
+                placeholder="Пошук за № картки, назвою, серійним, категорією..." @keydown.esc="unitDetailSearch = ''" />
+              <kbd v-if="!unitDetailSearch" class="search-hint">/</kbd>
+              <button v-if="unitDetailSearch" class="search-clear" @click="unitDetailSearch = ''; unitDetailSearchRef?.focus()">×</button>
+            </div>
+            <div class="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th class="col-card">№ картки</th>
-                  <th class="col-name">Найменування</th>
-                  <th class="col-cat">Категорія</th>
-                  <th class="col-unit">Од.</th>
-                  <th class="col-serial">Серійний №</th>
-                  <th class="col-qty">К-сть</th>
-                  <th class="col-price">Ціна</th>
-                  <th class="col-amount">Сума</th>
+                  <th class="sortable col-card" @click="udToggleSort('item_card_num')">№ картки <span class="sort-arrow">{{ udSortIcon('item_card_num') }}</span></th>
+                  <th class="sortable col-name" @click="udToggleSort('name')">Найменування <span class="sort-arrow">{{ udSortIcon('name') }}</span></th>
+                  <th class="sortable col-cat" @click="udToggleSort('category')">Категорія <span class="sort-arrow">{{ udSortIcon('category') }}</span></th>
+                  <th class="sortable col-unit" @click="udToggleSort('unit_of_measure')">Од. <span class="sort-arrow">{{ udSortIcon('unit_of_measure') }}</span></th>
+                  <th class="sortable col-serial" @click="udToggleSort('serial_number')">Серійний № <span class="sort-arrow">{{ udSortIcon('serial_number') }}</span></th>
+                  <th class="sortable col-qty" @click="udToggleSort('qty_num')">К-сть <span class="sort-arrow">{{ udSortIcon('qty_num') }}</span></th>
+                  <th class="sortable col-price" @click="udToggleSort('price_num')">Ціна <span class="sort-arrow">{{ udSortIcon('price_num') }}</span></th>
+                  <th class="sortable col-amount" @click="udToggleSort('amount_num')">Сума <span class="sort-arrow">{{ udSortIcon('amount_num') }}</span></th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="it in detail.items" :key="it.item_card_num">
+                <tr v-if="!udSorted.length"><td colspan="8" class="empty">Нічого не знайдено</td></tr>
+                <tr v-for="it in udSorted" :key="it.item_card_num">
                   <td class="td-mono">{{ it.item_card_num }}</td>
                   <td>{{ it.name || '—' }}</td>
                   <td>{{ it.category || '—' }}</td>
@@ -78,14 +97,24 @@
                 </tr>
               </tbody>
             </table>
-          </div>
+            </div>
+            <div class="t-foot">Показано <b>{{ udSorted.length }}</b> з <b>{{ detail.items.length }}</b> позицій</div>
+          </template>
         </div>
         </template>
 
         <!-- ═══ TAB: По особах ═══ -->
         <template v-else>
         <!-- Master: recipients -->
-        <div v-if="!selectedRecipient" class="table-wrap">
+        <div v-if="!selectedRecipient">
+          <div class="search-row">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            <input ref="recipientSearchRef" v-model="recipientSearch"
+              placeholder="Пошук за позивним..." @keydown.esc="recipientSearch = ''" />
+            <kbd v-if="!recipientSearch" class="search-hint">/</kbd>
+            <button v-if="recipientSearch" class="search-clear" @click="recipientSearch = ''; recipientSearchRef?.focus()">×</button>
+          </div>
+          <div class="table-wrap">
           <table>
             <thead>
               <tr>
@@ -99,7 +128,7 @@
             </thead>
             <tbody>
               <tr v-if="recipientsLoading"><td colspan="6" class="empty">Завантаження…</td></tr>
-              <tr v-else-if="!rSorted.length"><td colspan="6" class="empty">Ні у кого немає майна</td></tr>
+              <tr v-else-if="!rSorted.length"><td colspan="6" class="empty">{{ recipientSearch ? 'Нічого не знайдено' : 'Ні у кого немає майна' }}</td></tr>
               <tr v-for="r in rSorted" :key="r.recipient_id" class="click-row" @click="openRecipient(r)">
                 <td class="td-unit-name">{{ r.callsign }}</td>
                 <td class="td-num">{{ r.splits_count }}</td>
@@ -110,6 +139,8 @@
               </tr>
             </tbody>
           </table>
+          </div>
+          <div class="t-foot" v-if="!recipientsLoading">Показано <b>{{ rSorted.length }}</b> з <b>{{ recipientRows.length }}</b> осіб</div>
         </div>
 
         <!-- Detail: recipient's holdings -->
@@ -123,24 +154,33 @@
           </div>
           <div v-if="recipientDetailLoading" class="empty">Завантаження…</div>
           <template v-else>
+            <div v-if="recipientDetail?.splits?.length || recipientDetail?.serial_items?.length" class="search-row">
+              <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              <input ref="recipientDetailSearchRef" v-model="recipientDetailSearch"
+                placeholder="Пошук за № картки, назвою, серійним, категорією..." @keydown.esc="recipientDetailSearch = ''" />
+              <kbd v-if="!recipientDetailSearch" class="search-hint">/</kbd>
+              <button v-if="recipientDetailSearch" class="search-clear" @click="recipientDetailSearch = ''; recipientDetailSearchRef?.focus()">×</button>
+            </div>
+
             <!-- Non-serial splits -->
             <div v-if="recipientDetail?.splits?.length" class="table-wrap">
-              <div class="section-label">Видачі (розділені):</div>
+              <div class="section-label">Видачі (розділені): <span class="section-count">{{ rdSplitsSorted.length }} з {{ recipientDetail.splits.length }}</span></div>
               <table>
                 <thead>
                   <tr>
-                    <th class="col-card">№ картки</th>
-                    <th class="col-name">Найменування</th>
-                    <th class="col-cat">Категорія</th>
-                    <th class="col-unit">Од.</th>
-                    <th class="col-qty">К-сть</th>
-                    <th class="col-date">Дата видачі</th>
-                    <th class="col-price">Ціна</th>
-                    <th class="col-amount">Сума</th>
+                    <th class="sortable col-card" @click="rdSplitsToggleSort('item_number')">№ картки <span class="sort-arrow">{{ rdSplitsSortIcon('item_number') }}</span></th>
+                    <th class="sortable col-name" @click="rdSplitsToggleSort('item_name')">Найменування <span class="sort-arrow">{{ rdSplitsSortIcon('item_name') }}</span></th>
+                    <th class="sortable col-cat" @click="rdSplitsToggleSort('category')">Категорія <span class="sort-arrow">{{ rdSplitsSortIcon('category') }}</span></th>
+                    <th class="sortable col-unit" @click="rdSplitsToggleSort('unit_of_measure')">Од. <span class="sort-arrow">{{ rdSplitsSortIcon('unit_of_measure') }}</span></th>
+                    <th class="sortable col-qty" @click="rdSplitsToggleSort('qty_num')">К-сть <span class="sort-arrow">{{ rdSplitsSortIcon('qty_num') }}</span></th>
+                    <th class="sortable col-date" @click="rdSplitsToggleSort('issued_at')">Дата видачі <span class="sort-arrow">{{ rdSplitsSortIcon('issued_at') }}</span></th>
+                    <th class="sortable col-price" @click="rdSplitsToggleSort('price_num')">Ціна <span class="sort-arrow">{{ rdSplitsSortIcon('price_num') }}</span></th>
+                    <th class="sortable col-amount" @click="rdSplitsToggleSort('amount_num')">Сума <span class="sort-arrow">{{ rdSplitsSortIcon('amount_num') }}</span></th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="s in recipientDetail.splits" :key="s.split_id">
+                  <tr v-if="!rdSplitsSorted.length"><td colspan="8" class="empty">Нічого не знайдено</td></tr>
+                  <tr v-for="s in rdSplitsSorted" :key="s.split_id">
                     <td class="td-mono">{{ s.item_number || '—' }}</td>
                     <td>{{ s.item_name || '—' }}</td>
                     <td>{{ s.category || '—' }}</td>
@@ -156,22 +196,23 @@
 
             <!-- Serial items -->
             <div v-if="recipientDetail?.serial_items?.length" class="table-wrap">
-              <div class="section-label">Серійне майно (закріплено):</div>
+              <div class="section-label">Серійне майно (закріплено): <span class="section-count">{{ rdSerialSorted.length }} з {{ recipientDetail.serial_items.length }}</span></div>
               <table>
                 <thead>
                   <tr>
-                    <th class="col-card">№ картки</th>
-                    <th class="col-name">Найменування</th>
-                    <th class="col-cat">Категорія</th>
-                    <th class="col-serial">Серійний №</th>
-                    <th class="col-unit">Од.</th>
-                    <th class="col-qty">К-сть</th>
-                    <th class="col-price">Ціна</th>
-                    <th class="col-amount">Сума</th>
+                    <th class="sortable col-card" @click="rdSerialToggleSort('item_number')">№ картки <span class="sort-arrow">{{ rdSerialSortIcon('item_number') }}</span></th>
+                    <th class="sortable col-name" @click="rdSerialToggleSort('item_name')">Найменування <span class="sort-arrow">{{ rdSerialSortIcon('item_name') }}</span></th>
+                    <th class="sortable col-cat" @click="rdSerialToggleSort('category')">Категорія <span class="sort-arrow">{{ rdSerialSortIcon('category') }}</span></th>
+                    <th class="sortable col-serial" @click="rdSerialToggleSort('serial_number')">Серійний № <span class="sort-arrow">{{ rdSerialSortIcon('serial_number') }}</span></th>
+                    <th class="sortable col-unit" @click="rdSerialToggleSort('unit_of_measure')">Од. <span class="sort-arrow">{{ rdSerialSortIcon('unit_of_measure') }}</span></th>
+                    <th class="sortable col-qty" @click="rdSerialToggleSort('qty_num')">К-сть <span class="sort-arrow">{{ rdSerialSortIcon('qty_num') }}</span></th>
+                    <th class="sortable col-price" @click="rdSerialToggleSort('price_num')">Ціна <span class="sort-arrow">{{ rdSerialSortIcon('price_num') }}</span></th>
+                    <th class="sortable col-amount" @click="rdSerialToggleSort('amount_num')">Сума <span class="sort-arrow">{{ rdSerialSortIcon('amount_num') }}</span></th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="it in recipientDetail.serial_items" :key="it.item_id">
+                  <tr v-if="!rdSerialSorted.length"><td colspan="8" class="empty">Нічого не знайдено</td></tr>
+                  <tr v-for="it in rdSerialSorted" :key="it.item_id">
                     <td class="td-mono">{{ it.item_number }}</td>
                     <td>{{ it.item_name || '—' }}</td>
                     <td>{{ it.category || '—' }}</td>
@@ -197,7 +238,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import {
   getResiduesByUnit, getResiduesByUnitDetail,
@@ -228,20 +269,93 @@ const recipientDetailLoading = ref(false)
 // on their unit and shouldn't see the button.
 const canGoBack = computed(() => auth.user?.role === 'admin')
 
-// Enrich with numeric shadow fields for sort (backend sends strings)
-const enriched = computed(() => rows.value.map(r => ({
-  ...r,
-  total_qty_num: Number(r.total_qty || 0),
-  total_amount_num: Number(r.total_amount || 0),
-})))
+// Search state — separate per view so context is preserved on navigation
+const unitSearch = ref('')
+const recipientSearch = ref('')
+const unitDetailSearch = ref('')
+const recipientDetailSearch = ref('')
+const unitSearchRef = ref(null)
+const recipientSearchRef = ref(null)
+const unitDetailSearchRef = ref(null)
+const recipientDetailSearchRef = ref(null)
+
+function matches(row, q, fields) {
+  if (!q) return true
+  const s = q.toLowerCase()
+  return fields.some(f => String(row[f] ?? '').toLowerCase().includes(s))
+}
+
+// Master «По підрозділах» — filter + enrich for sort
+const enriched = computed(() => rows.value
+  .filter(r => matches(r, unitSearch.value.trim(), ['unit']))
+  .map(r => ({
+    ...r,
+    total_qty_num: Number(r.total_qty || 0),
+    total_amount_num: Number(r.total_amount || 0),
+  })))
 const { sorted, toggleSort, sortIcon } = useSort(enriched, 'unit', 'asc')
 
-const rEnriched = computed(() => recipientRows.value.map(r => ({
-  ...r,
-  total_qty_num: Number(r.total_qty || 0),
-  total_amount_num: Number(r.total_amount || 0),
-})))
+// Master «По особах»
+const rEnriched = computed(() => recipientRows.value
+  .filter(r => matches(r, recipientSearch.value.trim(), ['callsign']))
+  .map(r => ({
+    ...r,
+    total_qty_num: Number(r.total_qty || 0),
+    total_amount_num: Number(r.total_amount || 0),
+  })))
 const { sorted: rSorted, toggleSort: rToggleSort, sortIcon: rSortIcon } = useSort(rEnriched, 'callsign', 'asc')
+
+// Detail «Майно в підрозділі»
+const DETAIL_ITEM_FIELDS = ['item_card_num', 'name', 'serial_number', 'category']
+const udEnriched = computed(() => (detail.value?.items || [])
+  .filter(r => matches(r, unitDetailSearch.value.trim(), DETAIL_ITEM_FIELDS))
+  .map(r => ({
+    ...r,
+    qty_num: Number(r.qty || 0),
+    price_num: Number(r.price || 0),
+    amount_num: Number(r.amount || 0),
+  })))
+const { sorted: udSorted, toggleSort: udToggleSort, sortIcon: udSortIcon } = useSort(udEnriched, 'item_card_num', 'asc')
+
+// Detail «Майно у особи» — splits
+const RD_SPLIT_FIELDS = ['item_number', 'item_name', 'category']
+const rdSplitsEnriched = computed(() => (recipientDetail.value?.splits || [])
+  .filter(r => matches(r, recipientDetailSearch.value.trim(), RD_SPLIT_FIELDS))
+  .map(r => ({
+    ...r,
+    qty_num: Number(r.qty || 0),
+    price_num: Number(r.price || 0),
+    amount_num: Number(r.amount || 0),
+  })))
+const { sorted: rdSplitsSorted, toggleSort: rdSplitsToggleSort, sortIcon: rdSplitsSortIcon } = useSort(rdSplitsEnriched, 'item_number', 'asc')
+
+// Detail «Майно у особи» — серійне
+const RD_SERIAL_FIELDS = ['item_number', 'item_name', 'serial_number', 'category']
+const rdSerialEnriched = computed(() => (recipientDetail.value?.serial_items || [])
+  .filter(r => matches(r, recipientDetailSearch.value.trim(), RD_SERIAL_FIELDS))
+  .map(r => ({
+    ...r,
+    qty_num: Number(r.qty || 0),
+    price_num: Number(r.price || 0),
+    amount_num: Number(r.amount || 0),
+  })))
+const { sorted: rdSerialSorted, toggleSort: rdSerialToggleSort, sortIcon: rdSerialSortIcon } = useSort(rdSerialEnriched, 'item_number', 'asc')
+
+// «/» hotkey — focuses the currently visible search input
+function currentSearchRef() {
+  if (activeTab.value === 'unit') {
+    return selectedUnit.value ? unitDetailSearchRef.value : unitSearchRef.value
+  }
+  return selectedRecipient.value ? recipientDetailSearchRef.value : recipientSearchRef.value
+}
+function onKeyDown(e) {
+  const tag = document.activeElement?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+  if (e.key === '/' || e.key === '.') {
+    e.preventDefault()
+    currentSearchRef()?.focus()
+  }
+}
 
 async function loadRecipients() {
   recipientsLoading.value = true
@@ -254,6 +368,7 @@ async function loadRecipients() {
 async function openRecipient(r) {
   selectedRecipient.value = r.recipient_id
   recipientDetail.value = null
+  recipientDetailSearch.value = ''
   recipientDetailLoading.value = true
   try {
     const { data } = await getResiduesByRecipientDetail(r.recipient_id)
@@ -263,6 +378,7 @@ async function openRecipient(r) {
 function closeRecipient() {
   selectedRecipient.value = null
   recipientDetail.value = null
+  recipientDetailSearch.value = ''
 }
 
 function switchTab(t) {
@@ -299,11 +415,16 @@ async function bootstrap() {
   }
   await load()
 }
-onMounted(bootstrap)
+onMounted(() => {
+  bootstrap()
+  document.addEventListener('keydown', onKeyDown)
+})
+onUnmounted(() => document.removeEventListener('keydown', onKeyDown))
 
 async function openUnit(u) {
   selectedUnit.value = u.unit
   detail.value = null
+  unitDetailSearch.value = ''
   detailLoading.value = true
   try {
     const { data } = await getResiduesByUnitDetail(u.unit)
@@ -314,6 +435,7 @@ async function openUnit(u) {
 function closeUnit() {
   selectedUnit.value = null
   detail.value = null
+  unitDetailSearch.value = ''
 }
 
 function fmtQty(v) {
@@ -384,4 +506,16 @@ th.sortable:hover .sort-arrow { opacity:1; }
 .col-rec-name { width:30%; }
 .col-date     { width:120px; }
 .section-label { padding:12px 20px 6px; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-light); font-weight:600; }
+.section-count { font-weight:500; color:var(--text-mid); text-transform:none; letter-spacing:0; margin-left:6px; }
+
+.search-row { padding:10px 20px; display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--border-light); background:var(--surface); }
+.search-icon { width:14px; height:14px; color:var(--text-light); flex-shrink:0; }
+.search-row input { flex:1; border:none; background:transparent; font-family:inherit; font-size:14px; color:var(--text); outline:none; }
+.search-row input::placeholder { color:var(--text-light); }
+.search-hint { font-family:'DM Mono',monospace; font-size:11px; color:var(--text-light); background:var(--border-light); border:1px solid var(--border); border-radius:3px; padding:1px 5px; line-height:16px; flex-shrink:0; }
+.search-clear { width:22px; height:22px; border:none; background:transparent; cursor:pointer; color:var(--text-light); border-radius:3px; flex-shrink:0; font-size:16px; line-height:1; }
+.search-clear:hover { background:var(--border-light); color:var(--text); }
+
+.t-foot { padding:10px 20px; font-size:12px; color:var(--text-light); border-top:1px solid var(--border-light); background:var(--bg); }
+.t-foot b { color:var(--text-mid); font-weight:600; }
 </style>
