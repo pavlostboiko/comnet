@@ -175,27 +175,30 @@
                   <tr>
                     <th class="sortable col-card" @click="rdSplitsToggleSort('item_number')">№ картки <span class="sort-arrow">{{ rdSplitsSortIcon('item_number') }}</span></th>
                     <th class="sortable col-name" @click="rdSplitsToggleSort('item_name')">Найменування <span class="sort-arrow">{{ rdSplitsSortIcon('item_name') }}</span></th>
+                    <th class="sortable col-loc" @click="rdSplitsToggleSort('current_unit')">Підрозділ <span class="sort-arrow">{{ rdSplitsSortIcon('current_unit') }}</span></th>
                     <th class="sortable col-cat" @click="rdSplitsToggleSort('category')">Категорія <span class="sort-arrow">{{ rdSplitsSortIcon('category') }}</span></th>
                     <th class="sortable col-unit" @click="rdSplitsToggleSort('unit_of_measure')">Од. <span class="sort-arrow">{{ rdSplitsSortIcon('unit_of_measure') }}</span></th>
                     <th class="sortable col-qty" @click="rdSplitsToggleSort('qty_num')">К-сть <span class="sort-arrow">{{ rdSplitsSortIcon('qty_num') }}</span></th>
                     <th class="sortable col-date" @click="rdSplitsToggleSort('issued_at')">Дата видачі <span class="sort-arrow">{{ rdSplitsSortIcon('issued_at') }}</span></th>
                     <th class="sortable col-price" @click="rdSplitsToggleSort('price_num')">Ціна <span class="sort-arrow">{{ rdSplitsSortIcon('price_num') }}</span></th>
                     <th class="sortable col-amount" @click="rdSplitsToggleSort('amount_num')">Сума <span class="sort-arrow">{{ rdSplitsSortIcon('amount_num') }}</span></th>
-                    <th class="col-hist"></th>
+                    <th class="col-acts-2"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-if="!rdSplitsSorted.length"><td colspan="9" class="empty">Нічого не знайдено</td></tr>
+                  <tr v-if="!rdSplitsSorted.length"><td colspan="10" class="empty">Нічого не знайдено</td></tr>
                   <tr v-for="s in rdSplitsSorted" :key="s.split_id">
                     <td class="td-mono">{{ s.item_number || '—' }}</td>
                     <td>{{ s.item_name || '—' }}</td>
+                    <td class="td-dim">{{ s.current_unit || '—' }}</td>
                     <td>{{ s.category || '—' }}</td>
                     <td class="td-center">{{ s.unit_of_measure || '—' }}</td>
                     <td class="td-num">{{ fmtQty(s.qty) }}</td>
                     <td class="td-mono td-dim">{{ s.issued_at || '—' }}</td>
                     <td class="td-num">{{ fmtPrice(s.price) }}</td>
                     <td class="td-num">{{ fmtPrice(s.amount) }}</td>
-                    <td class="td-hist">
+                    <td class="td-acts-2">
+                      <button class="btn-return" @click="returnSplit(s)" title="Повернути МВО">Повернути</button>
                       <button v-if="s.item_id" class="btn-hist" @click="openHistory(s)" title="Історія">Історія</button>
                     </td>
                   </tr>
@@ -211,27 +214,30 @@
                   <tr>
                     <th class="sortable col-card" @click="rdSerialToggleSort('item_number')">№ картки <span class="sort-arrow">{{ rdSerialSortIcon('item_number') }}</span></th>
                     <th class="sortable col-name" @click="rdSerialToggleSort('item_name')">Найменування <span class="sort-arrow">{{ rdSerialSortIcon('item_name') }}</span></th>
+                    <th class="sortable col-loc" @click="rdSerialToggleSort('current_unit')">Підрозділ <span class="sort-arrow">{{ rdSerialSortIcon('current_unit') }}</span></th>
                     <th class="sortable col-cat" @click="rdSerialToggleSort('category')">Категорія <span class="sort-arrow">{{ rdSerialSortIcon('category') }}</span></th>
                     <th class="sortable col-serial" @click="rdSerialToggleSort('serial_number')">Серійний № <span class="sort-arrow">{{ rdSerialSortIcon('serial_number') }}</span></th>
                     <th class="sortable col-unit" @click="rdSerialToggleSort('unit_of_measure')">Од. <span class="sort-arrow">{{ rdSerialSortIcon('unit_of_measure') }}</span></th>
                     <th class="sortable col-qty" @click="rdSerialToggleSort('qty_num')">К-сть <span class="sort-arrow">{{ rdSerialSortIcon('qty_num') }}</span></th>
                     <th class="sortable col-price" @click="rdSerialToggleSort('price_num')">Ціна <span class="sort-arrow">{{ rdSerialSortIcon('price_num') }}</span></th>
                     <th class="sortable col-amount" @click="rdSerialToggleSort('amount_num')">Сума <span class="sort-arrow">{{ rdSerialSortIcon('amount_num') }}</span></th>
-                    <th class="col-hist"></th>
+                    <th class="col-acts-2"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-if="!rdSerialSorted.length"><td colspan="9" class="empty">Нічого не знайдено</td></tr>
+                  <tr v-if="!rdSerialSorted.length"><td colspan="10" class="empty">Нічого не знайдено</td></tr>
                   <tr v-for="it in rdSerialSorted" :key="it.item_id">
                     <td class="td-mono">{{ it.item_number }}</td>
                     <td>{{ it.item_name || '—' }}</td>
+                    <td class="td-dim">{{ it.current_unit || '—' }}</td>
                     <td>{{ it.category || '—' }}</td>
                     <td class="td-mono">{{ it.serial_number || '—' }}</td>
                     <td class="td-center">{{ it.unit_of_measure || '—' }}</td>
                     <td class="td-num">{{ fmtQty(it.qty) }}</td>
                     <td class="td-num">{{ fmtPrice(it.price) }}</td>
                     <td class="td-num">{{ fmtPrice(it.amount) }}</td>
-                    <td class="td-hist">
+                    <td class="td-acts-2">
+                      <button class="btn-return" @click="returnSerial(it)" title="Повернути МВО">Повернути</button>
                       <button class="btn-hist" @click="openHistory(it)" title="Історія">Історія</button>
                     </td>
                   </tr>
@@ -264,6 +270,8 @@ import {
 } from '../../api/residues.js'
 import { useSort } from '../../composables/useSort.js'
 import { useAuthStore } from '../../stores/auth.js'
+import { returnSplit as apiReturnSplit } from '../../api/splits.js'
+import { updateItem } from '../../api/items.js'
 
 const auth = useAuthStore()
 
@@ -291,7 +299,10 @@ function openIssue(row) {
 }
 function closeIssue() { issueTarget.value = null }
 async function onIssued() {
-  // Refresh the currently visible detail after successful issuance
+  await refreshDetails()
+}
+
+async function refreshDetails() {
   if (selectedUnit.value) {
     const { data } = await getResiduesByUnitDetail(selectedUnit.value)
     detail.value = data
@@ -300,9 +311,31 @@ async function onIssued() {
     const { data } = await getResiduesByRecipientDetail(selectedRecipient.value)
     recipientDetail.value = data
   }
-  // Master lists (residue totals) may shift too — refresh those in the background
   load()
   if (activeTab.value === 'recipient') loadRecipients()
+}
+
+// «Повернути» — closes a non-serial split
+async function returnSplit(s) {
+  if (!confirm(`Повернути ${fmtQty(s.qty)} шт «${s.item_name || s.item_number}» від «${recipientDetail.value?.callsign || '—'}» до МВО?`)) return
+  try {
+    await apiReturnSplit(s.item_id, s.split_id, {})
+    await refreshDetails()
+  } catch (e) {
+    alert(e?.response?.data?.detail || 'Не вдалось повернути')
+  }
+}
+
+// «Повернути» — for a serial item, clears items.issued_to_recipient_id.
+// Hook in items.PUT closes the active split under the hood.
+async function returnSerial(it) {
+  if (!confirm(`Повернути «${it.item_name || it.item_number}» від «${recipientDetail.value?.callsign || '—'}» до МВО?`)) return
+  try {
+    await updateItem(it.item_id, { issued_to_recipient_id: null })
+    await refreshDetails()
+  } catch (e) {
+    alert(e?.response?.data?.detail || 'Не вдалось повернути')
+  }
 }
 
 // unit tab state
@@ -372,7 +405,7 @@ const udEnriched = computed(() => (detail.value?.items || [])
 const { sorted: udSorted, toggleSort: udToggleSort, sortIcon: udSortIcon } = useSort(udEnriched, 'item_card_num', 'asc')
 
 // Detail «Майно у особи» — splits
-const RD_SPLIT_FIELDS = ['item_number', 'item_name', 'category']
+const RD_SPLIT_FIELDS = ['item_number', 'item_name', 'category', 'current_unit']
 const rdSplitsEnriched = computed(() => (recipientDetail.value?.splits || [])
   .filter(r => matches(r, recipientDetailSearch.value.trim(), RD_SPLIT_FIELDS))
   .map(r => ({
@@ -384,7 +417,7 @@ const rdSplitsEnriched = computed(() => (recipientDetail.value?.splits || [])
 const { sorted: rdSplitsSorted, toggleSort: rdSplitsToggleSort, sortIcon: rdSplitsSortIcon } = useSort(rdSplitsEnriched, 'item_number', 'asc')
 
 // Detail «Майно у особи» — серійне
-const RD_SERIAL_FIELDS = ['item_number', 'item_name', 'serial_number', 'category']
+const RD_SERIAL_FIELDS = ['item_number', 'item_name', 'serial_number', 'category', 'current_unit']
 const rdSerialEnriched = computed(() => (recipientDetail.value?.serial_items || [])
   .filter(r => matches(r, recipientDetailSearch.value.trim(), RD_SERIAL_FIELDS))
   .map(r => ({
@@ -582,4 +615,8 @@ th.sortable:hover .sort-arrow { opacity:1; }
 .btn-hist:hover  { background:var(--bg); color:var(--text); border-color:var(--accent); }
 .btn-issue { background:var(--accent); border:1px solid var(--accent); border-radius:var(--radius-sm); padding:3px 10px; cursor:pointer; color:white; font-size:12px; font-family:inherit; font-weight:500; }
 .btn-issue:hover { filter:brightness(0.9); }
+.btn-return { background:transparent; border:1px solid #d97706; border-radius:var(--radius-sm); padding:3px 10px; cursor:pointer; color:#b45309; font-size:12px; font-family:inherit; font-weight:500; }
+.btn-return:hover { background:#fef3c7; }
+
+.col-loc { width:12%; }
 </style>
