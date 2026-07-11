@@ -48,19 +48,21 @@ def _journal_serial_change(
     user_id: int,
     issued_at: date | None = None,
 ) -> None:
-    """Mirror an issued_to_recipient_id change on a serial item into the
-    item_splits ledger. Non-serial items already have their own splits UI —
-    skipped here to avoid double-writing.
+    """Mirror an issued_to_recipient_id change into the item_splits ledger.
 
     Semantics:
       - old is None, new set        → open new split (initial issuance)
       - old set, new None           → close previous active split (return)
       - old set, new set (different) → close previous + open new (reassignment)
 
+    Split qty: 1 for serial (physical unit), item.quantity for non-serial
+    (the entire card lands on one recipient — matches the old items-modal
+    quick-issue and the XLSX «Видано» column semantics).
+
     `issued_at` — when the new split's issue date should be; today if omitted.
-    Return/close events always use today (that's when the return was recorded).
+    Return/close events always use today (when the return was recorded).
     """
-    if not item.serial_number or old_recipient_id == new_recipient_id:
+    if old_recipient_id == new_recipient_id:
         return
     today = date.today()
     if old_recipient_id is not None:
@@ -73,10 +75,12 @@ def _journal_serial_change(
             row.returned_at = today
             row.returned_by = user_id
     if new_recipient_id is not None:
+        from decimal import Decimal
+        split_qty = Decimal(1) if item.serial_number else (Decimal(item.quantity or 0) or Decimal(1))
         db.add(ItemSplit(
             item_id=item.id,
             recipient_id=new_recipient_id,
-            qty=1,
+            qty=split_qty,
             issued_at=issued_at or today,
             created_by=user_id,
         ))

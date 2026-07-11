@@ -81,11 +81,12 @@
                   <th class="sortable col-qty" @click="udToggleSort('qty_num')">К-сть <span class="sort-arrow">{{ udSortIcon('qty_num') }}</span></th>
                   <th class="sortable col-price" @click="udToggleSort('price_num')">Ціна <span class="sort-arrow">{{ udSortIcon('price_num') }}</span></th>
                   <th class="sortable col-amount" @click="udToggleSort('amount_num')">Сума <span class="sort-arrow">{{ udSortIcon('amount_num') }}</span></th>
+                  <th class="sortable col-holders" @click="udToggleSort('current_holders')">На кому <span class="sort-arrow">{{ udSortIcon('current_holders') }}</span></th>
                   <th class="col-acts-2"></th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-if="!udSorted.length"><td colspan="9" class="empty">Нічого не знайдено</td></tr>
+                <tr v-if="!udSorted.length"><td colspan="10" class="empty">Нічого не знайдено</td></tr>
                 <tr v-for="it in udSorted" :key="it.item_card_num">
                   <td class="td-mono">{{ it.item_card_num }}</td>
                   <td>{{ it.name || '—' }}</td>
@@ -95,6 +96,7 @@
                   <td class="td-num">{{ fmtQty(it.qty) }}</td>
                   <td class="td-num">{{ fmtPrice(it.price) }}</td>
                   <td class="td-num">{{ fmtPrice(it.amount) }}</td>
+                  <td :class="it.current_holders ? '' : 'td-dim'">{{ it.current_holders || '—' }}</td>
                   <td class="td-acts-2">
                     <button v-if="it.item_id" class="btn-issue" @click="openIssue(it)" title="Видати">Видати</button>
                     <button v-if="it.item_id" class="btn-hist" @click="openHistory(it)" title="Історія">Історія</button>
@@ -393,7 +395,7 @@ const rEnriched = computed(() => recipientRows.value
 const { sorted: rSorted, toggleSort: rToggleSort, sortIcon: rSortIcon } = useSort(rEnriched, 'callsign', 'asc')
 
 // Detail «Майно в підрозділі»
-const DETAIL_ITEM_FIELDS = ['item_card_num', 'name', 'serial_number', 'category']
+const DETAIL_ITEM_FIELDS = ['item_card_num', 'name', 'serial_number', 'category', 'current_holders']
 const udEnriched = computed(() => (detail.value?.items || [])
   .filter(r => matches(r, unitDetailSearch.value.trim(), DETAIL_ITEM_FIELDS))
   .map(r => ({
@@ -619,4 +621,5 @@ th.sortable:hover .sort-arrow { opacity:1; }
 .btn-return:hover { background:#fef3c7; }
 
 .col-loc { width:12%; }
+.col-holders { width:14%; }
 </style>

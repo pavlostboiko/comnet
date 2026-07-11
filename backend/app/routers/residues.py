@@ -87,6 +87,35 @@ def residues_by_unit(
     return result
 
 
+def _holders_by_item_id(db: Session, item_ids: set[int]) -> dict[int, str]:
+    """Return the current holder(s) per item as a comma-joined callsign
+    string. Merges two signals:
+      - items.issued_to_recipient_id (used by serial + import quick-issue)
+      - active item_splits (the ledger channel)
+    Duplicates are de-duped so an item journaled via both paths shows once.
+    """
+    if not item_ids:
+        return {}
+
+    holders: dict[int, set[str]] = {}
+
+    items = db.query(Item).filter(Item.id.in_(item_ids)).all()
+    for it in items:
+        if it.issued_to_recipient_id and it.issued_to:
+            holders.setdefault(it.id, set()).add(it.issued_to.callsign)
+
+    active_splits = (
+        db.query(ItemSplit)
+        .filter(ItemSplit.item_id.in_(item_ids), ItemSplit.returned_at.is_(None))
+        .all()
+    )
+    for s in active_splits:
+        if s.recipient and s.recipient.callsign:
+            holders.setdefault(s.item_id, set()).add(s.recipient.callsign)
+
+    return {iid: ", ".join(sorted(cs)) for iid, cs in holders.items()}
+
+
 @router.get("/by-unit/{unit:path}")
 def residues_by_unit_detail(
     unit: str,
@@ -104,6 +133,7 @@ def residues_by_unit_detail(
     items_by_number = {
         it.number: it for it in db.query(Item).filter(Item.number.in_(card_nums)).all()
     }
+    holders = _holders_by_item_id(db, {it.id for it in items_by_number.values()})
 
     items = []
     for card, bal in unit_balances:
@@ -118,6 +148,7 @@ def residues_by_unit_detail(
             "price": str(it.price) if it and it.price is not None else None,
             "qty": str(bal),
             "amount": str(bal * Decimal(it.price or 0)) if it else None,
+            "current_holders": holders.get(it.id, "") if it else "",
         })
     items.sort(key=lambda x: (x["name"] or "", x["item_card_num"]))
     return {"unit": unit, "items": items}
