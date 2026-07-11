@@ -28,6 +28,44 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 # ── Wipe ──────────────────────────────────────────────────────────────────
 
+@router.post("/backfill-splits", status_code=status.HTTP_200_OK)
+def backfill_splits(db: Session = Depends(get_db), user: User = Depends(require_admin)):
+    """Fill in missing ItemSplits for items already carrying an
+    issued_to_recipient_id. Ran once on databases populated before the
+    journaling hook shipped — items had a recipient but no ledger entry,
+    so /history was empty of «Видано» events.
+
+    Idempotent: skips any item that already has an active split.
+    Returns count of splits created.
+    """
+    from datetime import date
+    from decimal import Decimal
+    candidates = (
+        db.query(Item)
+        .filter(Item.issued_to_recipient_id.isnot(None))
+        .all()
+    )
+    active_by_item = {
+        s.item_id for s in db.query(ItemSplit).filter(ItemSplit.returned_at.is_(None)).all()
+    }
+    today = date.today()
+    created = 0
+    for it in candidates:
+        if it.id in active_by_item:
+            continue
+        split_qty = Decimal(1) if it.serial_number else (Decimal(it.quantity or 0) or Decimal(1))
+        db.add(ItemSplit(
+            item_id=it.id,
+            recipient_id=it.issued_to_recipient_id,
+            qty=split_qty,
+            issued_at=today,
+            created_by=user.id,
+        ))
+        created += 1
+    db.commit()
+    return {"created": created, "scanned": len(candidates)}
+
+
 @router.post("/wipe-inventory", status_code=status.HTTP_200_OK)
 def wipe_inventory(db: Session = Depends(get_db), _: User = Depends(require_admin)):
     """Delete everything inventory-related. Persons/recipients/users
