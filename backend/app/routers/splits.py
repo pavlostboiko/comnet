@@ -128,6 +128,21 @@ def return_split(
     )
     row.return_notes = payload.return_notes
     row.returned_by = user.id
+
+    # If this closes the last active split AND item is orphan (no movements),
+    # place it in МВО's unit so it stays visible on /residues/by-unit.
+    from sqlalchemy import func as _func
+    remaining_active = db.query(_func.count(ItemSplit.id)).filter(
+        ItemSplit.item_id == item_id,
+        ItemSplit.returned_at.is_(None),
+        ItemSplit.id != row.id,
+    ).scalar() or 0
+    if remaining_active == 0:
+        from app.routers.items import maybe_place_orphan_return
+        item = db.get(Item, item_id)
+        if item:
+            maybe_place_orphan_return(db, item, user)
+
     db.commit()
     db.refresh(row)
     return _serialize(row)

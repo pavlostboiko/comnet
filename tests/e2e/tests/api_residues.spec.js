@@ -6,9 +6,11 @@
  * sign endpoint creates a movement to the receiver unit → balance shows
  * up in the residues report. That covers the real path a user follows.
  */
-const { test, expect } = require('@playwright/test')
+const { test, expect, request: pwRequest } = require('@playwright/test')
 const { loginApi } = require('./helpers/login')
 const { postJson, seedNakladnaContext, bestEffortDelete } = require('./helpers/seed')
+
+const API = process.env.API_URL || 'http://backend:8000'
 
 test.describe('Residues API · by-unit', () => {
   let api
@@ -182,6 +184,125 @@ test.describe('Residues API · by-unit', () => {
     // We already scanned; nothing new for this specific item
     const stillOne = await api.get(`/api/items/${item.id}/splits`).then(r => r.json())
     expect(stillOne.filter(s => s.is_active).length).toBe(1)
+  })
+
+  test('return of an imported orphan item by МВО places it in her subdivision', async ({ request }) => {
+    // Reproduces + verifies fix for: import Item with «Видано» → item has an
+    // active split but no movement. Before the fix, «Повернути» closed the
+    // split and the card vanished from every residues surface. With the fix,
+    // returning as МВО (person_unit set) synthesizes a movement into her
+    // subdivision so the card stays visible in /residues/by-unit/{her unit}.
+    const tag = `retorph-${Date.now()}-${Math.floor(Math.random() * 9999)}`
+    const unit = `MVO-Unit-${tag}`
+
+    // Seed persons/users: an МВО operator linked to a person with a unit
+    const person = await postJson(api, '/api/settings/persons', {
+      first_name: 'Mvo', last_name: `T-${tag}`, position: 'МВО', unit,
+    })
+    const mvoUser = await postJson(api, '/api/users', {
+      username: `mvo-${tag}`, password: 'mvo-pw-strong',
+      role: 'operator', is_active: true, person_id: person.id,
+    })
+    cleanup.push(`/api/users/${mvoUser.id}`, `/api/settings/persons/${person.id}`)
+
+    // Seed the imported-orphan item
+    const rcpt = await postJson(api, '/api/recipients', { callsign: `RO-${tag}` })
+    const item = await postJson(api, '/api/items', {
+      number: `RO-${tag}`, name: `Ret-orphan ${tag}`,
+      unit_of_measure: 'шт', price: 10, quantity: 3, is_official: false,
+      issued_to_recipient_id: rcpt.id,
+    })
+    cleanup.push(`/api/items/${item.id}`, `/api/recipients/${rcpt.id}`)
+
+    // Baseline: item is currently on the recipient, and NOT in any /by-unit
+    // detail (no movement placed it anywhere).
+    const beforeUnits = await api.get('/api/residues/by-unit').then(r => r.json())
+    for (const u of beforeUnits) {
+      const d = await api.get(`/api/residues/by-unit/${encodeURIComponent(u.unit)}`).then(r => r.json())
+      expect(d.items.find(x => x.item_card_num === `RO-${tag}`)).toBeFalsy()
+    }
+
+    // Log in as МВО and return the item via PUT null
+    const mvoLogin = await request.post(`${API}/api/auth/login`, {
+      form: { username: `mvo-${tag}`, password: 'mvo-pw-strong' },
+    })
+    const mvoToken = (await mvoLogin.json()).access_token
+    const mvoApi = await pwRequest.newContext({
+      baseURL: API, extraHTTPHeaders: { Authorization: `Bearer ${mvoToken}` },
+    })
+    try {
+      const putResp = await mvoApi.put(`/api/items/${item.id}`, {
+        data: { issued_to_recipient_id: null },
+      })
+      expect(putResp.status()).toBe(200)
+    } finally {
+      await mvoApi.dispose()
+    }
+
+    // Recipient no longer holds it
+    const afterList = await api.get('/api/residues/by-recipient').then(r => r.json())
+    expect(afterList.find(r => r.recipient_id === rcpt.id)).toBeFalsy()
+
+    // МВО's unit now has the card (via synthetic movement)
+    const detail = await api.get(`/api/residues/by-unit/${encodeURIComponent(unit)}`).then(r => r.json())
+    const placed = detail.items.find(x => x.item_card_num === `RO-${tag}`)
+    expect(placed).toBeTruthy()
+    expect(Number(placed.qty)).toBe(3)  // full item.quantity landed
+  })
+
+  test('return of a movement-placed item does NOT double-count residues', async ({ request }) => {
+    // Sanity: for items placed via a real movement, return does not
+    // synthesize an extra movement — otherwise we'd inflate residues.
+    const seed = await seedNakladnaContext(api, 'retmv')
+    await api.put(`/api/items/${seed.item.id}`, { data: { quantity: 5 } })
+    const doc = await postJson(api, '/api/documents', {
+      operation: 'переміщення', form: 'накладна',
+      doc_date: '2026-07-14',
+      op_type_id: seed.opType.id,
+      service_id: seed.service.id,
+      sender_id: seed.sender.id,
+      receiver_id: seed.receiver.id,
+      fin_id: seed.fin.id,
+      items: [{ item_id: seed.item.id, quantity: 5, qty_received: 5 }],
+    })
+    cleanup.push(`/api/documents/${doc.id}`, ...seed.cleanup)
+    await api.post(`/api/documents/${doc.id}/sign`)
+
+    // Set up an МВО linked to the receiver's unit
+    const mvoTag = `mv-${seed.tag}`
+    const mvoUser = await postJson(api, '/api/users', {
+      username: `mvo-${mvoTag}`, password: 'mvo-pw-strong',
+      role: 'operator', is_active: true, person_id: seed.receiver.id,
+    })
+    cleanup.push(`/api/users/${mvoUser.id}`)
+
+    // Issue + return a split as МВО
+    const rcpt = await postJson(api, '/api/recipients', { callsign: `RM-${mvoTag}` })
+    cleanup.push(`/api/recipients/${rcpt.id}`)
+    const split = await postJson(api, `/api/items/${seed.item.id}/splits`, {
+      recipient_id: rcpt.id, qty: 2,
+    })
+
+    // Log in as МВО, do the return
+    const mvoLogin = await request.post(`${API}/api/auth/login`, {
+      form: { username: `mvo-${mvoTag}`, password: 'mvo-pw-strong' },
+    })
+    const mvoApi = await pwRequest.newContext({
+      baseURL: API,
+      extraHTTPHeaders: { Authorization: `Bearer ${(await mvoLogin.json()).access_token}` },
+    })
+    try {
+      const rr = await mvoApi.post(`/api/items/${seed.item.id}/splits/${split.id}/return`)
+      expect(rr.status()).toBe(200)
+    } finally {
+      await mvoApi.dispose()
+    }
+
+    // Residue in receiver's unit stays at 5 — no synthetic double-count
+    const detail = await api.get(`/api/residues/by-unit/${encodeURIComponent(seed.receiver.unit)}`).then(r => r.json())
+    const row = detail.items.find(x => x.item_card_num === seed.item.number)
+    expect(row).toBeTruthy()
+    expect(Number(row.qty)).toBe(5)
   })
 
   test('by-recipient detail: current_unit reflects the subdivision where the item lives', async () => {

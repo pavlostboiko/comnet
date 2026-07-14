@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -7,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import AssetDocument, Item, ItemDocument, ItemSplit, Movement, Recipient, User
+from app.models import AssetDocument, Item, ItemDocument, ItemSplit, Movement, Person, Recipient, User
 from app.schemas import ItemCreate, ItemListRead, ItemRead, ItemUpdate
 
 router = APIRouter(prefix="/api/items", tags=["items"])
@@ -40,12 +41,70 @@ def _get_or_404(db: Session, item_id: int) -> Item:
     return item
 
 
+def _has_positive_residue_anywhere(db: Session, item_number: str | None) -> bool:
+    """Any unit has SUM(qty_in) − SUM(qty_out) > 0 for this card."""
+    if not item_number:
+        return False
+    in_by_unit = {
+        row[0]: Decimal(row[1] or 0)
+        for row in db.query(Movement.to_unit, func.sum(Movement.qty_in))
+            .filter(Movement.item_card_num == item_number, Movement.to_unit.isnot(None))
+            .group_by(Movement.to_unit).all()
+    }
+    out_by_unit = {
+        row[0]: Decimal(row[1] or 0)
+        for row in db.query(Movement.from_unit, func.sum(Movement.qty_out))
+            .filter(Movement.item_card_num == item_number, Movement.from_unit.isnot(None))
+            .group_by(Movement.from_unit).all()
+    }
+    all_units = set(in_by_unit) | set(out_by_unit)
+    return any(in_by_unit.get(u, Decimal(0)) - out_by_unit.get(u, Decimal(0)) > 0 for u in all_units)
+
+
+def maybe_place_orphan_return(db: Session, item: Item, user: User) -> Movement | None:
+    """After a return event that leaves the item fully unassigned, if the
+    item has no movement-based residue anywhere (i.e. it was never placed
+    via a real movement — «Видано»-import shortcut), synthesize a movement
+    placing item.quantity into the МВО's subdivision (from user.person.unit).
+
+    Returns the created Movement (or None if no synthesis happened).
+    Caller must have already closed any splits; this reads item.quantity as
+    the amount to land, matching the split we just closed.
+    """
+    if not user.person_id or item.quantity is None:
+        return None
+    person = db.get(Person, user.person_id)
+    if not person or not person.unit:
+        return None
+    if _has_positive_residue_anywhere(db, item.number):
+        return None
+    qty = Decimal(item.quantity or 0) or Decimal(1)
+    today = date.today()
+    mv = Movement(
+        entry_date=today.isoformat(),
+        item_name=item.name,
+        item_card_num=item.number,
+        unit_of_measure=item.unit_of_measure,
+        category=item.category,
+        qty_in=qty,
+        to_unit=person.unit,
+        mvo_to_id=user.person_id,
+        serial_number=item.serial_number,
+        notes="Автоматично при поверненні до МВО",
+        price=item.price,
+        nomenclature_code=item.nomenclature_code,
+        created_by=user.id,
+    )
+    db.add(mv)
+    return mv
+
+
 def _journal_serial_change(
     db: Session,
     item: Item,
     old_recipient_id: int | None,
     new_recipient_id: int | None,
-    user_id: int,
+    user: User,
     issued_at: date | None = None,
 ) -> None:
     """Mirror an issued_to_recipient_id change into the item_splits ledger.
@@ -61,6 +120,10 @@ def _journal_serial_change(
 
     `issued_at` — when the new split's issue date should be; today if omitted.
     Return/close events always use today (when the return was recorded).
+
+    On explicit return (new is None), if the item is orphan (no movements)
+    we place it in МВО's unit via a synthetic movement — otherwise it would
+    vanish from every residues surface.
     """
     if old_recipient_id == new_recipient_id:
         return
@@ -73,17 +136,19 @@ def _journal_serial_change(
         )
         for row in active:
             row.returned_at = today
-            row.returned_by = user_id
+            row.returned_by = user.id
     if new_recipient_id is not None:
-        from decimal import Decimal
         split_qty = Decimal(1) if item.serial_number else (Decimal(item.quantity or 0) or Decimal(1))
         db.add(ItemSplit(
             item_id=item.id,
             recipient_id=new_recipient_id,
             qty=split_qty,
             issued_at=issued_at or today,
-            created_by=user_id,
+            created_by=user.id,
         ))
+    elif old_recipient_id is not None:
+        # Explicit return branch — old set, new None.
+        maybe_place_orphan_return(db, item, user)
 
 
 @router.get("", response_model=List[ItemListRead])
@@ -131,7 +196,7 @@ def create_item(
     db.add(item)
     db.flush()
     issued_at = date.fromisoformat(payload.issued_at) if payload.issued_at else None
-    _journal_serial_change(db, item, None, item.issued_to_recipient_id, user.id, issued_at)
+    _journal_serial_change(db, item, None, item.issued_to_recipient_id, user, issued_at)
     _sync_documents(db, item.id, payload.documents)
     db.commit()
     db.refresh(item)
@@ -159,7 +224,7 @@ def update_item(
         setattr(item, field, value)
 
     issued_at = date.fromisoformat(payload_issued_at) if payload_issued_at else None
-    _journal_serial_change(db, item, old_recipient_id, item.issued_to_recipient_id, user.id, issued_at)
+    _journal_serial_change(db, item, old_recipient_id, item.issued_to_recipient_id, user, issued_at)
 
     if payload.documents is not None:
         _sync_documents(db, item_id, payload.documents)

@@ -303,7 +303,7 @@ def import_items(
                     issued_at = _date.fromisoformat(iso)
                 except ValueError:
                     issued_at = None
-            _journal_serial_change(db, item, None, recipient_id, user.id, issued_at)
+            _journal_serial_change(db, item, None, recipient_id, user, issued_at)
             existing_numbers.add(number)
             created += 1
         except Exception as e:
