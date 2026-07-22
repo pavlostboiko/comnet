@@ -160,6 +160,22 @@ class CustodyMovementCreate(BaseModel):
     signed_by_person_id: Optional[int] = None
 
 
+# --- v2 assignments ---
+
+class AssignmentCreate(BaseModel):
+    warehouse_id: int
+    person_id: int
+    nomenclature_id: int
+    instance_id: Optional[int] = None
+    quantity: Optional[Decimal] = None          # серійне → 1 автоматично
+    is_official: bool = True
+    issued_date: Optional[str] = None           # ISO; default сьогодні
+
+
+class AssignmentReturn(BaseModel):
+    returned_date: Optional[str] = None
+
+
 # --- Auth ---
 
 class Token(BaseModel):
@@ -275,6 +291,10 @@ class PersonRead(BaseModel):
     unit: Optional[str] = None
     unit_locative: Optional[str] = None
     is_active: bool
+    # v2
+    unit_id: Optional[int] = None
+    callsign: Optional[str] = None
+    group_id: Optional[int] = None
 
     model_config = {"from_attributes": True}
 
@@ -294,6 +314,10 @@ class PersonCreate(BaseModel):
     unit: Optional[str] = None
     unit_locative: Optional[str] = None
     is_active: bool = True
+    # v2
+    unit_id: Optional[int] = None
+    callsign: Optional[str] = None
+    group_id: Optional[int] = None
 
 
 class PersonUpdate(BaseModel):
@@ -311,6 +335,10 @@ class PersonUpdate(BaseModel):
     unit: Optional[str] = None
     unit_locative: Optional[str] = None
     is_active: Optional[bool] = None
+    # v2
+    unit_id: Optional[int] = None
+    callsign: Optional[str] = None
+    group_id: Optional[int] = None
 
 
 # --- Asset Documents ---
