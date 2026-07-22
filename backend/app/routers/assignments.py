@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.acl import check_assignment_create, scope_assignments
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import (
@@ -56,9 +57,9 @@ def list_assignments(
     person_id: Optional[int] = None,
     active: bool = True,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
-    q = db.query(Assignment)
+    q = scope_assignments(db.query(Assignment), user)
     if warehouse_id is not None:
         q = q.filter(Assignment.warehouse_id == warehouse_id)
     if person_id is not None:
@@ -75,6 +76,7 @@ def create_assignment(payload: AssignmentCreate, db: Session = Depends(get_db), 
         raise HTTPException(400, "Склад не знайдено")
     if wh.type != "unit":
         raise HTTPException(400, "Видача лише зі складу підрозділу")
+    check_assignment_create(user, wh.id)  # ACL: mvo свого складу / admin
     person = db.get(Person, payload.person_id)
     if not person:
         raise HTTPException(400, "Особу не знайдено")
