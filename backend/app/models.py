@@ -132,6 +132,33 @@ class CustodyMovement(Base):
     to_warehouse = relationship("Warehouse", foreign_keys=[to_warehouse_id])
 
 
+class Assignment(Base):
+    """v2: видача особовому складу (фізичне тримання). НЕ рухає custody.
+
+    warehouse — склад підрозділу; person.unit має = warehouse.unit.
+    Активна = returned_date IS NULL. Серійне: instance заповнено, один активний
+    на екземпляр. is_official — для несерійного визначає лінію балансу-джерела."""
+    __tablename__ = "assignments"
+
+    id = Column(Integer, primary_key=True)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False)
+    person_id = Column(Integer, ForeignKey("persons.id", ondelete="CASCADE"), nullable=False)
+    nomenclature_id = Column(Integer, ForeignKey("nomenclature.id", ondelete="RESTRICT"), nullable=False)
+    instance_id = Column(Integer, ForeignKey("instances.id", ondelete="SET NULL"), nullable=True)
+    quantity = Column(Numeric(15, 4), nullable=False)
+    is_official = Column(Boolean, nullable=False, default=True)
+    issued_date = Column(Date, nullable=False)
+    returned_date = Column(Date, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    returned_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    warehouse = relationship("Warehouse")
+    person = relationship("Person", foreign_keys=[person_id])
+    nomenclature = relationship("Nomenclature")
+    instance = relationship("Instance")
+
+
 class UnitSettings(Base):
     __tablename__ = "unit_settings"
 
