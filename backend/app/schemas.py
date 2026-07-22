@@ -8,6 +8,7 @@ from pydantic import BaseModel
 class ServiceRead(BaseModel):
     id: int
     name: str
+    code: Optional[str] = None
     chief_name: Optional[str] = None
     chief_position: Optional[str] = None
 
@@ -16,14 +17,87 @@ class ServiceRead(BaseModel):
 
 class ServiceCreate(BaseModel):
     name: str
+    code: Optional[str] = None
     chief_name: Optional[str] = None
     chief_position: Optional[str] = None
 
 
 class ServiceUpdate(BaseModel):
     name: Optional[str] = None
+    code: Optional[str] = None
     chief_name: Optional[str] = None
     chief_position: Optional[str] = None
+
+
+# --- v2 structure: units, groups, warehouses, mvo ---
+
+class UnitRead(BaseModel):
+    id: int
+    name: str
+    code: Optional[str] = None
+    name_locative: Optional[str] = None
+    model_config = {"from_attributes": True}
+
+
+class UnitCreate(BaseModel):
+    name: str
+    code: Optional[str] = None
+    name_locative: Optional[str] = None
+
+
+class UnitUpdate(BaseModel):
+    name: Optional[str] = None
+    code: Optional[str] = None
+    name_locative: Optional[str] = None
+
+
+class GroupRead(BaseModel):
+    id: int
+    name: str
+    unit_id: int
+    commander_id: Optional[int] = None
+    model_config = {"from_attributes": True}
+
+
+class GroupCreate(BaseModel):
+    name: str
+    unit_id: int
+    commander_id: Optional[int] = None
+
+
+class GroupUpdate(BaseModel):
+    name: Optional[str] = None
+    unit_id: Optional[int] = None
+    commander_id: Optional[int] = None
+
+
+class WarehouseRead(BaseModel):
+    id: int
+    name: str
+    type: str
+    service_id: Optional[int] = None
+    unit_id: Optional[int] = None
+    model_config = {"from_attributes": True}
+
+
+class MvoRead(BaseModel):
+    id: int
+    warehouse_id: int
+    person_id: int
+    from_date: str
+    to_date: Optional[str] = None
+    model_config = {"from_attributes": True}
+
+
+class MvoCreate(BaseModel):
+    warehouse_id: int
+    person_id: int
+    from_date: str
+    to_date: Optional[str] = None
+
+
+class MvoUpdate(BaseModel):
+    to_date: Optional[str] = None
 
 
 # --- Auth ---
