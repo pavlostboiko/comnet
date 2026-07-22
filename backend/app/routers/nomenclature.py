@@ -8,7 +8,8 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user, require_admin
+from app.acl import check_nomenclature_cud
+from app.auth import get_current_user
 from app.database import get_db
 from app.models import Instance, Nomenclature, Service, User, Warehouse
 from app.schemas import (
@@ -32,9 +33,10 @@ def list_nomenclature(db: Session = Depends(get_db), _: User = Depends(get_curre
 
 
 @router.post("", response_model=NomenclatureRead, status_code=status.HTTP_201_CREATED)
-def create_nomenclature(payload: NomenclatureCreate, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def create_nomenclature(payload: NomenclatureCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     if not db.get(Service, payload.service_id):
         raise HTTPException(400, "Службу не знайдено")
+    check_nomenclature_cud(user, payload.service_id)
     n = Nomenclature(**payload.model_dump())
     db.add(n)
     db.commit()
@@ -43,8 +45,9 @@ def create_nomenclature(payload: NomenclatureCreate, db: Session = Depends(get_d
 
 
 @router.put("/{nid}", response_model=NomenclatureRead)
-def update_nomenclature(nid: int, payload: NomenclatureUpdate, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def update_nomenclature(nid: int, payload: NomenclatureUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     n = _get_or_404(db, nid)
+    check_nomenclature_cud(user, n.service_id)
     data = payload.model_dump(exclude_unset=True)
     if data.get("service_id") and not db.get(Service, data["service_id"]):
         raise HTTPException(400, "Службу не знайдено")
@@ -60,8 +63,9 @@ def update_nomenclature(nid: int, payload: NomenclatureUpdate, db: Session = Dep
 
 
 @router.delete("/{nid}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_nomenclature(nid: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def delete_nomenclature(nid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     n = _get_or_404(db, nid)
+    check_nomenclature_cud(user, n.service_id)
     db.delete(n)  # CASCADE прибирає instances
     db.commit()
 
@@ -75,8 +79,9 @@ def list_instances(nid: int, db: Session = Depends(get_db), _: User = Depends(ge
 
 
 @router.post("/{nid}/instances", response_model=InstanceRead, status_code=status.HTTP_201_CREATED)
-def create_instance(nid: int, payload: InstanceCreate, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def create_instance(nid: int, payload: InstanceCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     n = _get_or_404(db, nid)
+    check_nomenclature_cud(user, n.service_id)
     if not n.is_serialized:
         raise HTTPException(400, "Екземпляри лише для серійної номенклатури")
     if db.query(Instance).filter(Instance.serial_no == payload.serial_no).first():
@@ -91,7 +96,9 @@ def create_instance(nid: int, payload: InstanceCreate, db: Session = Depends(get
 
 
 @router.delete("/{nid}/instances/{iid}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_instance(nid: int, iid: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def delete_instance(nid: int, iid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    n = _get_or_404(db, nid)
+    check_nomenclature_cud(user, n.service_id)
     inst = db.get(Instance, iid)
     if not inst or inst.nomenclature_id != nid:
         raise HTTPException(404, "Екземпляр не знайдено")

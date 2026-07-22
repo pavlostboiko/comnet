@@ -190,6 +190,10 @@ class UserOut(BaseModel):
     is_active: bool
     person_id: Optional[int] = None
     person_unit: Optional[str] = None  # persons.unit via property
+    # v2 scope
+    service_id: Optional[int] = None
+    unit_id: Optional[int] = None
+    warehouse_id: Optional[int] = None
 
     model_config = {"from_attributes": True}
 
@@ -199,9 +203,13 @@ class UserOut(BaseModel):
 class UserAdminCreate(BaseModel):
     username: str
     password: str
-    role: str = "admin"          # 'admin' | 'operator'
+    role: str = "admin"          # 'admin' | 'operator' | 'service' | 'mvo'
     is_active: bool = True
     person_id: Optional[int] = None
+    # v2 scope
+    service_id: Optional[int] = None
+    unit_id: Optional[int] = None
+    warehouse_id: Optional[int] = None
 
 
 class UserAdminUpdate(BaseModel):
@@ -209,6 +217,10 @@ class UserAdminUpdate(BaseModel):
     role: Optional[str] = None
     is_active: Optional[bool] = None
     person_id: Optional[int] = None
+    # v2 scope
+    service_id: Optional[int] = None
+    unit_id: Optional[int] = None
+    warehouse_id: Optional[int] = None
 
 
 class PasswordSet(BaseModel):

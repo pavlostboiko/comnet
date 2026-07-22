@@ -14,7 +14,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.auth import get_current_user, require_admin
+from app.acl import (
+    check_movement_create, check_warehouse_read, is_admin, scope_movements,
+)
+from app.auth import get_current_user
 from app.database import get_db
 from app.models import CustodyMovement, Instance, Nomenclature, User, Warehouse
 from app.schemas import CustodyMovementCreate
@@ -60,13 +63,14 @@ def _mv_dict(m: CustodyMovement) -> dict:
 
 
 @router.get("/movements")
-def list_movements(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    rows = db.query(CustodyMovement).order_by(CustodyMovement.date.desc(), CustodyMovement.id.desc()).all()
+def list_movements(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    q = scope_movements(db.query(CustodyMovement), user)
+    rows = q.order_by(CustodyMovement.date.desc(), CustodyMovement.id.desc()).all()
     return [_mv_dict(m) for m in rows]
 
 
 @router.post("/movements", status_code=status.HTTP_201_CREATED)
-def create_movement(payload: CustodyMovementCreate, db: Session = Depends(get_db), user: User = Depends(require_admin)):
+def create_movement(payload: CustodyMovementCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     if payload.type not in MOVEMENT_TYPES:
         raise HTTPException(400, f"Тип має бути з {MOVEMENT_TYPES}")
     frm, to = payload.from_warehouse_id, payload.to_warehouse_id
@@ -81,6 +85,7 @@ def create_movement(payload: CustodyMovementCreate, db: Session = Depends(get_db
     nom = db.get(Nomenclature, payload.nomenclature_id)
     if not nom:
         raise HTTPException(400, "Номенклатуру не знайдено")
+    check_movement_create(user, frm, nom)  # ACL
 
     if nom.is_serialized:
         if not payload.instance_id:
@@ -130,8 +135,10 @@ def create_movement(payload: CustodyMovementCreate, db: Session = Depends(get_db
 
 
 @router.get("/balances")
-def balances(warehouse_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def balances(warehouse_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Несерійні залишки складу, згруповані по (nomenclature, is_official)."""
+    check_warehouse_read(user, warehouse_id)
+    svc_scope = user.service_id if (not is_admin(user) and user.role == "service") else None
     rows_in = (
         db.query(CustodyMovement.nomenclature_id, CustodyMovement.is_official,
                  func.coalesce(func.sum(CustodyMovement.quantity), 0))
@@ -154,6 +161,8 @@ def balances(warehouse_id: int, db: Session = Depends(get_db), _: User = Depends
     for (nid, off), qty in net.items():
         if qty > 0:
             nom = db.get(Nomenclature, nid)
+            if svc_scope is not None and (not nom or nom.service_id != svc_scope):
+                continue  # service бачить лише свою службу
             out.append({
                 "nomenclature_id": nid,
                 "name": nom.name if nom else None,
@@ -167,12 +176,16 @@ def balances(warehouse_id: int, db: Session = Depends(get_db), _: User = Depends
 
 
 @router.get("/serial")
-def serial_at_warehouse(warehouse_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def serial_at_warehouse(warehouse_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Серійні екземпляри, що зараз на складі."""
+    check_warehouse_read(user, warehouse_id)
+    svc_scope = user.service_id if (not is_admin(user) and user.role == "service") else None
     rows = db.query(Instance).filter(Instance.current_warehouse_id == warehouse_id).all()
     out = []
     for it in rows:
         nom = db.get(Nomenclature, it.nomenclature_id)
+        if svc_scope is not None and (not nom or nom.service_id != svc_scope):
+            continue
         out.append({
             "instance_id": it.id,
             "serial_no": it.serial_no,

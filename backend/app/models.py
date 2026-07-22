@@ -195,9 +195,13 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     username = Column(String, nullable=False, unique=True)
     hashed_password = Column(String, nullable=False)
-    role = Column(String, nullable=False, default="operator")
+    role = Column(String, nullable=False, default="operator")  # admin|operator|service|mvo
     is_active = Column(Boolean, nullable=False, default=True)
     person_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
+    # v2 two-axis scope
+    service_id = Column(Integer, ForeignKey("services.id", ondelete="SET NULL"), nullable=True)
+    unit_id = Column(Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True)
 
     person = relationship("Person", foreign_keys=[person_id])
 
