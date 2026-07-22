@@ -105,6 +105,33 @@ class Instance(Base):
     current_warehouse = relationship("Warehouse")
 
 
+class CustodyMovement(Base):
+    """v2: рух custody між обліковими точками (склад → склад). Ядро леджера.
+
+    Серійне: instance заповнено, quantity=1. Несерійне: instance порожньо, quantity>0.
+    is_official — державне/волонтерське; для несерійного визначає лінію балансу."""
+    __tablename__ = "custody_movements"
+
+    id = Column(Integer, primary_key=True)
+    date = Column(Date, nullable=False)
+    type = Column(String, nullable=False)             # receipt | transfer | writeoff
+    from_warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True)
+    to_warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True)
+    nomenclature_id = Column(Integer, ForeignKey("nomenclature.id", ondelete="RESTRICT"), nullable=False)
+    instance_id = Column(Integer, ForeignKey("instances.id", ondelete="SET NULL"), nullable=True)
+    quantity = Column(Numeric(15, 4), nullable=False)
+    is_official = Column(Boolean, nullable=False, default=True)
+    document_id = Column(Integer, nullable=True)       # v2-документи підв'яжуться у Фазі 5
+    signed_by_person_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    nomenclature = relationship("Nomenclature")
+    instance = relationship("Instance")
+    from_warehouse = relationship("Warehouse", foreign_keys=[from_warehouse_id])
+    to_warehouse = relationship("Warehouse", foreign_keys=[to_warehouse_id])
+
+
 class UnitSettings(Base):
     __tablename__ = "unit_settings"
 

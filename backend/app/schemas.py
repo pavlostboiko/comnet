@@ -146,6 +146,20 @@ class InstanceCreate(BaseModel):
     current_warehouse_id: Optional[int] = None
 
 
+# --- v2 custody movements ---
+
+class CustodyMovementCreate(BaseModel):
+    date: str                                   # ISO
+    type: str                                   # receipt | transfer | writeoff
+    nomenclature_id: int
+    from_warehouse_id: Optional[int] = None
+    to_warehouse_id: Optional[int] = None
+    instance_id: Optional[int] = None
+    quantity: Optional[Decimal] = None          # серійне → 1 автоматично
+    is_official: bool = True
+    signed_by_person_id: Optional[int] = None
+
+
 # --- Auth ---
 
 class Token(BaseModel):
