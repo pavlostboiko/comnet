@@ -16,6 +16,7 @@ from app.routers import settings as settings_router
 from app.routers import admin as admin_router
 from app.routers import recipients as recipients_router
 from app.routers import residues as residues_router
+from app.routers import custody as custody_router
 from app.routers import nomenclature as nomenclature_router
 from app.routers import splits as splits_router
 from app.routers import structure as structure_router
@@ -69,6 +70,7 @@ app.include_router(users_router.router)
 app.include_router(admin_router.router)
 app.include_router(structure_router.router)
 app.include_router(nomenclature_router.router)
+app.include_router(custody_router.router)
 
 
 @app.get("/api/health")
