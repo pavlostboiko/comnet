@@ -73,6 +73,38 @@ class Mvo(Base):
     person = relationship("Person", foreign_keys=[person_id])
 
 
+class Nomenclature(Base):
+    """v2: тип майна («АК-74 взагалі»), не фізичний предмет.
+    `service` — вісь розмежування доступу. `is_serialized` — гілка обліку."""
+    __tablename__ = "nomenclature"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    service_id = Column(Integer, ForeignKey("services.id", ondelete="RESTRICT"), nullable=False)
+    is_serialized = Column(Boolean, nullable=False, default=False)
+    unit_of_measure = Column(String, nullable=True)   # шт, компл, пара, кг, м, л
+    code = Column(String, nullable=True)              # номенклатурний номер / артикул
+    price = Column(Numeric(15, 2), nullable=True)     # вартісний облік
+
+    service = relationship("Service")
+
+
+class Instance(Base):
+    """v2: екземпляр серійного майна (1 запис = 1 предмет).
+    current_warehouse — денормалізоване: to_warehouse останнього руху (заповниться
+    у Фазі 3, коли з'являться v2-рухи)."""
+    __tablename__ = "instances"
+
+    id = Column(Integer, primary_key=True)
+    nomenclature_id = Column(Integer, ForeignKey("nomenclature.id", ondelete="CASCADE"), nullable=False)
+    serial_no = Column(String, nullable=False, unique=True)
+    current_warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True)
+    is_official = Column(Boolean, nullable=False, default=True)  # державне / волонтерське
+
+    nomenclature = relationship("Nomenclature")
+    current_warehouse = relationship("Warehouse")
+
+
 class UnitSettings(Base):
     __tablename__ = "unit_settings"
 

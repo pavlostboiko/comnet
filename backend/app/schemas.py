@@ -100,6 +100,52 @@ class MvoUpdate(BaseModel):
     to_date: Optional[str] = None
 
 
+# --- v2 nomenclature + instances ---
+
+class NomenclatureRead(BaseModel):
+    id: int
+    name: str
+    service_id: int
+    is_serialized: bool
+    unit_of_measure: Optional[str] = None
+    code: Optional[str] = None
+    price: Optional[Decimal] = None
+    model_config = {"from_attributes": True}
+
+
+class NomenclatureCreate(BaseModel):
+    name: str
+    service_id: int
+    is_serialized: bool = False
+    unit_of_measure: Optional[str] = None
+    code: Optional[str] = None
+    price: Optional[Decimal] = None
+
+
+class NomenclatureUpdate(BaseModel):
+    name: Optional[str] = None
+    service_id: Optional[int] = None
+    is_serialized: Optional[bool] = None
+    unit_of_measure: Optional[str] = None
+    code: Optional[str] = None
+    price: Optional[Decimal] = None
+
+
+class InstanceRead(BaseModel):
+    id: int
+    nomenclature_id: int
+    serial_no: str
+    current_warehouse_id: Optional[int] = None
+    is_official: bool
+    model_config = {"from_attributes": True}
+
+
+class InstanceCreate(BaseModel):
+    serial_no: str
+    is_official: bool = True
+    current_warehouse_id: Optional[int] = None
+
+
 # --- Auth ---
 
 class Token(BaseModel):
