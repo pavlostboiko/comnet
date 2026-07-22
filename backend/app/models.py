@@ -13,8 +13,64 @@ class Service(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
-    chief_name = Column(String, nullable=True)
+    code = Column(String, nullable=True)              # v2: коротка абревіатура
+    chief_name = Column(String, nullable=True)        # для тексту накладних
     chief_position = Column(String, nullable=True)
+
+
+class Unit(Base):
+    """v2: підрозділ як окрема сутність (замість free-text persons.unit).
+    Плоска структура — без ієрархії."""
+    __tablename__ = "units"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False, unique=True)
+    code = Column(String, nullable=True)
+    name_locative = Column(String, nullable=True)     # «у 1-й роті» — для документів
+
+
+class Group(Base):
+    """v2: група всередині підрозділу; командир — person."""
+    __tablename__ = "groups"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    unit_id = Column(Integer, ForeignKey("units.id", ondelete="CASCADE"), nullable=False)
+    commander_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
+
+    unit = relationship("Unit")
+    commander = relationship("Person", foreign_keys=[commander_id])
+
+
+class Warehouse(Base):
+    """v2: облікова точка (склад служби АБО склад підрозділу).
+    Стабільна — прив'язана до служби/підрозділу, НЕ до особи.
+    Інваріант: type=service → service_id заповнено, unit_id порожньо (і навпаки)."""
+    __tablename__ = "warehouses"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    type = Column(String, nullable=False)             # 'service' | 'unit'
+    service_id = Column(Integer, ForeignKey("services.id", ondelete="CASCADE"), nullable=True)
+    unit_id = Column(Integer, ForeignKey("units.id", ondelete="CASCADE"), nullable=True)
+
+    service = relationship("Service")
+    unit = relationship("Unit")
+
+
+class Mvo(Base):
+    """v2: журнал призначень МВО на склад підрозділу (історичний).
+    Діючий = to_date IS NULL; максимум один діючий на склад."""
+    __tablename__ = "mvo"
+
+    id = Column(Integer, primary_key=True)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False)
+    person_id = Column(Integer, ForeignKey("persons.id", ondelete="CASCADE"), nullable=False)
+    from_date = Column(Date, nullable=False)
+    to_date = Column(Date, nullable=True)
+
+    warehouse = relationship("Warehouse")
+    person = relationship("Person", foreign_keys=[person_id])
 
 
 class UnitSettings(Base):
@@ -79,9 +135,16 @@ class Person(Base):
     patronymic = Column(String, nullable=True)
     patronymic_genitive = Column(String, nullable=True)
     search_name = Column(String, nullable=True)
-    unit = Column(String, nullable=True)
+    unit = Column(String, nullable=True)              # v1 free-text; прибереться в пізній фазі
     unit_locative = Column(String, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
+    # v2 additions
+    unit_id = Column(Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True)
+    callsign = Column(String, nullable=True)          # влиті recipients (позивні)
+    group_id = Column(Integer, ForeignKey("groups.id", ondelete="SET NULL"), nullable=True)
+
+    unit_ref = relationship("Unit", foreign_keys=[unit_id])
+    group = relationship("Group", foreign_keys=[group_id])
 
 
 class Recipient(Base):

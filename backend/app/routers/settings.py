@@ -225,8 +225,11 @@ def create_service(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
+    from app.routers.structure import ensure_warehouse_for_service
     row = Service(**payload.model_dump())
     db.add(row)
+    db.flush()
+    ensure_warehouse_for_service(db, row)  # v2: auto-склад служби
     db.commit()
     db.refresh(row)
     return row
