@@ -59,6 +59,8 @@ def _mv_dict(m: CustodyMovement) -> dict:
         "instance_id": m.instance_id,
         "quantity": str(m.quantity),
         "is_official": m.is_official,
+        "doc_number": m.doc_number,
+        "card_number": m.card_number,
     }
 
 

@@ -38,6 +38,7 @@ def is_service_warehouse_location(raw) -> bool:
 
 # header → logical key
 COLS = {
+    "№": "card_number",
     "Назва": "name", "Товар": "name",
     "Служба": "service",
     "Категорія": "category",
@@ -156,9 +157,15 @@ def import_items_v2(
                 _clean(col(row, "category")),
             )
             # серійний екземпляр — без розміщення (склад заповнить Переміщення)
-            if is_serial and not db.query(Instance).filter(Instance.serial_no == serial).first():
-                db.add(Instance(nomenclature_id=nom.id, serial_no=serial, is_official=True))
-                counts["instances"] += 1
+            if is_serial:
+                inst = db.query(Instance).filter(Instance.serial_no == serial).first()
+                card = _clean(col(row, "card_number"))
+                if not inst:
+                    db.add(Instance(nomenclature_id=nom.id, serial_no=serial,
+                                    card_number=card, is_official=True))
+                    counts["instances"] += 1
+                elif card and not inst.card_number:
+                    inst.card_number = card
         except Exception as e:
             errors.append(f"«{name}»: {e}")
 
@@ -171,7 +178,7 @@ def import_items_v2(
 MV_COLS = {
     "entry_date": 0, "item_name": 1, "unit_of_measure": 3, "qty_in": 5,
     "qty_out": 6, "from_unit": 7, "to_unit": 8, "doc_date": 12, "doc_number": 13,
-    "serial_number": 15, "price": 19, "service": 20,
+    "serial_number": 15, "price": 19, "service": 20, "card_number": 23,  # X = «Поле 12»
 }
 
 
@@ -281,13 +288,21 @@ def import_movements_v2(
                 errors.append(f"рядок {i} «{name}»: немає складів (from/to)")
                 continue
 
+            card = _clean(mc(cells, "card_number"))
             instance = None
             if is_serial:
-                instance = db.query(Instance).filter(Instance.serial_no == serial).first()
+                # join з Items: спершу по номеру картки, тоді по серійному
+                if card:
+                    instance = db.query(Instance).filter(Instance.card_number == card).first()
                 if not instance:
-                    instance = Instance(nomenclature_id=nom.id, serial_no=serial, is_official=True)
+                    instance = db.query(Instance).filter(Instance.serial_no == serial).first()
+                if not instance:
+                    instance = Instance(nomenclature_id=nom.id, serial_no=serial,
+                                        card_number=card, is_official=True)
                     db.add(instance); db.flush()
                     counts["instances_created"] += 1
+                elif card and not instance.card_number:
+                    instance.card_number = card
                 qty = Decimal(1)
             else:
                 qty = qin if qin > 0 else qout
@@ -307,7 +322,9 @@ def import_movements_v2(
                 from_warehouse_id=from_wh.id if from_wh else None,
                 to_warehouse_id=to_wh.id if to_wh else None,
                 instance_id=instance.id if instance else None,
-                quantity=qty, is_official=True, created_by=user.id,
+                quantity=qty, is_official=True,
+                card_number=card, doc_number=_clean(mc(cells, "doc_number")),
+                created_by=user.id,
             ))
             counts["movements"] += 1
             if instance:

@@ -138,6 +138,7 @@ class InstanceRead(BaseModel):
     id: int
     nomenclature_id: int
     serial_no: str
+    card_number: Optional[str] = None
     current_warehouse_id: Optional[int] = None
     is_official: bool
     model_config = {"from_attributes": True}
@@ -310,6 +311,7 @@ class PersonRead(BaseModel):
     unit_id: Optional[int] = None
     callsign: Optional[str] = None
     group_id: Optional[int] = None
+    ipn: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -333,6 +335,7 @@ class PersonCreate(BaseModel):
     unit_id: Optional[int] = None
     callsign: Optional[str] = None
     group_id: Optional[int] = None
+    ipn: Optional[str] = None
 
 
 class PersonUpdate(BaseModel):
@@ -354,6 +357,7 @@ class PersonUpdate(BaseModel):
     unit_id: Optional[int] = None
     callsign: Optional[str] = None
     group_id: Optional[int] = None
+    ipn: Optional[str] = None
 
 
 # --- Asset Documents ---
