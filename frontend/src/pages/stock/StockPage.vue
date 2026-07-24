@@ -24,15 +24,18 @@
           <div class="section-label">Несерійне майно</div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Найменування</th><th class="col-off">Тип</th><th class="col-num">К-сть</th><th class="col-uom">Од.</th><th class="col-num">Вартість</th></tr></thead>
+              <thead><tr><th>Найменування</th><th class="col-off">Тип</th><th class="col-num">К-сть</th><th class="col-uom">Од.</th><th class="col-num">Вартість</th><th class="col-issue"></th></tr></thead>
               <tbody>
-                <tr v-if="!balances.length"><td colspan="5" class="empty">Порожньо</td></tr>
+                <tr v-if="!balances.length"><td colspan="6" class="empty">Порожньо</td></tr>
                 <tr v-for="(b, i) in balances" :key="i">
                   <td class="td-name">{{ b.name }}</td>
                   <td><span class="chip" :class="b.is_official ? 'chip-gov' : 'chip-vol'">{{ b.is_official ? 'державне' : 'волонтерське' }}</span></td>
                   <td class="td-num">{{ fmtQty(b.qty) }}</td>
                   <td class="td-center">{{ b.unit_of_measure || '—' }}</td>
                   <td class="td-num">{{ b.price != null ? Number(b.price).toFixed(2) : '—' }}</td>
+                  <td class="td-issue">
+                    <button v-if="isUnitWh" class="btn-issue" @click="openIssueNonSerial(b)">Видати</button>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -42,17 +45,42 @@
           <div class="section-label">Серійне майно</div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>№ / серійний</th><th>Найменування</th><th class="col-off">Тип</th></tr></thead>
+              <thead><tr><th>№ / серійний</th><th>Найменування</th><th class="col-off">Тип</th><th>На кому</th><th class="col-issue"></th></tr></thead>
               <tbody>
-                <tr v-if="!serial.length"><td colspan="3" class="empty">Порожньо</td></tr>
+                <tr v-if="!serial.length"><td colspan="5" class="empty">Порожньо</td></tr>
                 <tr v-for="s in serial" :key="s.instance_id">
                   <td class="td-mono">{{ s.serial_no }}</td>
                   <td class="td-name">{{ s.name }}</td>
                   <td><span class="chip" :class="s.is_official ? 'chip-gov' : 'chip-vol'">{{ s.is_official ? 'державне' : 'волонтерське' }}</span></td>
+                  <td class="td-dim">{{ holderOfInstance(s.instance_id) || '—' }}</td>
+                  <td class="td-issue">
+                    <button v-if="isUnitWh && !holderOfInstance(s.instance_id)" class="btn-issue" @click="openIssueSerial(s)">Видати</button>
+                  </td>
                 </tr>
               </tbody>
             </table>
           </div>
+
+          <!-- Видано особам -->
+          <template v-if="isUnitWh">
+            <div class="section-label">Видано особам</div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Особа</th><th>Найменування</th><th class="col-off">Серійний</th><th class="col-num">К-сть</th><th class="col-date">Дата</th><th class="col-issue"></th></tr></thead>
+                <tbody>
+                  <tr v-if="!assignments.length"><td colspan="6" class="empty">Нічого не видано</td></tr>
+                  <tr v-for="a in assignments" :key="a.id">
+                    <td class="td-name">{{ personName(a.person_id) }}</td>
+                    <td>{{ nomName(a.nomenclature_id) }}</td>
+                    <td class="td-mono td-dim">{{ a.instance_id ? serialOfInstance(a.instance_id) : '—' }}</td>
+                    <td class="td-num">{{ fmtQty(a.quantity) }}</td>
+                    <td class="td-mono">{{ a.issued_date }}</td>
+                    <td class="td-issue"><button class="btn-return" @click="doReturn(a)">Повернути</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </template>
 
           <!-- Останні рухи цього складу -->
           <div class="section-label">Останні рухи</div>
@@ -72,6 +100,34 @@
             </table>
           </div>
         </template>
+      </div>
+    </div>
+
+    <!-- ═══ Видача modal ═══ -->
+    <div class="overlay" :class="{ open: issueOpen }" @click.self="issueOpen = false">
+      <div v-if="issueOpen" class="modal">
+        <div class="modal-head">
+          <span class="modal-title">Видати: {{ issue.itemName }}</span>
+          <button class="modal-close" @click="issueOpen = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <label class="fl">Кому</label>
+          <select class="fi" v-model="issue.person_id">
+            <option :value="null" disabled>— оберіть особу —</option>
+            <option v-for="p in unitPersons" :key="p.id" :value="p.id">{{ personLabel(p) }}</option>
+          </select>
+          <template v-if="!issue.instance_id">
+            <label class="fl">Кількість</label>
+            <input class="fi" type="number" min="0.0001" step="0.0001" v-model="issue.quantity" />
+          </template>
+          <label class="fl">Дата видачі</label>
+          <input class="fi" type="date" v-model="issue.issued_date" />
+          <div v-if="issueErr" class="err">{{ issueErr }}</div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-sec" @click="issueOpen = false">Скасувати</button>
+          <button class="btn-pri" :disabled="issueSaving" @click="saveIssue">Видати</button>
+        </div>
       </div>
     </div>
 
@@ -145,6 +201,8 @@ import TopBar from '../../components/TopBar.vue'
 import { getWarehouses } from '../../api/structure.js'
 import { getNomenclature, createInstance } from '../../api/nomenclature.js'
 import { getBalances, getSerialAt, getMovements, createMovement } from '../../api/custody.js'
+import { getPersons } from '../../api/settings.js'
+import { getAssignments, createAssignment, returnAssignment } from '../../api/assignments.js'
 
 const warehouses = ref([])
 const nomenclature = ref([])
@@ -152,10 +210,29 @@ const warehouseId = ref(null)
 const balances = ref([])
 const serial = ref([])
 const movements = ref([])
+const assignments = ref([])
+const persons = ref([])
 
 const serviceWarehouses = computed(() => warehouses.value.filter(w => w.type === 'service'))
 const unitWarehouses = computed(() => warehouses.value.filter(w => w.type === 'unit'))
 const otherWarehouses = computed(() => warehouses.value.filter(w => w.id !== warehouseId.value))
+const selectedWarehouse = computed(() => warehouses.value.find(w => w.id === warehouseId.value) || null)
+const isUnitWh = computed(() => selectedWarehouse.value?.type === 'unit')
+const unitPersons = computed(() => persons.value.filter(p => p.unit_id === selectedWarehouse.value?.unit_id))
+
+function personLabel(p) {
+  const full = [p.last_name, p.first_name].filter(Boolean).join(' ')
+  return full || p.callsign || `#${p.id}`
+}
+const personName = (id) => {
+  const p = persons.value.find(x => x.id === id)
+  return p ? personLabel(p) : '—'
+}
+const serialOfInstance = (id) => serial.value.find(s => s.instance_id === id)?.serial_no || `#${id}`
+const holderOfInstance = (instId) => {
+  const a = assignments.value.find(x => x.instance_id === instId)
+  return a ? personName(a.person_id) : null
+}
 const whMovements = computed(() => movements.value
   .filter(m => m.from_warehouse_id === warehouseId.value || m.to_warehouse_id === warehouseId.value)
   .slice(0, 20))
@@ -173,9 +250,10 @@ function fmtQty(v) {
 }
 
 async function loadRefs() {
-  const [w, n] = await Promise.all([getWarehouses(), getNomenclature()])
+  const [w, n, p] = await Promise.all([getWarehouses(), getNomenclature(), getPersons()])
   warehouses.value = w.data
   nomenclature.value = n.data
+  persons.value = p.data
 }
 async function loadStock() {
   if (!warehouseId.value) return
@@ -185,8 +263,65 @@ async function loadStock() {
   balances.value = b.data
   serial.value = s.data
   movements.value = m.data
+  if (isUnitWh.value) {
+    assignments.value = (await getAssignments(warehouseId.value)).data
+  } else {
+    assignments.value = []
+  }
 }
 onMounted(loadRefs)
+
+// ── Видача ───────────────────────────────────────────────────────────
+const issueOpen = ref(false)
+const issueSaving = ref(false)
+const issueErr = ref('')
+const issue = reactive({})
+function openIssueNonSerial(b) {
+  issueErr.value = ''
+  Object.assign(issue, {
+    itemName: b.name, nomenclature_id: b.nomenclature_id, instance_id: null,
+    is_official: b.is_official, quantity: 1, person_id: null,
+    issued_date: new Date().toISOString().slice(0, 10),
+  })
+  issueOpen.value = true
+}
+function openIssueSerial(s) {
+  issueErr.value = ''
+  Object.assign(issue, {
+    itemName: `${s.name} (${s.serial_no})`, nomenclature_id: s.nomenclature_id,
+    instance_id: s.instance_id, is_official: s.is_official, quantity: 1, person_id: null,
+    issued_date: new Date().toISOString().slice(0, 10),
+  })
+  issueOpen.value = true
+}
+async function saveIssue() {
+  if (!issue.person_id) { issueErr.value = 'Оберіть особу'; return }
+  issueSaving.value = true
+  issueErr.value = ''
+  try {
+    await createAssignment({
+      warehouse_id: warehouseId.value, person_id: issue.person_id,
+      nomenclature_id: issue.nomenclature_id, instance_id: issue.instance_id,
+      quantity: issue.instance_id ? 1 : Number(issue.quantity),
+      is_official: issue.is_official, issued_date: issue.issued_date,
+    })
+    issueOpen.value = false
+    await loadStock()
+  } catch (e) {
+    issueErr.value = e?.response?.data?.detail || 'Помилка видачі'
+  } finally {
+    issueSaving.value = false
+  }
+}
+async function doReturn(a) {
+  if (!confirm(`Повернути «${nomName(a.nomenclature_id)}» від «${personName(a.person_id)}»?`)) return
+  try {
+    await returnAssignment(a.id)
+    await loadStock()
+  } catch (e) {
+    alert(e?.response?.data?.detail || 'Не вдалось повернути')
+  }
+}
 
 // Move modal
 const moveOpen = ref(false)
@@ -254,7 +389,10 @@ async function saveMove() {
 table { width:100%; border-collapse:collapse; table-layout:fixed; }
 th, td { padding:9px 14px; text-align:left; font-size:13px; border-bottom:1px solid var(--border-light); }
 th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; }
-.col-off { width:130px; } .col-num { width:110px; text-align:right; } .col-uom { width:70px; } .col-date { width:110px; }
+.col-off { width:130px; } .col-num { width:110px; text-align:right; } .col-uom { width:70px; } .col-date { width:110px; } .col-issue { width:100px; text-align:center; }
+.td-issue { text-align:center; }
+.btn-issue { background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); padding:3px 10px; font-size:12px; font-family:inherit; font-weight:500; cursor:pointer; }
+.btn-return { background:transparent; border:1px solid #d97706; color:#b45309; border-radius:var(--radius-sm); padding:3px 10px; font-size:12px; font-family:inherit; cursor:pointer; }
 .td-name { font-weight:600; color:var(--text); }
 .td-dim { color:var(--text-light); }
 .td-center { text-align:center; }

@@ -115,6 +115,23 @@
             </tbody>
           </table>
         </div>
+
+        <!-- ═══ Особи ═══ -->
+        <div v-if="tab === 'persons'" class="table-wrap">
+          <table>
+            <thead><tr><th>ПІБ / позивний</th><th>Підрозділ</th><th>Група</th><th class="col-code">Звання</th><th class="col-acts"></th></tr></thead>
+            <tbody>
+              <tr v-if="!persons.length"><td colspan="5" class="empty">Немає осіб</td></tr>
+              <tr v-for="p in persons" :key="p.id">
+                <td class="td-name">{{ personLabel(p) }}</td>
+                <td class="td-dim">{{ p.unit_id ? unitName(p.unit_id) : '—' }}</td>
+                <td class="td-dim">{{ p.group_id ? groupName(p.group_id) : '—' }}</td>
+                <td>{{ p.rank || '—' }}</td>
+                <td class="td-acts"><button class="act-del" @click="del('person', p)">✕</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -173,6 +190,22 @@
               <option v-for="p in persons" :key="p.id" :value="p.id">{{ personLabel(p) }}</option>
             </select>
           </template>
+          <template v-else-if="tab === 'persons'">
+            <label class="fl">Прізвище</label><input class="fi" v-model="form.last_name" />
+            <label class="fl">Ім'я</label><input class="fi" v-model="form.first_name" />
+            <label class="fl">Позивний</label><input class="fi" v-model="form.callsign" />
+            <label class="fl">Звання</label><input class="fi" v-model="form.rank" />
+            <label class="fl">Підрозділ</label>
+            <select class="fi" v-model="form.unit_id">
+              <option :value="null">— не вказано —</option>
+              <option v-for="u in units" :key="u.id" :value="u.id">{{ u.name }}</option>
+            </select>
+            <label class="fl">Група</label>
+            <select class="fi" v-model="form.group_id">
+              <option :value="null">— не вказано —</option>
+              <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }} ({{ unitName(g.unit_id) }})</option>
+            </select>
+          </template>
           <div v-if="error" class="err">{{ error }}</div>
         </div>
         <div class="modal-foot">
@@ -187,7 +220,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
-import { getServices, createService, deleteService, getPersons } from '../../api/settings.js'
+import { getServices, createService, deleteService, getPersons, createPerson, deletePerson } from '../../api/settings.js'
 import {
   getUnits, createUnit, deleteUnit, getWarehouses,
   getGroups, createGroup, deleteGroup,
@@ -204,6 +237,7 @@ const tabs = [
   { key: 'warehouses', label: 'Склади' },
   { key: 'mvo', label: 'МВО' },
   { key: 'groups', label: 'Групи' },
+  { key: 'persons', label: 'Особи' },
 ]
 const tab = ref('services')
 const currentTab = computed(() => tabs.find(t => t.key === tab.value))
@@ -228,6 +262,7 @@ const personName = (id) => {
   const p = persons.value.find(x => x.id === id)
   return p ? personLabel(p) : '—'
 }
+const groupName = (id) => groups.value.find(g => g.id === id)?.name || '—'
 
 async function loadAll() {
   const [s, u, n, w, m, g, p] = await Promise.all([
@@ -255,6 +290,7 @@ function openAdd() {
   if (tab.value === 'nomenclature') { form.service_id = null; form.is_serialized = false }
   else if (tab.value === 'mvo') { form.warehouse_id = null; form.person_id = null; form.from_date = new Date().toISOString().slice(0, 10) }
   else if (tab.value === 'groups') { form.unit_id = null; form.commander_id = null }
+  else if (tab.value === 'persons') { form.unit_id = null; form.group_id = null }
   addOpen.value = true
 }
 
@@ -279,6 +315,13 @@ async function save() {
       if (!form.unit_id) { error.value = 'Оберіть підрозділ'; saving.value = false; return }
       await createGroup({ name: form.name, unit_id: form.unit_id, commander_id: form.commander_id || null })
     }
+    else if (tab.value === 'persons') {
+      await createPerson({
+        last_name: form.last_name || null, first_name: form.first_name || null,
+        callsign: form.callsign || null, rank: form.rank || null,
+        unit_id: form.unit_id || null, group_id: form.group_id || null,
+      })
+    }
     addOpen.value = false
     await loadAll()
   } catch (e) {
@@ -289,12 +332,14 @@ async function save() {
 }
 
 async function del(kind, row) {
-  if (!confirm(`Видалити «${row.name}»?`)) return
+  const label = kind === 'person' ? personLabel(row) : row.name
+  if (!confirm(`Видалити «${label}»?`)) return
   try {
     if (kind === 'service') await deleteService(row.id)
     else if (kind === 'unit') await deleteUnit(row.id)
     else if (kind === 'nomenclature') await deleteNomenclature(row.id)
     else if (kind === 'group') await deleteGroup(row.id)
+    else if (kind === 'person') await deletePerson(row.id)
     await loadAll()
   } catch (e) {
     alert(e?.response?.data?.detail || 'Не вдалось видалити')
