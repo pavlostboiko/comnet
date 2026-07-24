@@ -100,7 +100,7 @@ async function submit() {
   loading.value = true
   try {
     await authStore.login(username.value.trim(), password.value)
-    router.push('/items')
+    router.push('/stock')
   } catch {
     errorMsg.value = 'Невірний логін або пароль'
   } finally {
