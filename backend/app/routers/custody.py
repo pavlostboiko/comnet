@@ -180,13 +180,26 @@ def balances(warehouse_id: int, db: Session = Depends(get_db), user: User = Depe
 
 
 @router.get("/where")
-def where_is(nomenclature_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def where_is(nomenclature_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Де знаходиться конкретна номенклатура: розподіл по складах.
     Несерійне — кількість по (склад, держ/волонт); серійне — кожен екземпляр
-    з поточним складом і на кому видано."""
+    з поточним складом і на кому видано.
+
+    ACL: admin — усе; service — лише своя служба (інакше 403); mvo — лише свій
+    склад (розподіл звужується до нього); інші ролі — 403."""
     nom = db.get(Nomenclature, nomenclature_id)
     if not nom:
         raise HTTPException(404, "Номенклатуру не знайдено")
+
+    only_warehouse = None  # для mvo — обмеження до свого складу
+    if not is_admin(user):
+        if user.role == "service":
+            if user.service_id != nom.service_id:
+                raise HTTPException(403, "Немає доступу до цієї номенклатури")
+        elif user.role == "mvo" and user.warehouse_id:
+            only_warehouse = user.warehouse_id
+        else:
+            raise HTTPException(403, "Немає доступу")
 
     def wh_name(wid):
         w = db.get(Warehouse, wid) if wid else None
@@ -196,9 +209,12 @@ def where_is(nomenclature_id: int, db: Session = Depends(get_db), _: User = Depe
               "nonserial": [], "serial": []}
 
     if nom.is_serialized:
-        insts = db.query(Instance).filter(
+        q_inst = db.query(Instance).filter(
             Instance.nomenclature_id == nom.id, Instance.current_warehouse_id.isnot(None)
-        ).all()
+        )
+        if only_warehouse is not None:
+            q_inst = q_inst.filter(Instance.current_warehouse_id == only_warehouse)
+        insts = q_inst.all()
         # holders: active assignments by instance
         holders = {
             a.instance_id: a.person_id
@@ -240,7 +256,7 @@ def where_is(nomenclature_id: int, db: Session = Depends(get_db), _: User = Depe
         for wid, off, qty in rows_out:
             net[(wid, off)] = net.get((wid, off), Decimal(0)) - Decimal(qty or 0)
         for (wid, off), qty in net.items():
-            if qty > 0:
+            if qty > 0 and (only_warehouse is None or wid == only_warehouse):
                 result["nonserial"].append({
                     "warehouse_id": wid, "warehouse_name": wh_name(wid),
                     "is_official": off, "qty": str(qty),
