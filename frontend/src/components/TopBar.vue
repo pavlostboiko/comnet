@@ -19,7 +19,6 @@
       <router-link v-if="isAdmin" class="nav-link" to="/structure">Довідники</router-link>
       <router-link v-if="isAdmin" class="nav-link" to="/users">Користувачі</router-link>
       <router-link v-if="isAdmin" class="nav-link" to="/import">Імпорт</router-link>
-      <router-link v-if="isAdmin" class="nav-link" to="/settings">Налаштування</router-link>
     </nav>
 
     <div class="tb-right">
