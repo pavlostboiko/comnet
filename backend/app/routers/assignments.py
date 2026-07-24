@@ -109,7 +109,7 @@ def create_assignment(payload: AssignmentCreate, db: Session = Depends(get_db), 
         quantity = Decimal(payload.quantity or 0)
         if quantity <= 0:
             raise HTTPException(400, "Кількість має бути > 0")
-        is_official = payload.is_official
+        is_official = nom.is_official  # тип обліку — з картки
         bal = balance_of(db, wh.id, nom.id, is_official)
         issued = _active_issued(db, wh.id, nom.id, is_official)
         if issued + quantity > bal:

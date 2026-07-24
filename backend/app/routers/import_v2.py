@@ -162,7 +162,7 @@ def import_items_v2(
                 card = _clean(col(row, "card_number"))
                 if not inst:
                     db.add(Instance(nomenclature_id=nom.id, serial_no=serial,
-                                    card_number=card, is_official=True))
+                                    card_number=card, is_official=nom.is_official))
                     counts["instances"] += 1
                 elif card and not inst.card_number:
                     inst.card_number = card
@@ -306,7 +306,7 @@ def import_movements_v2(
                     instance = db.query(Instance).filter(Instance.serial_no == serial).first()
                 if not instance:
                     instance = Instance(nomenclature_id=nom.id, serial_no=serial,
-                                        card_number=card, is_official=True)
+                                        card_number=card, is_official=nom.is_official)
                     db.add(instance); db.flush()
                     counts["instances_created"] += 1
                 elif card and not instance.card_number:
@@ -330,7 +330,7 @@ def import_movements_v2(
                 from_warehouse_id=from_wh.id if from_wh else None,
                 to_warehouse_id=to_wh.id if to_wh else None,
                 instance_id=instance.id if instance else None,
-                quantity=qty, is_official=True,
+                quantity=qty, is_official=nom.is_official,
                 card_number=card, doc_number=_clean(mc(cells, "doc_number")),
                 created_by=user.id,
             ))

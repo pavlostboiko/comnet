@@ -31,22 +31,24 @@
               <th class="sortable" @click="toggleSort('name')">Найменування <span class="arr">{{ sortIcon('name') }}</span></th>
               <th class="sortable col-cat" @click="toggleSort('category')">Категорія <span class="arr">{{ sortIcon('category') }}</span></th>
               <th class="col-svc" v-if="!serviceId">Служба</th>
+              <th class="col-obl">Облік</th>
               <th class="col-type">Тип</th>
               <th class="col-uom">Од.</th>
+              <th class="sortable col-total" @click="toggleSort('total_num')">Всього <span class="arr">{{ sortIcon('total_num') }}</span></th>
               <th class="sortable col-price" @click="toggleSort('price_num')">Вартість <span class="arr">{{ sortIcon('price_num') }}</span></th>
-              <th class="col-code">Код</th>
               <th v-if="isAdmin" class="col-acts"></th>
             </tr></thead>
             <tbody>
-              <tr v-if="!sorted.length"><td :colspan="isAdmin ? 8 : 7" class="empty">Нічого не знайдено</td></tr>
+              <tr v-if="!sorted.length"><td :colspan="isAdmin ? 9 : 8" class="empty">Нічого не знайдено</td></tr>
               <tr v-for="n in sorted" :key="n.id" class="click-row" @click="openWhere(n)">
                 <td class="td-name">{{ n.name }}</td>
                 <td class="td-dim">{{ n.category || '—' }}</td>
                 <td class="td-dim" v-if="!serviceId">{{ serviceName(n.service_id) }}</td>
+                <td><span class="chip" :class="n.is_official ? 'chip-gov' : 'chip-vol'">{{ n.is_official ? 'облік' : 'ндм' }}</span></td>
                 <td><span class="chip" :class="n.is_serialized ? 'chip-ser' : 'chip-non'">{{ n.is_serialized ? 'серійне' : 'несерійне' }}</span></td>
                 <td class="td-center">{{ n.unit_of_measure || '—' }}</td>
+                <td class="td-num"><b>{{ totalOf(n.id) }}</b></td>
                 <td class="td-num">{{ n.price != null ? Number(n.price).toFixed(2) : '—' }}</td>
-                <td class="td-mono td-dim">{{ n.code || '—' }}</td>
                 <td v-if="isAdmin" class="td-acts">
                   <button class="act e" @click.stop="openEdit(n)">✎</button>
                   <button class="act d" @click.stop="del(n)">✕</button>
@@ -75,6 +77,11 @@
           </select>
           <label class="fl">Категорія</label><input class="fi" v-model="form.category" list="cats" />
           <datalist id="cats"><option v-for="c in categories" :key="c" :value="c" /></datalist>
+          <label class="fl">Тип обліку</label>
+          <select class="fi" v-model="form.is_official">
+            <option :value="true">облік</option>
+            <option :value="false">ндм</option>
+          </select>
           <label class="fl"><input type="checkbox" v-model="form.is_serialized" /> Серійне майно</label>
           <label class="fl">Одиниця виміру</label><input class="fi" v-model="form.unit_of_measure" placeholder="шт" />
           <label class="fl">Вартість</label><input class="fi" type="number" v-model="form.price" />
@@ -104,7 +111,7 @@
                 <tr v-if="!whereData.nonserial.length"><td colspan="3" class="empty">Ніде немає залишку</td></tr>
                 <tr v-for="(r, i) in whereData.nonserial" :key="i">
                   <td class="td-name">{{ r.warehouse_name }}</td>
-                  <td><span class="chip" :class="r.is_official ? 'chip-gov' : 'chip-vol'">{{ r.is_official ? 'державне' : 'волонтерське' }}</span></td>
+                  <td><span class="chip" :class="r.is_official ? 'chip-gov' : 'chip-vol'">{{ r.is_official ? 'облік' : 'ндм' }}</span></td>
                   <td class="td-num">{{ r.qty }}</td>
                 </tr>
               </tbody>
@@ -136,7 +143,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import { getServices } from '../../api/settings.js'
 import { getNomenclature, createNomenclature, updateNomenclature, deleteNomenclature } from '../../api/nomenclature.js'
-import { whereIs } from '../../api/custody.js'
+import { whereIs, getTotals } from '../../api/custody.js'
 import { useSort } from '../../composables/useSort.js'
 import { useAuthStore } from '../../stores/auth.js'
 
@@ -150,7 +157,12 @@ const search = ref('')
 const searchRef = ref(null)
 const category = ref(null)
 
+const totals = ref({})
 const serviceName = (id) => services.value.find(s => s.id === id)?.name || '—'
+const totalOf = (id) => {
+  const v = totals.value[String(id)]
+  return v != null ? String(Number(v)) : '0'
+}
 
 const filtered = computed(() => {
   let list = nomenclature.value
@@ -159,7 +171,7 @@ const filtered = computed(() => {
   const q = search.value.trim().toLowerCase()
   if (q) list = list.filter(n =>
     (n.name || '').toLowerCase().includes(q) || (n.code || '').toLowerCase().includes(q))
-  return list.map(n => ({ ...n, price_num: Number(n.price || 0) }))
+  return list.map(n => ({ ...n, price_num: Number(n.price || 0), total_num: Number(totals.value[String(n.id)] || 0) }))
 })
 const { sorted, toggleSort, sortIcon } = useSort(filtered, 'name', 'asc')
 
@@ -169,9 +181,10 @@ const categories = computed(() => {
 })
 
 async function load() {
-  const [s, n] = await Promise.all([getServices(), getNomenclature()])
+  const [s, n, t] = await Promise.all([getServices(), getNomenclature(), getTotals()])
   services.value = s.data
   nomenclature.value = n.data
+  totals.value = t.data
 }
 onMounted(load)
 
@@ -182,12 +195,12 @@ const error = ref('')
 const form = reactive({})
 function openAdd() {
   editId.value = null; error.value = ''
-  Object.assign(form, { name: '', service_id: serviceId.value, category: '', is_serialized: false, unit_of_measure: '', price: null, code: '' })
+  Object.assign(form, { name: '', service_id: serviceId.value, category: '', is_official: true, is_serialized: false, unit_of_measure: '', price: null, code: '' })
   modalOpen.value = true
 }
 function openEdit(n) {
   editId.value = n.id; error.value = ''
-  Object.assign(form, { name: n.name, service_id: n.service_id, category: n.category || '', is_serialized: n.is_serialized, unit_of_measure: n.unit_of_measure || '', price: n.price, code: n.code || '' })
+  Object.assign(form, { name: n.name, service_id: n.service_id, category: n.category || '', is_official: n.is_official, is_serialized: n.is_serialized, unit_of_measure: n.unit_of_measure || '', price: n.price, code: n.code || '' })
   modalOpen.value = true
 }
 async function save() {
@@ -196,7 +209,8 @@ async function save() {
   try {
     const payload = {
       name: form.name, service_id: form.service_id, category: form.category || null,
-      is_serialized: !!form.is_serialized, unit_of_measure: form.unit_of_measure || null,
+      is_official: form.is_official !== false, is_serialized: !!form.is_serialized,
+      unit_of_measure: form.unit_of_measure || null,
       price: form.price ? Number(form.price) : null, code: form.code || null,
     }
     if (editId.value) await updateNomenclature(editId.value, payload)
@@ -247,7 +261,7 @@ th, td { padding:9px 14px; text-align:left; font-size:13px; border-bottom:1px so
 th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; }
 th.sortable { cursor:pointer; user-select:none; }
 .arr { color:var(--text-light); font-size:10px; opacity:0.5; }
-.col-cat { width:16%; } .col-svc { width:16%; } .col-type { width:110px; } .col-uom { width:60px; } .col-price { width:110px; text-align:right; } .col-code { width:120px; } .col-acts { width:70px; }
+.col-cat { width:14%; } .col-svc { width:14%; } .col-obl { width:90px; } .col-type { width:100px; } .col-uom { width:56px; } .col-total { width:90px; text-align:right; } .col-price { width:100px; text-align:right; } .col-acts { width:70px; }
 .td-name { font-weight:600; color:var(--text); }
 .td-dim { color:var(--text-light); } .td-center { text-align:center; } .td-num { text-align:right; font-family:'DM Mono',monospace; }
 .td-mono { font-family:'DM Mono',monospace; font-size:12px; } .td-acts { text-align:center; }
