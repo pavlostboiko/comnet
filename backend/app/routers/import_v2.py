@@ -245,16 +245,11 @@ def import_items_v2(
             if instance:
                 instance.current_warehouse_id = target_wh.id
 
-            # assignment to person (only for unit warehouses)
+            # Видача особам НЕ робиться при імпорті Items (рішення 2026-07-24):
+            # Items = каталог + розміщення; видача — окремим кроком після
+            # переміщень. Особа з «Де» фіксується, але без assignment.
             if person_name and unit:
-                person = get_person(person_name, unit)
-                db.add(Assignment(
-                    warehouse_id=target_wh.id, person_id=person.id, nomenclature_id=nom.id,
-                    instance_id=instance.id if instance else None,
-                    quantity=Decimal(1) if is_serial else qty, is_official=True,
-                    issued_date=issued_at or date_cls.today(), created_by=user.id,
-                ))
-                counts["assignments"] += 1
+                get_person(person_name, unit)  # завести особу в підрозділі
         except Exception as e:
             errors.append(f"«{name}»: {e}")
 

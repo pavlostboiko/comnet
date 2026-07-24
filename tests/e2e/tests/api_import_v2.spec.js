@@ -41,16 +41,17 @@ test('v2 import: nomenclature + custody + assignment (delta-safe)', async ({ req
     const body = await resp.json()
     expect(body.rows).toBe(3)
     expect(body.movements).toBe(3)
-    expect(body.assignments).toBeGreaterThanOrEqual(1)
+    // Items import no longer issues to people — видача is a later step.
+    expect(body.assignments).toBe(0)
 
-    // БушлатA contributed exactly +5 (custody unchanged by the assignment)
+    // БушлатA contributed exactly +5 to the unit warehouse (placement only)
     const after = await api.get(`/api/custody/balances?warehouse_id=${unitWh.id}`).then(r => r.json())
     expect(qtyOf(after, 'БушлатA') - bushBefore).toBe(5)
 
-    // Петренко holds БушлатA
-    const bushId = after.find(b => b.name === 'БушлатA').nomenclature_id
+    // No assignment created at the unit warehouse from the import
     const asg = await api.get(`/api/assignments?warehouse_id=${unitWh.id}&active=true`).then(r => r.json())
-    expect(asg.some(a => a.nomenclature_id === bushId)).toBe(true)
+    const bushId = after.find(b => b.name === 'БушлатA').nomenclature_id
+    expect(asg.some(a => a.nomenclature_id === bushId)).toBe(false)
 
     // АК-A serial at the unit warehouse; ПатрониA (empty «Де») at the ImpRaoA service warehouse
     const serial = await api.get(`/api/custody/serial?warehouse_id=${unitWh.id}`).then(r => r.json())
