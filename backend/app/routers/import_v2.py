@@ -99,17 +99,13 @@ def import_items_v2(
         raise HTTPException(400, "Не знайдено заголовок «Назва»/«Товар»")
     cmap = _col_map(ws, header_row)
 
-    # Caches / find-or-create — ВСІ сідяться з БД, щоб повторний імпорт не плодив дублі
+    # Items = КАТАЛОГ: лише номенклатура + серійні екземпляри. Розміщення на
+    # складах (баланси) робить окремий імпорт Переміщень (рішення 2026-07-24),
+    # щоб не подвоювати. Колонка «Де» тут ігнорується.
     services = {s.name.strip().lower(): s for s in db.query(Service).all()}
-    units = {u.name.strip().lower(): u for u in db.query(Unit).all()}
     noms = {(n.name.strip().lower(), n.service_id): n for n in db.query(Nomenclature).all()}
-    persons_cache = {
-        (p.last_name.strip().lower(), p.unit_id): p
-        for p in db.query(Person).all() if p.last_name and p.unit_id
-    }
 
-    counts = {"rows": 0, "nomenclature": 0, "movements": 0, "assignments": 0,
-              "services_created": 0, "units_created": 0, "persons_created": 0}
+    counts = {"rows": 0, "nomenclature": 0, "instances": 0, "services_created": 0}
     errors = []
 
     def get_service(name):
@@ -118,28 +114,10 @@ def import_items_v2(
         if not s:
             s = Service(name=name.strip())
             db.add(s); db.flush()
+            ensure_warehouse_for_service(db, s)  # склад служби знадобиться Переміщенням
             services[key] = s
             counts["services_created"] += 1
-        # Ensure a warehouse even for pre-existing (v1) services — idempotent.
-        ensure_warehouse_for_service(db, s)
         return s
-
-    def get_unit(name):
-        key = name.strip().lower()
-        u = units.get(key)
-        if not u:
-            u = Unit(name=name.strip())
-            db.add(u); db.flush()
-            units[key] = u
-            counts["units_created"] += 1
-        ensure_warehouse_for_unit(db, u)  # idempotent
-        return u
-
-    def wh_of_unit(u):
-        return db.query(Warehouse).filter(Warehouse.unit_id == u.id).first()
-
-    def wh_of_service(s):
-        return db.query(Warehouse).filter(Warehouse.service_id == s.id).first()
 
     def get_nomenclature(name, service, is_serial, uom, price, code):
         key = (name.strip().lower(), service.id)
@@ -151,38 +129,6 @@ def import_items_v2(
             noms[key] = n
             counts["nomenclature"] += 1
         return n
-
-    def parse_location(raw):
-        """Return (unit_or_None, person_name_or_None) from «<підрозділ> [людина]».
-        Порожнє або токен складу («СКЛАД») → (None, None) → склад служби."""
-        s = (raw or "").strip()
-        if not s or is_service_warehouse_location(s):
-            return None, None
-        low = s.lower()
-        # longest existing-unit prefix
-        best = None
-        for uname_key, u in units.items():
-            if low == uname_key or low.startswith(uname_key + " "):
-                if best is None or len(uname_key) > len(best[0]):
-                    best = (uname_key, u)
-        if best:
-            person = s[len(best[0]):].strip()
-            return best[1], (person or None)
-        # no known unit prefix → treat entire string as a unit, no person
-        return get_unit(s), None
-
-    def get_person(name, unit):
-        key = (name.strip().lower(), unit.id)
-        p = persons_cache.get(key)
-        if not p:
-            p = db.query(Person).filter(Person.last_name == name.strip(),
-                                        Person.unit_id == unit.id).first()
-        if not p:
-            p = Person(last_name=name.strip(), unit_id=unit.id, is_active=True)
-            db.add(p); db.flush()
-            counts["persons_created"] += 1
-        persons_cache[key] = p
-        return p
 
     def col(row, key):
         for c, k in cmap.items():
@@ -203,55 +149,170 @@ def import_items_v2(
             service = get_service(svc_name)
             serial = _normalize_serial(col(row, "serial"))
             is_serial = serial is not None
-            uom = _clean(col(row, "uom"))
-            price = _parse_decimal(col(row, "price"))
-            code = _clean(col(row, "code"))
-            qty = _parse_decimal(col(row, "qty")) or Decimal("1")
-            nom = get_nomenclature(name, service, is_serial, uom, price, code)
+            nom = get_nomenclature(
+                name, service, is_serial,
+                _clean(col(row, "uom")), _parse_decimal(col(row, "price")), _clean(col(row, "code")),
+            )
+            # серійний екземпляр — без розміщення (склад заповнить Переміщення)
+            if is_serial and not db.query(Instance).filter(Instance.serial_no == serial).first():
+                db.add(Instance(nomenclature_id=nom.id, serial_no=serial, is_official=True))
+                counts["instances"] += 1
+        except Exception as e:
+            errors.append(f"«{name}»: {e}")
 
-            unit, person_name = parse_location(col(row, "location"))
-            if unit:
-                target_wh = wh_of_unit(unit)
+    db.commit()
+    return {**counts, "errors": errors}
+
+
+# ── Переміщення (custody movements) — жорсткий layout v1 ─────────────────────
+
+MV_COLS = {
+    "entry_date": 0, "item_name": 1, "unit_of_measure": 3, "qty_in": 5,
+    "qty_out": 6, "from_unit": 7, "to_unit": 8, "doc_date": 12, "doc_number": 13,
+    "serial_number": 15, "price": 19, "service": 20,
+}
+
+
+@router.post("/import/movements", status_code=status.HTTP_200_OK)
+def import_movements_v2(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    """Файл Переміщень (той самий layout, що v1) → custody_movements.
+    from_unit/to_unit резолвляться у склади: «склад»/назва служби → склад служби,
+    інакше → склад підрозділу (find-or-create). Історичні дані НЕ валідуються
+    (вставляються як є); поточне розташування серійного = останній to-склад."""
+    try:
+        wb = load_workbook(BytesIO(file.file.read()), data_only=True)
+    except Exception as e:
+        raise HTTPException(400, f"Не вдалось прочитати XLSX: {e}")
+    ws = wb.active
+
+    services = {s.name.strip().lower(): s for s in db.query(Service).all()}
+    units = {u.name.strip().lower(): u for u in db.query(Unit).all()}
+    noms = {(n.name.strip().lower(), n.service_id): n for n in db.query(Nomenclature).all()}
+
+    counts = {"rows": 0, "movements": 0, "skipped": 0,
+              "services_created": 0, "units_created": 0, "instances_created": 0}
+    errors = []
+
+    def get_service(name):
+        key = name.strip().lower()
+        s = services.get(key)
+        if not s:
+            s = Service(name=name.strip()); db.add(s); db.flush()
+            ensure_warehouse_for_service(db, s)
+            services[key] = s; counts["services_created"] += 1
+        return s
+
+    def get_unit(name):
+        key = name.strip().lower()
+        u = units.get(key)
+        if not u:
+            u = Unit(name=name.strip()); db.add(u); db.flush()
+            ensure_warehouse_for_unit(db, u)
+            units[key] = u; counts["units_created"] += 1
+        return u
+
+    def wh_of_service(s):
+        return db.query(Warehouse).filter(Warehouse.service_id == s.id).first()
+
+    def wh_of_unit(u):
+        return db.query(Warehouse).filter(Warehouse.unit_id == u.id).first()
+
+    def resolve_wh(name, service):
+        s = (name or "").strip()
+        if not s:
+            return None  # зовні (надходження/списання)
+        if is_service_warehouse_location(s):        # «склад» → склад цієї служби
+            return wh_of_service(service)
+        if s.lower() in services:                   # назва служби → її склад
+            return wh_of_service(services[s.lower()])
+        return wh_of_unit(get_unit(s))              # інакше — склад підрозділу
+
+    def get_nomenclature(name, service, is_serial, uom, price):
+        key = (name.strip().lower(), service.id)
+        n = noms.get(key)
+        if not n:
+            n = Nomenclature(name=name.strip(), service_id=service.id,
+                             is_serialized=is_serial, unit_of_measure=uom, price=price)
+            db.add(n); db.flush(); noms[key] = n
+        return n
+
+    def mc(row, key):
+        idx = MV_COLS[key]
+        return row[idx].value if idx < len(row) else None
+
+    for i, row in enumerate(ws.iter_rows(min_row=3, values_only=False), start=3):
+        cells = row
+        name = _clean(mc(cells, "item_name"))
+        if not name:
+            continue
+        counts["rows"] += 1
+        try:
+            svc_name = _clean(mc(cells, "service"))
+            if not svc_name:
+                counts["skipped"] += 1
+                errors.append(f"рядок {i} «{name}»: порожня служба")
+                continue
+            service = get_service(svc_name)
+            serial = _normalize_serial(mc(cells, "serial_number"))
+            is_serial = serial is not None
+            uom = _clean(mc(cells, "unit_of_measure"))
+            price = _parse_decimal(mc(cells, "price"))
+            nom = get_nomenclature(name, service, is_serial, uom, price)
+
+            qin = _parse_decimal(mc(cells, "qty_in")) or Decimal(0)
+            qout = _parse_decimal(mc(cells, "qty_out")) or Decimal(0)
+            from_wh = resolve_wh(mc(cells, "from_unit"), service)
+            to_wh = resolve_wh(mc(cells, "to_unit"), service)
+
+            if from_wh and to_wh:
+                mtype = "transfer"
+            elif to_wh:
+                mtype = "receipt"
+            elif from_wh:
+                mtype = "writeoff"
             else:
-                target_wh = wh_of_service(service)
-            if not target_wh:
-                errors.append(f"«{name}»: не знайдено склад — пропущено")
+                counts["skipped"] += 1
+                errors.append(f"рядок {i} «{name}»: немає складів (from/to)")
                 continue
 
-            iso = _parse_date(col(row, "issued_at"))
-            issued_at = None
-            if iso:
-                try:
-                    issued_at = date_cls.fromisoformat(iso)
-                except ValueError:
-                    issued_at = None
-
-            # instance for serial
             instance = None
             if is_serial:
                 instance = db.query(Instance).filter(Instance.serial_no == serial).first()
                 if not instance:
                     instance = Instance(nomenclature_id=nom.id, serial_no=serial, is_official=True)
                     db.add(instance); db.flush()
+                    counts["instances_created"] += 1
+                qty = Decimal(1)
+            else:
+                qty = qin if qin > 0 else qout
+                if qty <= 0:
+                    counts["skipped"] += 1
+                    errors.append(f"рядок {i} «{name}»: нульова кількість")
+                    continue
 
-            # receipt movement into target warehouse
-            mv = CustodyMovement(
-                date=date_cls.today(), type="receipt", nomenclature_id=nom.id,
-                to_warehouse_id=target_wh.id, instance_id=instance.id if instance else None,
-                quantity=Decimal(1) if is_serial else qty, is_official=True, created_by=user.id,
-            )
-            db.add(mv)
+            iso = _parse_date(mc(cells, "entry_date")) or _parse_date(mc(cells, "doc_date"))
+            try:
+                mdate = date_cls.fromisoformat(iso) if iso else date_cls.today()
+            except ValueError:
+                mdate = date_cls.today()
+
+            db.add(CustodyMovement(
+                date=mdate, type=mtype, nomenclature_id=nom.id,
+                from_warehouse_id=from_wh.id if from_wh else None,
+                to_warehouse_id=to_wh.id if to_wh else None,
+                instance_id=instance.id if instance else None,
+                quantity=qty, is_official=True, created_by=user.id,
+            ))
             counts["movements"] += 1
             if instance:
-                instance.current_warehouse_id = target_wh.id
-
-            # Видача особам НЕ робиться при імпорті Items (рішення 2026-07-24):
-            # Items = каталог + розміщення; видача — окремим кроком після
-            # переміщень. Особа з «Де» фіксується, але без assignment.
-            if person_name and unit:
-                get_person(person_name, unit)  # завести особу в підрозділі
+                instance.current_warehouse_id = to_wh.id if to_wh else None
         except Exception as e:
-            errors.append(f"«{name}»: {e}")
+            counts["skipped"] += 1
+            errors.append(f"рядок {i} «{name}»: {e}")
 
     db.commit()
-    return {**counts, "errors": errors}
+    return {**counts, "errors": errors[:100]}
