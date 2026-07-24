@@ -119,15 +119,19 @@
         <!-- ═══ Особи ═══ -->
         <div v-if="tab === 'persons'" class="table-wrap">
           <table>
-            <thead><tr><th>ПІБ / позивний</th><th>Підрозділ</th><th>Група</th><th class="col-code">Звання</th><th class="col-acts"></th></tr></thead>
+            <thead><tr><th>ПІБ / позивний</th><th class="col-code">ІПН</th><th>Підрозділ</th><th>Група</th><th class="col-code">Звання</th><th class="col-acts2"></th></tr></thead>
             <tbody>
-              <tr v-if="!persons.length"><td colspan="5" class="empty">Немає осіб</td></tr>
+              <tr v-if="!persons.length"><td colspan="6" class="empty">Немає осіб</td></tr>
               <tr v-for="p in persons" :key="p.id">
                 <td class="td-name">{{ personLabel(p) }}</td>
+                <td class="td-mono td-dim">{{ p.ipn || '—' }}</td>
                 <td class="td-dim">{{ p.unit_id ? unitName(p.unit_id) : '—' }}</td>
                 <td class="td-dim">{{ p.group_id ? groupName(p.group_id) : '—' }}</td>
                 <td>{{ p.rank || '—' }}</td>
-                <td class="td-acts"><button class="act-del" @click="del('person', p)">✕</button></td>
+                <td class="td-acts2">
+                  <button class="act-e" @click="openEditPerson(p)" title="Редагувати">✎</button>
+                  <button class="act-del" @click="del('person', p)">✕</button>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -139,7 +143,7 @@
     <div class="overlay" :class="{ open: addOpen }" @click.self="addOpen = false">
       <div v-if="addOpen" class="modal">
         <div class="modal-head">
-          <span class="modal-title">Додати: {{ currentTab.label }}</span>
+          <span class="modal-title">{{ editPersonId ? 'Редагувати особу' : 'Додати: ' + currentTab.label }}</span>
           <button class="modal-close" @click="addOpen = false">✕</button>
         </div>
         <div class="modal-body">
@@ -193,6 +197,8 @@
           <template v-else-if="tab === 'persons'">
             <label class="fl">Прізвище</label><input class="fi" v-model="form.last_name" />
             <label class="fl">Ім'я</label><input class="fi" v-model="form.first_name" />
+            <label class="fl">По батькові</label><input class="fi" v-model="form.patronymic" />
+            <label class="fl">ІПН</label><input class="fi" v-model="form.ipn" />
             <label class="fl">Позивний</label><input class="fi" v-model="form.callsign" />
             <label class="fl">Звання</label><input class="fi" v-model="form.rank" />
             <label class="fl">Підрозділ</label>
@@ -220,7 +226,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
-import { getServices, createService, deleteService, getPersons, createPerson, deletePerson } from '../../api/settings.js'
+import { getServices, createService, deleteService, getPersons, createPerson, updatePerson, deletePerson } from '../../api/settings.js'
 import {
   getUnits, createUnit, deleteUnit, getWarehouses,
   getGroups, createGroup, deleteGroup,
@@ -283,13 +289,26 @@ const addOpen = ref(false)
 const saving = ref(false)
 const error = ref('')
 const form = reactive({})
+const editPersonId = ref(null)
 function openAdd() {
   error.value = ''
+  editPersonId.value = null
   Object.keys(form).forEach(k => delete form[k])
   if (tab.value === 'nomenclature') { form.service_id = null; form.is_serialized = false }
   else if (tab.value === 'mvo') { form.warehouse_id = null; form.person_id = null; form.from_date = new Date().toISOString().slice(0, 10) }
   else if (tab.value === 'groups') { form.unit_id = null; form.commander_id = null }
   else if (tab.value === 'persons') { form.unit_id = null; form.group_id = null }
+  addOpen.value = true
+}
+function openEditPerson(p) {
+  error.value = ''
+  editPersonId.value = p.id
+  Object.keys(form).forEach(k => delete form[k])
+  Object.assign(form, {
+    last_name: p.last_name, first_name: p.first_name, patronymic: p.patronymic,
+    ipn: p.ipn, callsign: p.callsign, rank: p.rank,
+    unit_id: p.unit_id || null, group_id: p.group_id || null,
+  })
   addOpen.value = true
 }
 
@@ -315,11 +334,14 @@ async function save() {
       await createGroup({ name: form.name, unit_id: form.unit_id, commander_id: form.commander_id || null })
     }
     else if (tab.value === 'persons') {
-      await createPerson({
+      const body = {
         last_name: form.last_name || null, first_name: form.first_name || null,
+        patronymic: form.patronymic || null, ipn: form.ipn || null,
         callsign: form.callsign || null, rank: form.rank || null,
         unit_id: form.unit_id || null, group_id: form.group_id || null,
-      })
+      }
+      if (editPersonId.value) await updatePerson(editPersonId.value, body)
+      else await createPerson(body)
     }
     addOpen.value = false
     await loadAll()
@@ -386,6 +408,10 @@ th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:1
 .act-del { background:transparent; border:none; color:var(--text-light); cursor:pointer; font-size:14px; }
 .act-del:hover { color:#dc2626; }
 .act-rot { background:transparent; border:none; color:var(--accent); cursor:pointer; font-size:15px; }
+.col-acts2 { width:80px; }
+.td-acts2 { text-align:center; white-space:nowrap; }
+.act-e { background:transparent; border:none; color:var(--text-light); cursor:pointer; font-size:13px; padding:2px 5px; }
+.act-e:hover { color:var(--accent); }
 .chip { display:inline-block; padding:2px 8px; border-radius:3px; font-size:11px; font-weight:600; }
 .chip-ser { background:#dbeafe; color:#1e40af; } .chip-non { background:#f1f5f9; color:#475569; }
 .chip-svc { background:#fef3c7; color:#854d0e; } .chip-unit { background:#dcfce7; color:#166534; }

@@ -19,7 +19,8 @@
           <table>
             <thead><tr>
               <th class="col-date">Дата</th><th class="col-type">Тип</th>
-              <th>Звідки → Куди</th><th>Номенклатура</th><th class="col-serial">Серійний</th><th class="col-num">К-сть</th>
+              <th>Звідки → Куди</th><th>Номенклатура</th><th class="col-serial">Картка</th>
+              <th class="col-doc">Накладна</th><th class="col-num">К-сть</th>
             </tr></thead>
             <tbody>
               <tr v-if="loading"><td colspan="6" class="empty">Завантаження…</td></tr>
@@ -29,7 +30,8 @@
                 <td><span class="chip" :class="`mv-${m.type}`">{{ moveLabel(m.type) }}</span></td>
                 <td class="td-dim">{{ warehouseName(m.from_warehouse_id) }} → {{ warehouseName(m.to_warehouse_id) }}</td>
                 <td>{{ nomName(m.nomenclature_id) }}</td>
-                <td class="td-mono td-dim">{{ m.instance_id ? '№' + m.instance_id : '—' }}</td>
+                <td class="td-mono td-dim">{{ m.card_number || '—' }}</td>
+                <td class="td-mono td-dim">{{ m.doc_number || '—' }}</td>
                 <td class="td-num">{{ fmtQty(m.quantity) }}</td>
               </tr>
             </tbody>
@@ -90,7 +92,7 @@ onMounted(async () => {
 table { width:100%; border-collapse:collapse; table-layout:fixed; }
 th, td { padding:9px 14px; text-align:left; font-size:13px; border-bottom:1px solid var(--border-light); }
 th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; }
-.col-date { width:110px; } .col-type { width:130px; } .col-serial { width:120px; } .col-num { width:100px; text-align:right; }
+.col-date { width:110px; } .col-type { width:130px; } .col-serial { width:120px; } .col-doc { width:120px; } .col-num { width:90px; text-align:right; }
 .td-mono { font-family:'DM Mono',monospace; font-size:12px; }
 .td-dim { color:var(--text-light); }
 .td-num { text-align:right; font-family:'DM Mono',monospace; }

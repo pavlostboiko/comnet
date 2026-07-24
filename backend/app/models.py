@@ -99,6 +99,7 @@ class Instance(Base):
     id = Column(Integer, primary_key=True)
     nomenclature_id = Column(Integer, ForeignKey("nomenclature.id", ondelete="CASCADE"), nullable=False)
     serial_no = Column(String, nullable=False, unique=True)
+    card_number = Column(String, nullable=True)       # Items «№» — join з Переміщеннями
     current_warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True)
     is_official = Column(Boolean, nullable=False, default=True)  # державне / волонтерське
 
@@ -122,6 +123,8 @@ class CustodyMovement(Base):
     instance_id = Column(Integer, ForeignKey("instances.id", ondelete="SET NULL"), nullable=True)
     quantity = Column(Numeric(15, 4), nullable=False)
     is_official = Column(Boolean, nullable=False, default=True)
+    card_number = Column(String, nullable=True)        # Переміщення «Поле 12»
+    doc_number = Column(String, nullable=True)         # номер накладної
     document_id = Column(Integer, nullable=True)       # v2-документи підв'яжуться у Фазі 5
     signed_by_person_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
@@ -233,6 +236,7 @@ class Person(Base):
     unit_id = Column(Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True)
     callsign = Column(String, nullable=True)          # влиті recipients (позивні)
     group_id = Column(Integer, ForeignKey("groups.id", ondelete="SET NULL"), nullable=True)
+    ipn = Column(String, nullable=True)               # ІПН — заповнюється вручну
 
     unit_ref = relationship("Unit", foreign_keys=[unit_id])
     group = relationship("Group", foreign_keys=[group_id])
