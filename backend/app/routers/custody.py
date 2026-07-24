@@ -19,7 +19,9 @@ from app.acl import (
 )
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import CustodyMovement, Instance, Nomenclature, User, Warehouse
+from app.models import (
+    Assignment, CustodyMovement, Instance, Nomenclature, Person, User, Warehouse,
+)
 from app.schemas import CustodyMovementCreate
 
 router = APIRouter(prefix="/api/custody", tags=["custody"])
@@ -175,6 +177,76 @@ def balances(warehouse_id: int, db: Session = Depends(get_db), user: User = Depe
             })
     out.sort(key=lambda x: (x["name"] or "", not x["is_official"]))
     return out
+
+
+@router.get("/where")
+def where_is(nomenclature_id: int, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    """Де знаходиться конкретна номенклатура: розподіл по складах.
+    Несерійне — кількість по (склад, держ/волонт); серійне — кожен екземпляр
+    з поточним складом і на кому видано."""
+    nom = db.get(Nomenclature, nomenclature_id)
+    if not nom:
+        raise HTTPException(404, "Номенклатуру не знайдено")
+
+    def wh_name(wid):
+        w = db.get(Warehouse, wid) if wid else None
+        return w.name if w else None
+
+    result = {"nomenclature_id": nom.id, "name": nom.name, "is_serialized": nom.is_serialized,
+              "nonserial": [], "serial": []}
+
+    if nom.is_serialized:
+        insts = db.query(Instance).filter(
+            Instance.nomenclature_id == nom.id, Instance.current_warehouse_id.isnot(None)
+        ).all()
+        # holders: active assignments by instance
+        holders = {
+            a.instance_id: a.person_id
+            for a in db.query(Assignment).filter(
+                Assignment.instance_id.in_([i.id for i in insts]) if insts else False,
+                Assignment.returned_date.is_(None),
+            ).all()
+        } if insts else {}
+        for it in insts:
+            pid = holders.get(it.id)
+            person = db.get(Person, pid) if pid else None
+            holder = None
+            if person:
+                holder = " ".join(x for x in [person.last_name, person.first_name] if x) or person.callsign
+            result["serial"].append({
+                "instance_id": it.id, "serial_no": it.serial_no, "card_number": it.card_number,
+                "warehouse_id": it.current_warehouse_id, "warehouse_name": wh_name(it.current_warehouse_id),
+                "is_official": it.is_official, "holder": holder,
+            })
+        result["serial"].sort(key=lambda x: (x["warehouse_name"] or "", x["serial_no"] or ""))
+    else:
+        rows_in = (
+            db.query(CustodyMovement.to_warehouse_id, CustodyMovement.is_official,
+                     func.coalesce(func.sum(CustodyMovement.quantity), 0))
+            .filter(CustodyMovement.nomenclature_id == nom.id, CustodyMovement.instance_id.is_(None),
+                    CustodyMovement.to_warehouse_id.isnot(None))
+            .group_by(CustodyMovement.to_warehouse_id, CustodyMovement.is_official).all()
+        )
+        rows_out = (
+            db.query(CustodyMovement.from_warehouse_id, CustodyMovement.is_official,
+                     func.coalesce(func.sum(CustodyMovement.quantity), 0))
+            .filter(CustodyMovement.nomenclature_id == nom.id, CustodyMovement.instance_id.is_(None),
+                    CustodyMovement.from_warehouse_id.isnot(None))
+            .group_by(CustodyMovement.from_warehouse_id, CustodyMovement.is_official).all()
+        )
+        net: dict = {}
+        for wid, off, qty in rows_in:
+            net[(wid, off)] = net.get((wid, off), Decimal(0)) + Decimal(qty or 0)
+        for wid, off, qty in rows_out:
+            net[(wid, off)] = net.get((wid, off), Decimal(0)) - Decimal(qty or 0)
+        for (wid, off), qty in net.items():
+            if qty > 0:
+                result["nonserial"].append({
+                    "warehouse_id": wid, "warehouse_name": wh_name(wid),
+                    "is_official": off, "qty": str(qty),
+                })
+        result["nonserial"].sort(key=lambda x: (x["warehouse_name"] or "", not x["is_official"]))
+    return result
 
 
 @router.get("/serial")
