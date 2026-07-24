@@ -2,11 +2,11 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
 
 // Routes an operator (non-admin) can access. Everything else redirects
-// to /residues (their default landing).
-const OPERATOR_ALLOWED = new Set(['/residues', '/items', '/movements', '/login'])
+// to /stock (their default landing).
+const OPERATOR_ALLOWED = new Set(['/stock', '/login'])
 
 const routes = [
-  { path: '/', redirect: '/items' },
+  { path: '/', redirect: '/stock' },
   {
     path: '/login',
     component: () => import('../pages/auth/LoginPage.vue'),
@@ -51,6 +51,11 @@ const routes = [
     component: () => import('../pages/structure/StructurePage.vue'),
     meta: { requiresAuth: true, adminOnly: true, label: 'Довідники' },
   },
+  {
+    path: '/stock',
+    component: () => import('../pages/stock/StockPage.vue'),
+    meta: { requiresAuth: true, label: 'Залишки' },
+  },
 ]
 
 const router = createRouter({
@@ -77,11 +82,11 @@ router.beforeEach(async (to) => {
 
   // Non-admin scoping: block admin-only pages, land on /residues instead.
   if (role !== 'admin' && to.meta.adminOnly) {
-    return { path: '/residues' }
+    return { path: '/stock' }
   }
   // Non-admin visiting '/' — redirect straight to their landing.
   if (role !== 'admin' && to.path === '/') {
-    return { path: '/residues' }
+    return { path: '/stock' }
   }
 })
 
