@@ -49,7 +49,7 @@ const routes = [
   {
     path: '/structure',
     component: () => import('../pages/structure/StructurePage.vue'),
-    meta: { requiresAuth: true, adminOnly: true, label: 'Довідники v2' },
+    meta: { requiresAuth: true, adminOnly: true, label: 'Довідники' },
   },
 ]
 

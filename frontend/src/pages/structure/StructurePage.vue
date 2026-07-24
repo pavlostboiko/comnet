@@ -4,7 +4,7 @@
     <div class="content-scroll">
       <div class="tile">
         <div class="tile-header">
-          <span class="tile-title">Довідники v2</span>
+          <span class="tile-title">Довідники</span>
           <div class="tile-tabs">
             <button v-for="t in tabs" :key="t.key" class="tt-btn"
               :class="{ on: tab === t.key }" @click="tab = t.key">{{ t.label }}</button>
@@ -80,6 +80,41 @@
             </tbody>
           </table>
         </div>
+
+        <!-- ═══ МВО ═══ -->
+        <div v-if="tab === 'mvo'" class="table-wrap">
+          <table>
+            <thead><tr><th>Особа</th><th>Склад підрозділу</th><th class="col-date">З</th><th class="col-date">По</th><th class="col-acts"></th></tr></thead>
+            <tbody>
+              <tr v-if="!mvo.length"><td colspan="5" class="empty">Немає призначень</td></tr>
+              <tr v-for="m in mvo" :key="m.id" :class="{ 'row-dim': m.to_date }">
+                <td class="td-name">{{ personName(m.person_id) }}</td>
+                <td class="td-dim">{{ warehouseName(m.warehouse_id) }}</td>
+                <td class="td-mono">{{ m.from_date }}</td>
+                <td class="td-mono">{{ m.to_date || '—' }}</td>
+                <td class="td-acts">
+                  <button v-if="!m.to_date" class="act-rot" @click="rotate(m)" title="Завершити (ротація)">↩</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ═══ Групи ═══ -->
+        <div v-if="tab === 'groups'" class="table-wrap">
+          <table>
+            <thead><tr><th>Назва</th><th>Підрозділ</th><th>Командир</th><th class="col-acts"></th></tr></thead>
+            <tbody>
+              <tr v-if="!groups.length"><td colspan="4" class="empty">Немає груп</td></tr>
+              <tr v-for="g in groups" :key="g.id">
+                <td class="td-name">{{ g.name }}</td>
+                <td class="td-dim">{{ unitName(g.unit_id) }}</td>
+                <td class="td-dim">{{ g.commander_id ? personName(g.commander_id) : '—' }}</td>
+                <td class="td-acts"><button class="act-del" @click="del('group', g)">✕</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -112,6 +147,32 @@
             <label class="fl">Одиниця виміру</label><input class="fi" v-model="form.unit_of_measure" placeholder="шт" />
             <label class="fl">Вартість</label><input class="fi" type="number" v-model="form.price" />
           </template>
+          <template v-else-if="tab === 'mvo'">
+            <label class="fl">Склад підрозділу *</label>
+            <select class="fi" v-model="form.warehouse_id">
+              <option :value="null" disabled>— оберіть —</option>
+              <option v-for="w in unitWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
+            </select>
+            <label class="fl">Особа *</label>
+            <select class="fi" v-model="form.person_id">
+              <option :value="null" disabled>— оберіть —</option>
+              <option v-for="p in persons" :key="p.id" :value="p.id">{{ personLabel(p) }}</option>
+            </select>
+            <label class="fl">Діє з *</label><input class="fi" type="date" v-model="form.from_date" />
+          </template>
+          <template v-else-if="tab === 'groups'">
+            <label class="fl">Назва *</label><input class="fi" v-model="form.name" />
+            <label class="fl">Підрозділ *</label>
+            <select class="fi" v-model="form.unit_id">
+              <option :value="null" disabled>— оберіть —</option>
+              <option v-for="u in units" :key="u.id" :value="u.id">{{ u.name }}</option>
+            </select>
+            <label class="fl">Командир</label>
+            <select class="fi" v-model="form.commander_id">
+              <option :value="null">— не вказано —</option>
+              <option v-for="p in persons" :key="p.id" :value="p.id">{{ personLabel(p) }}</option>
+            </select>
+          </template>
           <div v-if="error" class="err">{{ error }}</div>
         </div>
         <div class="modal-foot">
@@ -126,9 +187,11 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
-import { getServices, createService, deleteService } from '../../api/settings.js'
+import { getServices, createService, deleteService, getPersons } from '../../api/settings.js'
 import {
   getUnits, createUnit, deleteUnit, getWarehouses,
+  getGroups, createGroup, deleteGroup,
+  getMvo, createMvo, updateMvo,
 } from '../../api/structure.js'
 import {
   getNomenclature, createNomenclature, deleteNomenclature,
@@ -139,6 +202,8 @@ const tabs = [
   { key: 'units', label: 'Підрозділи' },
   { key: 'nomenclature', label: 'Номенклатура' },
   { key: 'warehouses', label: 'Склади' },
+  { key: 'mvo', label: 'МВО' },
+  { key: 'groups', label: 'Групи' },
 ]
 const tab = ref('services')
 const currentTab = computed(() => tabs.find(t => t.key === tab.value))
@@ -147,18 +212,35 @@ const services = ref([])
 const units = ref([])
 const nomenclature = ref([])
 const warehouses = ref([])
+const mvo = ref([])
+const groups = ref([])
+const persons = ref([])
 
+const unitWarehouses = computed(() => warehouses.value.filter(w => w.type === 'unit'))
 const serviceName = (id) => services.value.find(s => s.id === id)?.name || '—'
 const unitName = (id) => units.value.find(u => u.id === id)?.name || '—'
+const warehouseName = (id) => warehouses.value.find(w => w.id === id)?.name || '—'
+function personLabel(p) {
+  const full = [p.last_name, p.first_name].filter(Boolean).join(' ')
+  return full || p.callsign || `#${p.id}`
+}
+const personName = (id) => {
+  const p = persons.value.find(x => x.id === id)
+  return p ? personLabel(p) : '—'
+}
 
 async function loadAll() {
-  const [s, u, n, w] = await Promise.all([
+  const [s, u, n, w, m, g, p] = await Promise.all([
     getServices(), getUnits(), getNomenclature(), getWarehouses(),
+    getMvo(), getGroups(), getPersons(),
   ])
   services.value = s.data
   units.value = u.data
   nomenclature.value = n.data
   warehouses.value = w.data
+  mvo.value = m.data
+  groups.value = g.data
+  persons.value = p.data
 }
 onMounted(loadAll)
 
@@ -171,6 +253,8 @@ function openAdd() {
   error.value = ''
   Object.keys(form).forEach(k => delete form[k])
   if (tab.value === 'nomenclature') { form.service_id = null; form.is_serialized = false }
+  else if (tab.value === 'mvo') { form.warehouse_id = null; form.person_id = null; form.from_date = new Date().toISOString().slice(0, 10) }
+  else if (tab.value === 'groups') { form.unit_id = null; form.commander_id = null }
   addOpen.value = true
 }
 
@@ -187,6 +271,14 @@ async function save() {
         unit_of_measure: form.unit_of_measure || null, price: form.price ? Number(form.price) : null,
       })
     }
+    else if (tab.value === 'mvo') {
+      if (!form.warehouse_id || !form.person_id) { error.value = 'Оберіть склад і особу'; saving.value = false; return }
+      await createMvo({ warehouse_id: form.warehouse_id, person_id: form.person_id, from_date: form.from_date })
+    }
+    else if (tab.value === 'groups') {
+      if (!form.unit_id) { error.value = 'Оберіть підрозділ'; saving.value = false; return }
+      await createGroup({ name: form.name, unit_id: form.unit_id, commander_id: form.commander_id || null })
+    }
     addOpen.value = false
     await loadAll()
   } catch (e) {
@@ -202,9 +294,22 @@ async function del(kind, row) {
     if (kind === 'service') await deleteService(row.id)
     else if (kind === 'unit') await deleteUnit(row.id)
     else if (kind === 'nomenclature') await deleteNomenclature(row.id)
+    else if (kind === 'group') await deleteGroup(row.id)
     await loadAll()
   } catch (e) {
     alert(e?.response?.data?.detail || 'Не вдалось видалити')
+  }
+}
+
+async function rotate(m) {
+  const today = new Date().toISOString().slice(0, 10)
+  const to = prompt('Дата завершення призначення (YYYY-MM-DD):', today)
+  if (!to) return
+  try {
+    await updateMvo(m.id, { to_date: to })
+    await loadAll()
+  } catch (e) {
+    alert(e?.response?.data?.detail || 'Не вдалось завершити')
   }
 }
 </script>
@@ -225,15 +330,18 @@ async function del(kind, row) {
 table { width:100%; border-collapse:collapse; table-layout:fixed; }
 th, td { padding:9px 14px; text-align:left; font-size:13px; border-bottom:1px solid var(--border-light); }
 th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; }
-.col-code { width:100px; } .col-ser { width:120px; } .col-uom { width:70px; } .col-price { width:120px; text-align:right; } .col-acts { width:50px; }
+.col-code { width:100px; } .col-ser { width:120px; } .col-uom { width:70px; } .col-price { width:120px; text-align:right; } .col-acts { width:50px; } .col-date { width:120px; }
 .td-name { font-weight:600; color:var(--text); }
 .td-dim { color:var(--text-light); }
 .td-center { text-align:center; }
 .td-num { text-align:right; font-family:'DM Mono',monospace; }
+.td-mono { font-family:'DM Mono',monospace; font-size:12px; }
 .td-acts { text-align:center; }
+.row-dim td { opacity:0.55; }
 .empty { text-align:center; padding:32px; color:var(--text-light); font-style:italic; }
 .act-del { background:transparent; border:none; color:var(--text-light); cursor:pointer; font-size:14px; }
 .act-del:hover { color:#dc2626; }
+.act-rot { background:transparent; border:none; color:var(--accent); cursor:pointer; font-size:15px; }
 .chip { display:inline-block; padding:2px 8px; border-radius:3px; font-size:11px; font-weight:600; }
 .chip-ser { background:#dbeafe; color:#1e40af; } .chip-non { background:#f1f5f9; color:#475569; }
 .chip-svc { background:#fef3c7; color:#854d0e; } .chip-unit { background:#dcfce7; color:#166534; }
