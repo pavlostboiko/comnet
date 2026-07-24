@@ -107,6 +107,7 @@ class NomenclatureRead(BaseModel):
     name: str
     service_id: int
     category: Optional[str] = None
+    is_official: bool = True
     is_serialized: bool
     unit_of_measure: Optional[str] = None
     code: Optional[str] = None
@@ -118,6 +119,7 @@ class NomenclatureCreate(BaseModel):
     name: str
     service_id: int
     category: Optional[str] = None
+    is_official: bool = True
     is_serialized: bool = False
     unit_of_measure: Optional[str] = None
     code: Optional[str] = None
@@ -128,6 +130,7 @@ class NomenclatureUpdate(BaseModel):
     name: Optional[str] = None
     service_id: Optional[int] = None
     category: Optional[str] = None
+    is_official: Optional[bool] = None
     is_serialized: Optional[bool] = None
     unit_of_measure: Optional[str] = None
     code: Optional[str] = None

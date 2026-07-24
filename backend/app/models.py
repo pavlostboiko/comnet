@@ -82,6 +82,7 @@ class Nomenclature(Base):
     name = Column(String, nullable=False)
     service_id = Column(Integer, ForeignKey("services.id", ondelete="RESTRICT"), nullable=False)
     category = Column(String, nullable=True)          # група майна всередині служби
+    is_official = Column(Boolean, nullable=False, default=True)  # облік / ндм
     is_serialized = Column(Boolean, nullable=False, default=False)
     unit_of_measure = Column(String, nullable=True)   # шт, компл, пара, кг, м, л
     code = Column(String, nullable=True)              # номенклатурний номер / артикул

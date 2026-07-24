@@ -33,7 +33,7 @@
                 <tr v-for="r in stockRows" :key="r.key">
                   <td class="td-name">{{ r.name }}</td>
                   <td class="td-mono td-dim">{{ r.serial_no || '—' }}</td>
-                  <td><span class="chip" :class="r.is_official ? 'chip-gov' : 'chip-vol'">{{ r.is_official ? 'державне' : 'волонтерське' }}</span></td>
+                  <td><span class="chip" :class="r.is_official ? 'chip-gov' : 'chip-vol'">{{ r.is_official ? 'облік' : 'ндм' }}</span></td>
                   <td class="td-num">{{ fmtQty(r.qty) }}</td>
                   <td class="td-center">{{ r.unit_of_measure || '—' }}</td>
                   <td class="td-num">{{ r.price != null ? Number(r.price).toFixed(2) : '—' }}</td>
@@ -133,7 +133,6 @@
             <template v-if="mv.type === 'receipt'">
               <label class="fl">Серійний номер</label>
               <input class="fi" v-model="mv.serial_no" placeholder="напр. SN-12345" />
-              <label class="fl"><input type="checkbox" v-model="mv.is_official" /> Державне (інакше — волонтерське)</label>
             </template>
             <template v-else>
               <label class="fl">Екземпляр (на цьому складі)</label>
@@ -146,7 +145,6 @@
           <template v-else-if="selectedNom">
             <label class="fl">Кількість</label>
             <input class="fi" type="number" min="0.0001" step="0.0001" v-model="mv.quantity" />
-            <label class="fl"><input type="checkbox" v-model="mv.is_official" /> Державне (інакше — волонтерське)</label>
           </template>
 
           <label class="fl">Дата</label>

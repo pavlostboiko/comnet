@@ -110,7 +110,7 @@ def create_movement(payload: CustodyMovementCreate, db: Session = Depends(get_db
         quantity = Decimal(payload.quantity or 0)
         if quantity <= 0:
             raise HTTPException(400, "Кількість має бути > 0")
-        is_official = payload.is_official
+        is_official = nom.is_official  # тип обліку — з картки
         # Sufficiency check для transfer/writeoff
         if frm is not None:
             bal = balance_of(db, frm, nom.id, is_official)
@@ -177,6 +177,34 @@ def balances(warehouse_id: int, db: Session = Depends(get_db), user: User = Depe
             })
     out.sort(key=lambda x: (x["name"] or "", not x["is_official"]))
     return out
+
+
+@router.get("/totals")
+def totals(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    """Сумарна кількість кожної номенклатури в системі (для списку «Майно»).
+    Несерійне: SUM(надходження) − SUM(списання) (переміщення взаємно 0).
+    Серійне: кількість розміщених екземплярів."""
+    out: dict = {}
+    # non-serial receipts (from null, to set)
+    for nid, qty in (db.query(CustodyMovement.nomenclature_id, func.coalesce(func.sum(CustodyMovement.quantity), 0))
+                     .filter(CustodyMovement.instance_id.is_(None),
+                             CustodyMovement.from_warehouse_id.is_(None),
+                             CustodyMovement.to_warehouse_id.isnot(None))
+                     .group_by(CustodyMovement.nomenclature_id).all()):
+        out[nid] = out.get(nid, Decimal(0)) + Decimal(qty or 0)
+    # non-serial writeoffs (from set, to null)
+    for nid, qty in (db.query(CustodyMovement.nomenclature_id, func.coalesce(func.sum(CustodyMovement.quantity), 0))
+                     .filter(CustodyMovement.instance_id.is_(None),
+                             CustodyMovement.from_warehouse_id.isnot(None),
+                             CustodyMovement.to_warehouse_id.is_(None))
+                     .group_by(CustodyMovement.nomenclature_id).all()):
+        out[nid] = out.get(nid, Decimal(0)) - Decimal(qty or 0)
+    # serial: placed instances
+    for nid, cnt in (db.query(Instance.nomenclature_id, func.count(Instance.id))
+                     .filter(Instance.current_warehouse_id.isnot(None))
+                     .group_by(Instance.nomenclature_id).all()):
+        out[nid] = out.get(nid, Decimal(0)) + Decimal(cnt or 0)
+    return {str(nid): str(v) for nid, v in out.items() if v != 0}
 
 
 @router.get("/where")
