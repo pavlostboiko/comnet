@@ -29,6 +29,13 @@ from app.routers.structure import ensure_warehouse_for_service, ensure_warehouse
 
 router = APIRouter(prefix="/api/admin/v2", tags=["admin-v2"])
 
+# Значення «Де», що означають «склад служби» (не підрозділ, не видано особі).
+WAREHOUSE_TOKENS = {"склад", "на складі", "склад служби"}
+
+
+def is_service_warehouse_location(raw) -> bool:
+    return (str(raw).strip().lower() if raw is not None else "") in WAREHOUSE_TOKENS
+
 # header → logical key
 COLS = {
     "Назва": "name", "Товар": "name",
@@ -146,9 +153,10 @@ def import_items_v2(
         return n
 
     def parse_location(raw):
-        """Return (unit_or_None, person_name_or_None) from «<підрозділ> [людина]»."""
+        """Return (unit_or_None, person_name_or_None) from «<підрозділ> [людина]».
+        Порожнє або токен складу («СКЛАД») → (None, None) → склад служби."""
         s = (raw or "").strip()
-        if not s:
+        if not s or is_service_warehouse_location(s):
             return None, None
         low = s.lower()
         # longest existing-unit prefix
