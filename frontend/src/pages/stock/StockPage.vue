@@ -203,6 +203,9 @@ import { getNomenclature, createInstance } from '../../api/nomenclature.js'
 import { getBalances, getSerialAt, getMovements, createMovement } from '../../api/custody.js'
 import { getPersons } from '../../api/settings.js'
 import { getAssignments, createAssignment, returnAssignment } from '../../api/assignments.js'
+import { useAuthStore } from '../../stores/auth.js'
+
+const auth = useAuthStore()
 
 const warehouses = ref([])
 const nomenclature = ref([])
@@ -254,6 +257,11 @@ async function loadRefs() {
   warehouses.value = w.data
   nomenclature.value = n.data
   persons.value = p.data
+  // МВО: одразу відкриваємо свій склад
+  if (auth.user?.role === 'mvo' && auth.user?.warehouse_id) {
+    warehouseId.value = auth.user.warehouse_id
+    await loadStock()
+  }
 }
 async function loadStock() {
   if (!warehouseId.value) return
