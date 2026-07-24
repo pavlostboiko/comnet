@@ -61,6 +61,11 @@ const routes = [
     component: () => import('../pages/users/UsersPage.vue'),
     meta: { requiresAuth: true, adminOnly: true, label: 'Користувачі' },
   },
+  {
+    path: '/import',
+    component: () => import('../pages/import/ImportPage.vue'),
+    meta: { requiresAuth: true, adminOnly: true, label: 'Імпорт' },
+  },
 ]
 
 const router = createRouter({
