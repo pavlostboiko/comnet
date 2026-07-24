@@ -39,7 +39,7 @@
             </tr></thead>
             <tbody>
               <tr v-if="!sorted.length"><td :colspan="isAdmin ? 8 : 7" class="empty">Нічого не знайдено</td></tr>
-              <tr v-for="n in sorted" :key="n.id">
+              <tr v-for="n in sorted" :key="n.id" class="click-row" @click="openWhere(n)">
                 <td class="td-name">{{ n.name }}</td>
                 <td class="td-dim">{{ n.category || '—' }}</td>
                 <td class="td-dim" v-if="!serviceId">{{ serviceName(n.service_id) }}</td>
@@ -48,8 +48,8 @@
                 <td class="td-num">{{ n.price != null ? Number(n.price).toFixed(2) : '—' }}</td>
                 <td class="td-mono td-dim">{{ n.code || '—' }}</td>
                 <td v-if="isAdmin" class="td-acts">
-                  <button class="act e" @click="openEdit(n)">✎</button>
-                  <button class="act d" @click="del(n)">✕</button>
+                  <button class="act e" @click.stop="openEdit(n)">✎</button>
+                  <button class="act d" @click.stop="del(n)">✕</button>
                 </td>
               </tr>
             </tbody>
@@ -87,6 +87,47 @@
         </div>
       </div>
     </div>
+
+    <!-- Де знаходиться modal -->
+    <div class="overlay" :class="{ open: !!whereData }" @click.self="whereData=null">
+      <div v-if="whereData" class="modal wide">
+        <div class="modal-head">
+          <span class="modal-title">Де знаходиться: <b>{{ whereData.name }}</b></span>
+          <button class="modal-close" @click="whereData=null">✕</button>
+        </div>
+        <div class="modal-body">
+          <!-- Несерійне: по складах -->
+          <template v-if="!whereData.is_serialized">
+            <table class="w-table">
+              <thead><tr><th>Склад</th><th class="wc-off">Тип</th><th class="wc-num">К-сть</th></tr></thead>
+              <tbody>
+                <tr v-if="!whereData.nonserial.length"><td colspan="3" class="empty">Ніде немає залишку</td></tr>
+                <tr v-for="(r, i) in whereData.nonserial" :key="i">
+                  <td class="td-name">{{ r.warehouse_name }}</td>
+                  <td><span class="chip" :class="r.is_official ? 'chip-gov' : 'chip-vol'">{{ r.is_official ? 'державне' : 'волонтерське' }}</span></td>
+                  <td class="td-num">{{ r.qty }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </template>
+          <!-- Серійне: кожен екземпляр -->
+          <template v-else>
+            <table class="w-table">
+              <thead><tr><th>Серійний №</th><th>Картка</th><th>Склад</th><th>На кому</th></tr></thead>
+              <tbody>
+                <tr v-if="!whereData.serial.length"><td colspan="4" class="empty">Ніде не розміщено</td></tr>
+                <tr v-for="s in whereData.serial" :key="s.instance_id">
+                  <td class="td-mono">{{ s.serial_no }}</td>
+                  <td class="td-mono td-dim">{{ s.card_number || '—' }}</td>
+                  <td class="td-name">{{ s.warehouse_name }}</td>
+                  <td class="td-dim">{{ s.holder || '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </template>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -95,6 +136,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import { getServices } from '../../api/settings.js'
 import { getNomenclature, createNomenclature, updateNomenclature, deleteNomenclature } from '../../api/nomenclature.js'
+import { whereIs } from '../../api/custody.js'
 import { useSort } from '../../composables/useSort.js'
 import { useAuthStore } from '../../stores/auth.js'
 
@@ -170,6 +212,17 @@ async function del(n) {
   try { await deleteNomenclature(n.id); await load() }
   catch (e) { alert(e?.response?.data?.detail || 'Не вдалось видалити') }
 }
+
+const whereData = ref(null)
+async function openWhere(n) {
+  whereData.value = null
+  try {
+    const { data } = await whereIs(n.id)
+    whereData.value = data
+  } catch (e) {
+    alert(e?.response?.data?.detail || 'Не вдалось завантажити')
+  }
+}
 </script>
 
 <style scoped>
@@ -203,6 +256,14 @@ th.sortable { cursor:pointer; user-select:none; }
 .empty { text-align:center; padding:32px; color:var(--text-light); font-style:italic; }
 .chip { display:inline-block; padding:2px 8px; border-radius:3px; font-size:11px; font-weight:600; }
 .chip-ser { background:#dbeafe; color:#1e40af; } .chip-non { background:#f1f5f9; color:#475569; }
+.chip-gov { background:#dbeafe; color:#1e40af; } .chip-vol { background:#fef3c7; color:#854d0e; }
+.click-row { cursor:pointer; }
+.click-row:hover { background:var(--bg); }
+.modal.wide { width:min(680px,100%); }
+.w-table { width:100%; border-collapse:collapse; }
+.w-table th, .w-table td { padding:8px 12px; text-align:left; font-size:13px; border-bottom:1px solid var(--border-light); }
+.w-table th { color:var(--text-light); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; }
+.wc-off { width:130px; } .wc-num { width:100px; text-align:right; }
 .t-foot { padding:10px 20px; font-size:12px; color:var(--text-light); border-top:1px solid var(--border-light); background:var(--bg); }
 .t-foot b { color:var(--text-mid); font-weight:600; }
 .overlay { position:fixed; inset:0; background:rgba(15,23,42,0.35); display:none; align-items:flex-start; justify-content:center; padding:60px 20px; z-index:1200; }
