@@ -40,6 +40,7 @@ def is_service_warehouse_location(raw) -> bool:
 COLS = {
     "Назва": "name", "Товар": "name",
     "Служба": "service",
+    "Категорія": "category",
     "Серійний номер": "serial",
     "Од. виміру": "uom", "Од.виміру": "uom",
     "Вартість": "price",
@@ -119,11 +120,11 @@ def import_items_v2(
             counts["services_created"] += 1
         return s
 
-    def get_nomenclature(name, service, is_serial, uom, price, code):
+    def get_nomenclature(name, service, is_serial, uom, price, code, category):
         key = (name.strip().lower(), service.id)
         n = noms.get(key)
         if not n:
-            n = Nomenclature(name=name.strip(), service_id=service.id,
+            n = Nomenclature(name=name.strip(), service_id=service.id, category=category,
                              is_serialized=is_serial, unit_of_measure=uom, price=price, code=code)
             db.add(n); db.flush()
             noms[key] = n
@@ -152,6 +153,7 @@ def import_items_v2(
             nom = get_nomenclature(
                 name, service, is_serial,
                 _clean(col(row, "uom")), _parse_decimal(col(row, "price")), _clean(col(row, "code")),
+                _clean(col(row, "category")),
             )
             # серійний екземпляр — без розміщення (склад заповнить Переміщення)
             if is_serial and not db.query(Instance).filter(Instance.serial_no == serial).first():

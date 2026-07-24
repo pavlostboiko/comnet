@@ -233,7 +233,6 @@ import {
 const tabs = [
   { key: 'services', label: 'Служби' },
   { key: 'units', label: 'Підрозділи' },
-  { key: 'nomenclature', label: 'Номенклатура' },
   { key: 'warehouses', label: 'Склади' },
   { key: 'mvo', label: 'МВО' },
   { key: 'groups', label: 'Групи' },

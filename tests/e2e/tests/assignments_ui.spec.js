@@ -27,14 +27,15 @@ test('issue non-serial to a person; custody balance unchanged', async ({ page })
   await page.locator('.modal .fi').first().fill(unit)
   await page.locator('.btn-pri').click()
   await expect(page.locator('td.td-name', { hasText: unit })).toBeVisible()
-  // nomenclature (non-serial, service svc)
-  await page.locator('.tt-btn', { hasText: 'Номенклатура' }).click()
-  await page.locator('.btn-add').click()
+  // nomenclature (non-serial, service svc) on the Майно page
+  await page.goto(`${URL}/catalog`)
+  await page.locator('.btn-add', { hasText: '+ Додати' }).click()
   await page.locator('.modal .fi').first().fill(nom)
   await page.locator('.modal select').first().selectOption({ label: svc })
-  await page.locator('.btn-pri').click()
+  await page.locator('.btn-pri', { hasText: 'Зберегти' }).click()
   await expect(page.locator('td.td-name', { hasText: nom })).toBeVisible()
-  // person in the unit
+  // person in the unit — back to Довідники → Особи
+  await page.goto(`${URL}/structure`)
   await page.locator('.tt-btn', { hasText: 'Особи' }).click()
   await page.locator('.btn-add').click()
   await page.locator('.modal .fi').first().fill(soldier)         // last_name

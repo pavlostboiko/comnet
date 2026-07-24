@@ -13,6 +13,7 @@
     </div>
 
     <nav class="nav-links">
+      <router-link class="nav-link" to="/catalog">Майно</router-link>
       <router-link class="nav-link" to="/stock">Залишки</router-link>
       <router-link class="nav-link" to="/custody">Переміщення</router-link>
       <router-link v-if="isAdmin" class="nav-link" to="/documents">Документи</router-link>
