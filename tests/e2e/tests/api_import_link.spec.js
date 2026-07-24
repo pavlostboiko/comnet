@@ -49,6 +49,12 @@ test('card number links Items instance to a Переміщення movement', as
     expect(ours).toBeTruthy()
     expect(ours.doc_number).toBe('НАКЛ-777')
     expect(ours.card_number).toBe('CARD-LNK-1')
+
+    // Same card but a DIFFERENT serial → conflict: skipped + reported, no new movement
+    const mv2 = await up(api, '/api/admin/v2/import/movements', 'import_v2_link_mv_mismatch.xlsx').then(r => r.json())
+    expect(mv2.movements).toBe(0)
+    expect(mv2.skipped).toBeGreaterThanOrEqual(1)
+    expect(mv2.errors.some(e => e.includes('не збігається'))).toBe(true)
   } finally {
     await api.dispose()
   }

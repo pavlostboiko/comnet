@@ -291,9 +291,17 @@ def import_movements_v2(
             card = _clean(mc(cells, "card_number"))
             instance = None
             if is_serial:
-                # join з Items: спершу по номеру картки, тоді по серійному
-                if card:
-                    instance = db.query(Instance).filter(Instance.card_number == card).first()
+                # join з Items: спершу по номеру картки, тоді по серійному.
+                by_card = db.query(Instance).filter(Instance.card_number == card).first() if card else None
+                # Крос-перевірка: якщо картка вказує на екземпляр з ІНШИМ серійним
+                # (колонка P), це конфлікт — не розміщуємо, повідомляємо.
+                if by_card and by_card.serial_no != serial:
+                    counts["skipped"] += 1
+                    errors.append(
+                        f"рядок {i} «{name}»: картка {card} → серійний {by_card.serial_no} "
+                        f"у каталозі, а в Переміщеннях {serial} — не збігається")
+                    continue
+                instance = by_card
                 if not instance:
                     instance = db.query(Instance).filter(Instance.serial_no == serial).first()
                 if not instance:
