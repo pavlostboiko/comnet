@@ -1,0 +1,255 @@
+<template>
+  <div class="page-wrap">
+    <TopBar />
+    <div class="content-scroll">
+      <div class="tile">
+        <div class="tile-header">
+          <span class="tile-title">Довідники v2</span>
+          <div class="tile-tabs">
+            <button v-for="t in tabs" :key="t.key" class="tt-btn"
+              :class="{ on: tab === t.key }" @click="tab = t.key">{{ t.label }}</button>
+          </div>
+          <button class="btn-add" @click="openAdd">+ Додати</button>
+        </div>
+
+        <!-- ═══ Служби ═══ -->
+        <div v-if="tab === 'services'" class="table-wrap">
+          <table>
+            <thead><tr><th>Назва</th><th class="col-code">Код</th><th>Начальник</th><th class="col-acts"></th></tr></thead>
+            <tbody>
+              <tr v-if="!services.length"><td colspan="4" class="empty">Немає служб</td></tr>
+              <tr v-for="s in services" :key="s.id">
+                <td class="td-name">{{ s.name }}</td>
+                <td>{{ s.code || '—' }}</td>
+                <td class="td-dim">{{ s.chief_name || '—' }}</td>
+                <td class="td-acts"><button class="act-del" @click="del('service', s)">✕</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ═══ Підрозділи ═══ -->
+        <div v-if="tab === 'units'" class="table-wrap">
+          <table>
+            <thead><tr><th>Назва</th><th class="col-code">Код</th><th>Місцевий відмінок</th><th class="col-acts"></th></tr></thead>
+            <tbody>
+              <tr v-if="!units.length"><td colspan="4" class="empty">Немає підрозділів</td></tr>
+              <tr v-for="u in units" :key="u.id">
+                <td class="td-name">{{ u.name }}</td>
+                <td>{{ u.code || '—' }}</td>
+                <td class="td-dim">{{ u.name_locative || '—' }}</td>
+                <td class="td-acts"><button class="act-del" @click="del('unit', u)">✕</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ═══ Номенклатура ═══ -->
+        <div v-if="tab === 'nomenclature'" class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Назва</th><th>Служба</th><th class="col-ser">Тип</th>
+              <th class="col-uom">Од.</th><th class="col-price">Вартість</th><th class="col-acts"></th>
+            </tr></thead>
+            <tbody>
+              <tr v-if="!nomenclature.length"><td colspan="6" class="empty">Немає номенклатури</td></tr>
+              <tr v-for="n in nomenclature" :key="n.id">
+                <td class="td-name">{{ n.name }}</td>
+                <td class="td-dim">{{ serviceName(n.service_id) }}</td>
+                <td><span class="chip" :class="n.is_serialized ? 'chip-ser' : 'chip-non'">{{ n.is_serialized ? 'серійне' : 'несерійне' }}</span></td>
+                <td class="td-center">{{ n.unit_of_measure || '—' }}</td>
+                <td class="td-num">{{ n.price != null ? Number(n.price).toFixed(2) : '—' }}</td>
+                <td class="td-acts"><button class="act-del" @click="del('nomenclature', n)">✕</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ═══ Склади ═══ -->
+        <div v-if="tab === 'warehouses'" class="table-wrap">
+          <div class="hint">Склади створюються автоматично — один на кожну службу і кожен підрозділ.</div>
+          <table>
+            <thead><tr><th>Назва</th><th class="col-ser">Тип</th><th>Прив'язка</th></tr></thead>
+            <tbody>
+              <tr v-if="!warehouses.length"><td colspan="3" class="empty">Немає складів</td></tr>
+              <tr v-for="w in warehouses" :key="w.id">
+                <td class="td-name">{{ w.name }}</td>
+                <td><span class="chip" :class="w.type === 'service' ? 'chip-svc' : 'chip-unit'">{{ w.type === 'service' ? 'служба' : 'підрозділ' }}</span></td>
+                <td class="td-dim">{{ w.type === 'service' ? serviceName(w.service_id) : unitName(w.unit_id) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ Add modal ═══ -->
+    <div class="overlay" :class="{ open: addOpen }" @click.self="addOpen = false">
+      <div v-if="addOpen" class="modal">
+        <div class="modal-head">
+          <span class="modal-title">Додати: {{ currentTab.label }}</span>
+          <button class="modal-close" @click="addOpen = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <template v-if="tab === 'services'">
+            <label class="fl">Назва *</label><input class="fi" v-model="form.name" />
+            <label class="fl">Код</label><input class="fi" v-model="form.code" />
+            <label class="fl">Начальник (ПІБ)</label><input class="fi" v-model="form.chief_name" />
+          </template>
+          <template v-else-if="tab === 'units'">
+            <label class="fl">Назва *</label><input class="fi" v-model="form.name" />
+            <label class="fl">Код</label><input class="fi" v-model="form.code" />
+            <label class="fl">Місцевий відмінок («у 1-й роті»)</label><input class="fi" v-model="form.name_locative" />
+          </template>
+          <template v-else-if="tab === 'nomenclature'">
+            <label class="fl">Назва *</label><input class="fi" v-model="form.name" />
+            <label class="fl">Служба *</label>
+            <select class="fi" v-model="form.service_id">
+              <option :value="null" disabled>— оберіть —</option>
+              <option v-for="s in services" :key="s.id" :value="s.id">{{ s.name }}</option>
+            </select>
+            <label class="fl"><input type="checkbox" v-model="form.is_serialized" /> Серійне майно</label>
+            <label class="fl">Одиниця виміру</label><input class="fi" v-model="form.unit_of_measure" placeholder="шт" />
+            <label class="fl">Вартість</label><input class="fi" type="number" v-model="form.price" />
+          </template>
+          <div v-if="error" class="err">{{ error }}</div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-sec" @click="addOpen = false">Скасувати</button>
+          <button class="btn-pri" :disabled="saving" @click="save">Зберегти</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, reactive, computed, onMounted } from 'vue'
+import TopBar from '../../components/TopBar.vue'
+import { getServices, createService, deleteService } from '../../api/settings.js'
+import {
+  getUnits, createUnit, deleteUnit, getWarehouses,
+} from '../../api/structure.js'
+import {
+  getNomenclature, createNomenclature, deleteNomenclature,
+} from '../../api/nomenclature.js'
+
+const tabs = [
+  { key: 'services', label: 'Служби' },
+  { key: 'units', label: 'Підрозділи' },
+  { key: 'nomenclature', label: 'Номенклатура' },
+  { key: 'warehouses', label: 'Склади' },
+]
+const tab = ref('services')
+const currentTab = computed(() => tabs.find(t => t.key === tab.value))
+
+const services = ref([])
+const units = ref([])
+const nomenclature = ref([])
+const warehouses = ref([])
+
+const serviceName = (id) => services.value.find(s => s.id === id)?.name || '—'
+const unitName = (id) => units.value.find(u => u.id === id)?.name || '—'
+
+async function loadAll() {
+  const [s, u, n, w] = await Promise.all([
+    getServices(), getUnits(), getNomenclature(), getWarehouses(),
+  ])
+  services.value = s.data
+  units.value = u.data
+  nomenclature.value = n.data
+  warehouses.value = w.data
+}
+onMounted(loadAll)
+
+// Add modal
+const addOpen = ref(false)
+const saving = ref(false)
+const error = ref('')
+const form = reactive({})
+function openAdd() {
+  error.value = ''
+  Object.keys(form).forEach(k => delete form[k])
+  if (tab.value === 'nomenclature') { form.service_id = null; form.is_serialized = false }
+  addOpen.value = true
+}
+
+async function save() {
+  saving.value = true
+  error.value = ''
+  try {
+    if (tab.value === 'services') await createService({ name: form.name, code: form.code || null, chief_name: form.chief_name || null })
+    else if (tab.value === 'units') await createUnit({ name: form.name, code: form.code || null, name_locative: form.name_locative || null })
+    else if (tab.value === 'nomenclature') {
+      if (!form.service_id) { error.value = 'Оберіть службу'; saving.value = false; return }
+      await createNomenclature({
+        name: form.name, service_id: form.service_id, is_serialized: !!form.is_serialized,
+        unit_of_measure: form.unit_of_measure || null, price: form.price ? Number(form.price) : null,
+      })
+    }
+    addOpen.value = false
+    await loadAll()
+  } catch (e) {
+    error.value = e?.response?.data?.detail || 'Помилка збереження'
+  } finally {
+    saving.value = false
+  }
+}
+
+async function del(kind, row) {
+  if (!confirm(`Видалити «${row.name}»?`)) return
+  try {
+    if (kind === 'service') await deleteService(row.id)
+    else if (kind === 'unit') await deleteUnit(row.id)
+    else if (kind === 'nomenclature') await deleteNomenclature(row.id)
+    await loadAll()
+  } catch (e) {
+    alert(e?.response?.data?.detail || 'Не вдалось видалити')
+  }
+}
+</script>
+
+<style scoped>
+.page-wrap { height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+.content-scroll { flex:1; overflow-y:auto; padding:20px 24px; }
+.tile { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); }
+.tile-header { padding:14px 20px; border-bottom:1px solid var(--border-light); display:flex; align-items:center; gap:16px; }
+.tile-title { font-weight:700; font-size:15px; }
+.tile-tabs { display:flex; gap:2px; background:var(--bg); padding:3px; border-radius:var(--radius-sm); }
+.tt-btn { padding:5px 13px; border:none; background:transparent; border-radius:var(--radius-sm); font-family:inherit; font-size:13px; font-weight:500; color:var(--text-light); cursor:pointer; }
+.tt-btn.on { background:var(--surface); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,0.06); font-weight:600; }
+.btn-add { margin-left:auto; padding:6px 14px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+
+.table-wrap { overflow-x:auto; }
+.hint { padding:10px 20px; font-size:12.5px; color:var(--text-light); font-style:italic; }
+table { width:100%; border-collapse:collapse; table-layout:fixed; }
+th, td { padding:9px 14px; text-align:left; font-size:13px; border-bottom:1px solid var(--border-light); }
+th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; }
+.col-code { width:100px; } .col-ser { width:120px; } .col-uom { width:70px; } .col-price { width:120px; text-align:right; } .col-acts { width:50px; }
+.td-name { font-weight:600; color:var(--text); }
+.td-dim { color:var(--text-light); }
+.td-center { text-align:center; }
+.td-num { text-align:right; font-family:'DM Mono',monospace; }
+.td-acts { text-align:center; }
+.empty { text-align:center; padding:32px; color:var(--text-light); font-style:italic; }
+.act-del { background:transparent; border:none; color:var(--text-light); cursor:pointer; font-size:14px; }
+.act-del:hover { color:#dc2626; }
+.chip { display:inline-block; padding:2px 8px; border-radius:3px; font-size:11px; font-weight:600; }
+.chip-ser { background:#dbeafe; color:#1e40af; } .chip-non { background:#f1f5f9; color:#475569; }
+.chip-svc { background:#fef3c7; color:#854d0e; } .chip-unit { background:#dcfce7; color:#166534; }
+
+.overlay { position:fixed; inset:0; background:rgba(15,23,42,0.35); display:none; align-items:flex-start; justify-content:center; padding:80px 20px; z-index:1200; }
+.overlay.open { display:flex; }
+.modal { background:var(--surface); border-radius:var(--radius); box-shadow:0 20px 50px rgba(0,0,0,0.15); width:min(460px,100%); }
+.modal-head { padding:14px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; }
+.modal-title { flex:1; font-weight:700; font-size:14px; }
+.modal-close { border:none; background:transparent; font-size:16px; color:var(--text-light); cursor:pointer; }
+.modal-body { padding:16px 20px; display:flex; flex-direction:column; gap:4px; }
+.fl { font-size:12px; color:var(--text-light); font-weight:600; margin-top:8px; }
+.fi { padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:inherit; font-size:14px; }
+.err { margin-top:10px; padding:8px 10px; background:#fee2e2; color:#991b1b; font-size:12.5px; border-radius:3px; }
+.modal-foot { padding:12px 20px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:8px; }
+.btn-sec { padding:7px 14px; background:transparent; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:inherit; font-size:13px; cursor:pointer; }
+.btn-pri { padding:7px 16px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+.btn-pri:disabled { opacity:0.5; }
+</style>

@@ -46,6 +46,11 @@ const routes = [
     component: () => import('../pages/settings/SettingsPage.vue'),
     meta: { requiresAuth: true, adminOnly: true },
   },
+  {
+    path: '/structure',
+    component: () => import('../pages/structure/StructurePage.vue'),
+    meta: { requiresAuth: true, adminOnly: true, label: 'Довідники v2' },
+  },
 ]
 
 const router = createRouter({
