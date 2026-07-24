@@ -24,12 +24,12 @@ test('receipt increases the non-serial balance (full UI loop)', async ({ page })
   await page.locator('.btn-pri').click()
   await expect(page.locator('td.td-name', { hasText: svcName })).toBeVisible()
 
-  // Create a non-serial nomenclature in that service
-  await page.locator('.tt-btn', { hasText: 'Номенклатура' }).click()
-  await page.locator('.btn-add').click()
+  // Create a non-serial nomenclature on the Майно page
+  await page.goto(`${URL}/catalog`)
+  await page.locator('.btn-add', { hasText: '+ Додати' }).click()
   await page.locator('.modal .fi').first().fill(nomName)
   await page.locator('.modal select').first().selectOption({ label: svcName })
-  await page.locator('.btn-pri').click()
+  await page.locator('.btn-pri', { hasText: 'Зберегти' }).click()
   await expect(page.locator('td.td-name', { hasText: nomName })).toBeVisible()
 
   // Go to Stock, pick the service warehouse, do a receipt of 7

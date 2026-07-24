@@ -56,11 +56,14 @@ test('МВО login: no admin nav, stock opens on own warehouse', async ({ page }
   await page.locator('.user-pill').click()   // logout → /login
   await uiLogin(page, { user: username, pass: 'mvopass' })
 
-  // No admin-only nav links
+  // No admin-only nav links; operational pages visible
   await expect(page.locator('.nav-link', { hasText: 'Довідники' })).toHaveCount(0)
   await expect(page.locator('.nav-link', { hasText: 'Користувачі' })).toHaveCount(0)
+  await expect(page.locator('.nav-link', { hasText: 'Майно' })).toBeVisible()
   await expect(page.locator('.nav-link', { hasText: 'Залишки' })).toBeVisible()
 
-  // Stock auto-opened on their warehouse (no «оберіть склад» prompt)
-  await expect(page.locator('.section-label', { hasText: 'Несерійне майно' })).toBeVisible()
+  // Stock auto-opens on their warehouse (unified table visible, no «оберіть склад»)
+  await page.locator('.nav-link', { hasText: 'Залишки' }).click()
+  await expect(page.locator('.wh-select')).toBeVisible()
+  await expect(page.locator('.empty', { hasText: 'Оберіть склад' })).toHaveCount(0)
 })
