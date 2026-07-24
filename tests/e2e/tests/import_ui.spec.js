@@ -8,7 +8,7 @@ test('Import page uploads a file and shows a result summary', async ({ page }) =
   await expect(page.locator('.tile-title')).toContainText('Імпорт')
 
   await page.locator('input[type="file"]').setInputFiles(
-    path.join(__dirname, 'fixtures/import_v2_items.xlsx'))
+    path.join(__dirname, 'fixtures/import_v2_ui.xlsx'))
   await page.locator('.btn-pri', { hasText: 'Імпортувати' }).click()
 
   // Result grid appears with a row count

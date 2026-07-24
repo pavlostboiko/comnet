@@ -61,6 +61,21 @@ def _col_map(ws, header_row: int) -> dict:
     return m
 
 
+@router.post("/wipe", status_code=status.HTTP_200_OK)
+def wipe_v2_inventory(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """Скидає v2 інвентарний шар для повторного імпорту: видачі, рухи,
+    екземпляри, номенклатуру. Довідники (служби/підрозділи/склади/особи)
+    лишаються — імпорт їх find-or-create."""
+    counts = {
+        "assignments": db.query(Assignment).delete(synchronize_session=False),
+        "custody_movements": db.query(CustodyMovement).delete(synchronize_session=False),
+        "instances": db.query(Instance).delete(synchronize_session=False),
+        "nomenclature": db.query(Nomenclature).delete(synchronize_session=False),
+    }
+    db.commit()
+    return {"deleted": counts}
+
+
 @router.post("/import/items", status_code=status.HTTP_200_OK)
 def import_items_v2(
     file: UploadFile = File(...),
@@ -77,11 +92,14 @@ def import_items_v2(
         raise HTTPException(400, "Не знайдено заголовок «Назва»/«Товар»")
     cmap = _col_map(ws, header_row)
 
-    # Caches / find-or-create
+    # Caches / find-or-create — ВСІ сідяться з БД, щоб повторний імпорт не плодив дублі
     services = {s.name.strip().lower(): s for s in db.query(Service).all()}
     units = {u.name.strip().lower(): u for u in db.query(Unit).all()}
-    noms: dict = {}
-    persons_cache: dict = {}
+    noms = {(n.name.strip().lower(), n.service_id): n for n in db.query(Nomenclature).all()}
+    persons_cache = {
+        (p.last_name.strip().lower(), p.unit_id): p
+        for p in db.query(Person).all() if p.last_name and p.unit_id
+    }
 
     counts = {"rows": 0, "nomenclature": 0, "movements": 0, "assignments": 0,
               "services_created": 0, "units_created": 0, "persons_created": 0}
@@ -93,9 +111,10 @@ def import_items_v2(
         if not s:
             s = Service(name=name.strip())
             db.add(s); db.flush()
-            ensure_warehouse_for_service(db, s)
             services[key] = s
             counts["services_created"] += 1
+        # Ensure a warehouse even for pre-existing (v1) services — idempotent.
+        ensure_warehouse_for_service(db, s)
         return s
 
     def get_unit(name):
@@ -104,9 +123,9 @@ def import_items_v2(
         if not u:
             u = Unit(name=name.strip())
             db.add(u); db.flush()
-            ensure_warehouse_for_unit(db, u)
             units[key] = u
             counts["units_created"] += 1
+        ensure_warehouse_for_unit(db, u)  # idempotent
         return u
 
     def wh_of_unit(u):
