@@ -224,7 +224,7 @@
 | **2. Номенклатура** | nomenclature (service, category, is_official, is_serialized, price); instances (serial_no, card_number) | ✅ |
 | **3. Леджер** | custody_movements (warehouses, type enum, card/doc number); balances (обчислювані); assignments + групи | ✅ |
 | **4. Доступ** | users(+role service/mvo, scope); двохосьовий ACL (жорсткий, 403) | ✅ |
-| **5. Документи** | `custody_documents` (шапка накладна/акт над рухами) + групування рухів заднім числом; snap Дод.25; sign/unsign; XLSX (міграція 020) | 🟡 Ф1 готова (переміщення); приймання ззовні — Ф2 |
+| **5. Документи** | `custody_documents` (шапка накладна/акт над рухами); групування рухів заднім числом + приймання ззовні одразу документом; snap Дод.25; sign/unsign; XLSX; import backfill (міграція 020) | ✅ |
 | **6. Імпорт** | 2 файли: Items(каталог) + Переміщення(розміщення); card-linking; wipe | ✅ |
 | **UI** | Майно · Залишки · Переміщення · Документи · Довідники · Користувачі · Імпорт | ✅ |
 | **Cutover** | v2→main, drop v1, деплой, re-import | ⬜ **наступне** |
