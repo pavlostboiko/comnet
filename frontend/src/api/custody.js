@@ -17,3 +17,4 @@ export const signDoc      = (id)     => http.post(`/custody/documents/${id}/sign
 export const unsignDoc    = (id)     => http.post(`/custody/documents/${id}/unsign`)
 export const deleteDoc    = (id)     => http.delete(`/custody/documents/${id}`)
 export const exportDocXlsx = (id)    => http.get(`/custody/documents/${id}/export/xlsx`, { responseType: 'blob' })
+export const receiveDocument = (data) => http.post('/custody/documents/receive', data)

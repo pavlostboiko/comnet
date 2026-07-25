@@ -207,6 +207,42 @@ class CustodyDocIn(BaseModel):
     movement_ids: List[int] = []                  # рухи, що входять у документ
 
 
+# --- v2 receipt document (приймання ззовні одразу документом) ---
+
+class NewNomIn(BaseModel):
+    name: str
+    service_id: int
+    category: Optional[str] = None
+    is_official: bool = True
+    is_serialized: bool = False
+    unit_of_measure: Optional[str] = None
+    code: Optional[str] = None
+    price: Optional[Decimal] = None
+
+
+class ReceiptItemIn(BaseModel):
+    nomenclature_id: Optional[int] = None          # існуюча картка
+    new_nomenclature: Optional[NewNomIn] = None    # або створити на льоту
+    quantity: Optional[Decimal] = None             # несерійне
+    serial_no: Optional[str] = None                # серійне
+    card_number: Optional[str] = None
+
+
+class ReceiptCreate(BaseModel):
+    to_warehouse_id: int
+    form: str = "накладна"                          # накладна | акт
+    counterparty: Optional[str] = None             # від кого
+    doc_number: Optional[str] = None
+    doc_date: Optional[str] = None
+    basis: Optional[str] = None
+    service_id: Optional[int] = None
+    op_type_id: Optional[int] = None
+    sender_id: Optional[int] = None
+    receiver_id: Optional[int] = None
+    fin_id: Optional[int] = None
+    items: List[ReceiptItemIn] = []
+
+
 # --- v2 assignments ---
 
 class AssignmentCreate(BaseModel):
