@@ -67,15 +67,16 @@
 
         <!-- ═══ Склади ═══ -->
         <div v-if="tab === 'warehouses'" class="table-wrap">
-          <div class="hint">Склади створюються автоматично — один на кожну службу і кожен підрозділ.</div>
+          <div class="hint">Склади створюються автоматично. Назву можна скоротити (тип і прив'язка незмінні).</div>
           <table>
-            <thead><tr><th>Назва</th><th class="col-ser">Тип</th><th>Прив'язка</th></tr></thead>
+            <thead><tr><th>Назва</th><th class="col-ser">Тип</th><th>Прив'язка</th><th class="col-acts"></th></tr></thead>
             <tbody>
-              <tr v-if="!warehouses.length"><td colspan="3" class="empty">Немає складів</td></tr>
+              <tr v-if="!warehouses.length"><td colspan="4" class="empty">Немає складів</td></tr>
               <tr v-for="w in warehouses" :key="w.id">
                 <td class="td-name">{{ w.name }}</td>
                 <td><span class="chip" :class="w.type === 'service' ? 'chip-svc' : 'chip-unit'">{{ w.type === 'service' ? 'служба' : 'підрозділ' }}</span></td>
                 <td class="td-dim">{{ w.type === 'service' ? serviceName(w.service_id) : unitName(w.unit_id) }}</td>
+                <td class="td-acts"><button class="act-e" @click="renameWh(w)" title="Перейменувати">✎</button></td>
               </tr>
             </tbody>
           </table>
@@ -228,7 +229,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import { getServices, createService, deleteService, getPersons, createPerson, updatePerson, deletePerson } from '../../api/settings.js'
 import {
-  getUnits, createUnit, deleteUnit, getWarehouses,
+  getUnits, createUnit, deleteUnit, getWarehouses, renameWarehouse,
   getGroups, createGroup, deleteGroup,
   getMvo, createMvo, updateMvo,
 } from '../../api/structure.js'
@@ -364,6 +365,19 @@ async function del(kind, row) {
     await loadAll()
   } catch (e) {
     alert(e?.response?.data?.detail || 'Не вдалось видалити')
+  }
+}
+
+async function renameWh(w) {
+  const name = prompt('Нова назва складу:', w.name)
+  if (name == null) return
+  const trimmed = name.trim()
+  if (!trimmed || trimmed === w.name) return
+  try {
+    await renameWarehouse(w.id, trimmed)
+    await loadAll()
+  } catch (e) {
+    alert(e?.response?.data?.detail || 'Не вдалось перейменувати')
   }
 }
 

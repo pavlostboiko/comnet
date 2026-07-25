@@ -12,8 +12,9 @@ export const createGroup = (data)     => http.post('/structure/groups', data)
 export const updateGroup = (id, data) => http.put(`/structure/groups/${id}`, data)
 export const deleteGroup = (id)       => http.delete(`/structure/groups/${id}`)
 
-// Warehouses (read-only, auto-created)
-export const getWarehouses = () => http.get('/structure/warehouses')
+// Warehouses (auto-created; only name is editable)
+export const getWarehouses   = ()         => http.get('/structure/warehouses')
+export const renameWarehouse = (id, name) => http.put(`/structure/warehouses/${id}`, { name })
 
 // МВО
 export const getMvo    = ()         => http.get('/structure/mvo')

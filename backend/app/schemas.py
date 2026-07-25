@@ -80,6 +80,10 @@ class WarehouseRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class WarehouseUpdate(BaseModel):
+    name: str
+
+
 class MvoRead(BaseModel):
     id: int
     warehouse_id: int
