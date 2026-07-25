@@ -171,6 +171,22 @@ class CustodyMovementCreate(BaseModel):
     signed_by_person_id: Optional[int] = None
 
 
+# --- batch transfer (накладна на переміщення) ---
+
+class DocumentItemIn(BaseModel):
+    nomenclature_id: int
+    instance_id: Optional[int] = None
+    quantity: Optional[Decimal] = None          # серійне → 1
+
+
+class DocumentBatchCreate(BaseModel):
+    date: str
+    from_warehouse_id: int
+    to_warehouse_id: int
+    doc_number: Optional[str] = None
+    items: List[DocumentItemIn]
+
+
 # --- v2 assignments ---
 
 class AssignmentCreate(BaseModel):

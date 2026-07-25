@@ -22,7 +22,7 @@ from app.database import get_db
 from app.models import (
     Assignment, CustodyMovement, Instance, Nomenclature, Person, User, Warehouse,
 )
-from app.schemas import CustodyMovementCreate
+from app.schemas import CustodyMovementCreate, DocumentBatchCreate
 
 router = APIRouter(prefix="/api/custody", tags=["custody"])
 
@@ -136,6 +136,57 @@ def create_movement(payload: CustodyMovementCreate, db: Session = Depends(get_db
     db.commit()
     db.refresh(mv)
     return _mv_dict(mv)
+
+
+@router.post("/document", status_code=status.HTTP_201_CREATED)
+def create_document(payload: DocumentBatchCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Накладна на переміщення: N позицій зі складу-джерела на склад-отримувач
+    одним номером. Валідація по кожній позиції; або всі проводяться, або жодна."""
+    frm = db.get(Warehouse, payload.from_warehouse_id)
+    to = db.get(Warehouse, payload.to_warehouse_id)
+    if not frm or not to:
+        raise HTTPException(400, "Склад не знайдено")
+    if frm.id == to.id:
+        raise HTTPException(400, "Склади збігаються")
+    if not payload.items:
+        raise HTTPException(400, "Немає позицій")
+    date = date_cls.fromisoformat(payload.date)
+    created = 0
+    for it in payload.items:
+        nom = db.get(Nomenclature, it.nomenclature_id)
+        if not nom:
+            raise HTTPException(400, f"Номенклатуру {it.nomenclature_id} не знайдено")
+        check_movement_create(user, frm.id, nom)
+        if nom.is_serialized:
+            if not it.instance_id:
+                raise HTTPException(400, f"«{nom.name}»: потрібен екземпляр")
+            inst = db.get(Instance, it.instance_id)
+            if not inst or inst.nomenclature_id != nom.id:
+                raise HTTPException(400, f"«{nom.name}»: екземпляр не відповідає")
+            if inst.current_warehouse_id != frm.id:
+                raise HTTPException(400, f"«{nom.name}» ({inst.serial_no}): не на складі-джерелі")
+            qty = Decimal(1)
+        else:
+            qty = Decimal(it.quantity or 0)
+            if qty <= 0:
+                raise HTTPException(400, f"«{nom.name}»: кількість має бути > 0")
+            bal = balance_of(db, frm.id, nom.id, nom.is_official)
+            if bal < qty:
+                raise HTTPException(400, f"«{nom.name}»: недостатньо (є {bal}, треба {qty})")
+        mv = CustodyMovement(
+            date=date, type="transfer", nomenclature_id=nom.id,
+            from_warehouse_id=frm.id, to_warehouse_id=to.id,
+            instance_id=it.instance_id if nom.is_serialized else None,
+            quantity=qty, is_official=nom.is_official,
+            doc_number=payload.doc_number, created_by=user.id,
+        )
+        db.add(mv)
+        if nom.is_serialized:
+            inst.current_warehouse_id = to.id
+        db.flush()
+        created += 1
+    db.commit()
+    return {"created": created, "doc_number": payload.doc_number}
 
 
 @router.get("/balances")

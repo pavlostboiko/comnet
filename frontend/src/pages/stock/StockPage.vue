@@ -14,6 +14,7 @@
               <option v-for="w in unitWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
             </optgroup>
           </select>
+          <button class="btn-sec2" :disabled="!warehouseId" @click="openDoc">Видати в підрозділ</button>
           <button class="btn-add" :disabled="!warehouseId" @click="openMove">+ Рух</button>
         </div>
 
@@ -67,6 +68,54 @@
             </div>
           </template>
         </template>
+      </div>
+    </div>
+
+    <!-- ═══ Накладна на переміщення (batch) ═══ -->
+    <div class="overlay" :class="{ open: docOpen }" @click.self="docOpen = false">
+      <div v-if="docOpen" class="modal wide">
+        <div class="modal-head">
+          <span class="modal-title">Видати в підрозділ — з «{{ warehouseName(warehouseId) }}»</span>
+          <button class="modal-close" @click="docOpen = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="doc-top">
+            <div class="fg">
+              <label class="fl">Куди (склад)</label>
+              <select class="fi" v-model="doc.to_warehouse_id">
+                <option :value="null" disabled>— оберіть —</option>
+                <option v-for="w in otherWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
+              </select>
+            </div>
+            <div class="fg"><label class="fl">№ накладної</label><input class="fi" v-model="doc.doc_number" /></div>
+            <div class="fg"><label class="fl">Дата</label><input class="fi" type="date" v-model="doc.date" /></div>
+          </div>
+
+          <div class="doc-label">Позиції</div>
+          <div v-for="(r, i) in doc.items" :key="i" class="doc-row">
+            <select class="fi row-nom" v-model="r.nomenclature_id" @change="r.instance_id=null">
+              <option :value="null" disabled>— номенклатура —</option>
+              <option v-for="n in nomenclature" :key="n.id" :value="n.id">{{ n.name }} ({{ n.is_serialized ? 'серійне' : 'несерійне' }})</option>
+            </select>
+            <template v-if="nomById(r.nomenclature_id)?.is_serialized">
+              <select class="fi row-qty" v-model="r.instance_id">
+                <option :value="null" disabled>екземпляр</option>
+                <option v-for="s in serial.filter(x => x.nomenclature_id === r.nomenclature_id)" :key="s.instance_id" :value="s.instance_id">{{ s.serial_no }}</option>
+              </select>
+            </template>
+            <template v-else>
+              <input class="fi row-qty" type="number" min="0.0001" step="0.0001" v-model="r.quantity" placeholder="к-сть" />
+            </template>
+            <button class="row-del" @click="doc.items.splice(i, 1)" :disabled="doc.items.length === 1">✕</button>
+          </div>
+          <button class="btn-addrow" @click="doc.items.push({ nomenclature_id: null, quantity: null, instance_id: null })">+ Додати позицію</button>
+
+          <div v-if="docErr" class="err">{{ docErr }}</div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-sec" @click="docOpen = false">Скасувати</button>
+          <button class="btn-pri" :disabled="docSaving" @click="saveDoc">Провести накладну</button>
+        </div>
       </div>
     </div>
 
@@ -165,7 +214,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import { getWarehouses } from '../../api/structure.js'
 import { getNomenclature, createInstance } from '../../api/nomenclature.js'
-import { getBalances, getSerialAt, createMovement } from '../../api/custody.js'
+import { getBalances, getSerialAt, createMovement, createDocument } from '../../api/custody.js'
 import { getPersons } from '../../api/settings.js'
 import { getAssignments, createAssignment, returnAssignment } from '../../api/assignments.js'
 import { useAuthStore } from '../../stores/auth.js'
@@ -223,6 +272,7 @@ const stockRows = computed(() => {
 
 const warehouseName = (id) => warehouses.value.find(w => w.id === id)?.name || (id ? `#${id}` : 'ззовні')
 const nomName = (id) => nomenclature.value.find(n => n.id === id)?.name || '—'
+const nomById = (id) => nomenclature.value.find(n => n.id === id) || null
 const selectedNom = computed(() => nomenclature.value.find(n => n.id === mv.nomenclature_id) || null)
 const serialOfNom = computed(() => serial.value.filter(s => s.nomenclature_id === mv.nomenclature_id))
 
@@ -331,6 +381,44 @@ function openMove() {
 function onTypeChange() { mv.instance_id = null }
 function onNomChange() { mv.instance_id = null }
 
+// ── Накладна на переміщення (batch) ──────────────────────────────────
+const docOpen = ref(false)
+const docSaving = ref(false)
+const docErr = ref('')
+const doc = reactive({ to_warehouse_id: null, doc_number: '', date: '', items: [] })
+function openDoc() {
+  docErr.value = ''
+  Object.assign(doc, {
+    to_warehouse_id: null, doc_number: '', date: new Date().toISOString().slice(0, 10),
+    items: [{ nomenclature_id: null, quantity: null, instance_id: null }],
+  })
+  docOpen.value = true
+}
+async function saveDoc() {
+  if (!doc.to_warehouse_id) { docErr.value = 'Оберіть склад призначення'; return }
+  const items = doc.items.filter(r => r.nomenclature_id && (r.instance_id || Number(r.quantity) > 0))
+  if (!items.length) { docErr.value = 'Додайте хоча б одну позицію'; return }
+  docSaving.value = true
+  docErr.value = ''
+  try {
+    await createDocument({
+      date: doc.date, from_warehouse_id: warehouseId.value, to_warehouse_id: doc.to_warehouse_id,
+      doc_number: doc.doc_number || null,
+      items: items.map(r => ({
+        nomenclature_id: r.nomenclature_id,
+        instance_id: r.instance_id || null,
+        quantity: r.instance_id ? 1 : Number(r.quantity),
+      })),
+    })
+    docOpen.value = false
+    await loadStock()
+  } catch (e) {
+    docErr.value = e?.response?.data?.detail || 'Помилка проведення'
+  } finally {
+    docSaving.value = false
+  }
+}
+
 async function saveMove() {
   saving.value = true
   error.value = ''
@@ -372,8 +460,19 @@ async function saveMove() {
 .tile-header { padding:14px 20px; border-bottom:1px solid var(--border-light); display:flex; align-items:center; gap:16px; }
 .tile-title { font-weight:700; font-size:15px; }
 .wh-select { padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:inherit; font-size:13px; min-width:240px; }
-.btn-add { margin-left:auto; padding:6px 14px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+.btn-add { padding:6px 14px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; }
 .btn-add:disabled { opacity:0.5; }
+.btn-sec2 { margin-left:auto; padding:6px 14px; background:transparent; border:1px solid var(--accent); color:var(--accent); border-radius:var(--radius-sm); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+.btn-sec2:disabled { opacity:0.5; }
+.modal.wide { width:min(640px,100%); }
+.doc-top { display:grid; grid-template-columns:1fr 140px 140px; gap:10px; margin-bottom:14px; }
+.fg { display:flex; flex-direction:column; gap:4px; }
+.doc-label { font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-light); font-weight:600; margin-bottom:6px; }
+.doc-row { display:flex; gap:8px; margin-bottom:6px; align-items:center; }
+.row-nom { flex:1; } .row-qty { width:130px; }
+.row-del { width:28px; border:1px solid var(--border); background:transparent; border-radius:var(--radius-sm); cursor:pointer; color:var(--text-light); }
+.row-del:disabled { opacity:0.4; }
+.btn-addrow { margin-top:6px; background:transparent; border:1px dashed var(--border); color:var(--text-mid); border-radius:var(--radius-sm); padding:6px 12px; font-family:inherit; font-size:13px; cursor:pointer; }
 
 .section-label { padding:14px 20px 6px; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-light); font-weight:600; }
 .table-wrap { overflow-x:auto; }
