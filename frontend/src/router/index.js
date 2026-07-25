@@ -72,6 +72,11 @@ const routes = [
     meta: { requiresAuth: true, adminOnly: true, label: 'Документи' },
   },
   {
+    path: '/docs/:id',
+    component: () => import('../pages/documents_v2/DocumentFormPage.vue'),
+    meta: { requiresAuth: true, adminOnly: true },
+  },
+  {
     path: '/users',
     component: () => import('../pages/users/UsersPage.vue'),
     meta: { requiresAuth: true, adminOnly: true, label: 'Користувачі' },

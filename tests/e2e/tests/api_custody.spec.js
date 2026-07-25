@@ -79,22 +79,31 @@ test.describe('v2 custody API', () => {
     expect(resp.status()).toBe(400)
   })
 
-  test('державне і волонтерське — окремі лінії балансу', async () => {
+  test('державне і волонтерське — окремі картки, окремі лінії балансу', async () => {
+    // is_official — властивість картки (номенклатури), не руху (міграція 019).
+    // Тому облік і ндм — це дві окремі картки → дві лінії балансу.
     const tag = `off-${Date.now()}-${Math.floor(Math.random() * 9999)}`
-    const s = await seed(tag)
+    const s = await seed(tag)                        // s.nom — облік (is_official=true за замовч.)
+    const nomNdm = await postJson(api, '/api/nomenclature', {
+      name: `Бушлат-ндм ${tag}`, service_id: s.svc.id,
+      unit_of_measure: 'шт', price: 100, is_official: false,
+    })
+    cleanup.push(`/api/nomenclature/${nomNdm.id}`)
     await postJson(api, '/api/custody/movements', {
       date: '2026-07-01', type: 'receipt', nomenclature_id: s.nom.id,
-      to_warehouse_id: s.svcWh.id, quantity: 5, is_official: true,
+      to_warehouse_id: s.svcWh.id, quantity: 5,
     })
     await postJson(api, '/api/custody/movements', {
-      date: '2026-07-01', type: 'receipt', nomenclature_id: s.nom.id,
-      to_warehouse_id: s.svcWh.id, quantity: 3, is_official: false,
+      date: '2026-07-01', type: 'receipt', nomenclature_id: nomNdm.id,
+      to_warehouse_id: s.svcWh.id, quantity: 3,
     })
     const bal = await api.get(`/api/custody/balances?warehouse_id=${s.svcWh.id}`).then(r => r.json())
-    const lines = bal.filter(b => b.nomenclature_id === s.nom.id)
-    expect(lines).toHaveLength(2)
-    expect(Number(lines.find(l => l.is_official).qty)).toBe(5)
-    expect(Number(lines.find(l => !l.is_official).qty)).toBe(3)
+    const official = bal.find(b => b.nomenclature_id === s.nom.id)
+    const ndm = bal.find(b => b.nomenclature_id === nomNdm.id)
+    expect(official.is_official).toBe(true)
+    expect(Number(official.qty)).toBe(5)
+    expect(ndm.is_official).toBe(false)
+    expect(Number(ndm.qty)).toBe(3)
   })
 
   test('serial: receipt places instance, transfer updates current_warehouse, wrong-location rejected', async () => {
