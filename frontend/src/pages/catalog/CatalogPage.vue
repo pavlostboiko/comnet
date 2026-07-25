@@ -112,7 +112,7 @@
                 <tr v-for="(r, i) in whereData.nonserial" :key="i">
                   <td class="td-name">{{ r.warehouse_name }}</td>
                   <td><span class="chip" :class="r.is_official ? 'chip-gov' : 'chip-vol'">{{ r.is_official ? 'облік' : 'ндм' }}</span></td>
-                  <td class="td-num">{{ r.qty }}</td>
+                  <td class="td-num">{{ fmtQty(r.qty) }}</td>
                 </tr>
               </tbody>
             </table>
@@ -161,7 +161,12 @@ const totals = ref({})
 const serviceName = (id) => services.value.find(s => s.id === id)?.name || '—'
 const totalOf = (id) => {
   const v = totals.value[String(id)]
-  return v != null ? String(Number(v)) : '0'
+  return v != null ? fmtQty(v) : '0'
+}
+function fmtQty(v) {
+  if (v == null || v === '') return '—'
+  const n = Number(v)
+  return Number.isInteger(n) ? String(n) : n.toLocaleString('uk-UA', { maximumFractionDigits: 4 })
 }
 
 const filtered = computed(() => {

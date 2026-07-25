@@ -182,23 +182,26 @@ def balances(warehouse_id: int, db: Session = Depends(get_db), user: User = Depe
 @router.get("/totals")
 def totals(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     """Сумарна кількість кожної номенклатури в системі (для списку «Майно»).
-    Несерійне: SUM(надходження) − SUM(списання) (переміщення взаємно 0).
+    Несерійне: сума ПОЗИТИВНИХ залишків по складах (як у балансах/«Де знаходиться»),
+    щоб узгоджувалося з попапом навіть якщо надходження зайшло переміщенням.
     Серійне: кількість розміщених екземплярів."""
+    # net per (nomenclature, warehouse)
+    net: dict = {}
+    for nid, wid, qty in (db.query(CustodyMovement.nomenclature_id, CustodyMovement.to_warehouse_id,
+                                   func.coalesce(func.sum(CustodyMovement.quantity), 0))
+                          .filter(CustodyMovement.instance_id.is_(None), CustodyMovement.to_warehouse_id.isnot(None))
+                          .group_by(CustodyMovement.nomenclature_id, CustodyMovement.to_warehouse_id).all()):
+        net[(nid, wid)] = net.get((nid, wid), Decimal(0)) + Decimal(qty or 0)
+    for nid, wid, qty in (db.query(CustodyMovement.nomenclature_id, CustodyMovement.from_warehouse_id,
+                                   func.coalesce(func.sum(CustodyMovement.quantity), 0))
+                          .filter(CustodyMovement.instance_id.is_(None), CustodyMovement.from_warehouse_id.isnot(None))
+                          .group_by(CustodyMovement.nomenclature_id, CustodyMovement.from_warehouse_id).all()):
+        net[(nid, wid)] = net.get((nid, wid), Decimal(0)) - Decimal(qty or 0)
+
     out: dict = {}
-    # non-serial receipts (from null, to set)
-    for nid, qty in (db.query(CustodyMovement.nomenclature_id, func.coalesce(func.sum(CustodyMovement.quantity), 0))
-                     .filter(CustodyMovement.instance_id.is_(None),
-                             CustodyMovement.from_warehouse_id.is_(None),
-                             CustodyMovement.to_warehouse_id.isnot(None))
-                     .group_by(CustodyMovement.nomenclature_id).all()):
-        out[nid] = out.get(nid, Decimal(0)) + Decimal(qty or 0)
-    # non-serial writeoffs (from set, to null)
-    for nid, qty in (db.query(CustodyMovement.nomenclature_id, func.coalesce(func.sum(CustodyMovement.quantity), 0))
-                     .filter(CustodyMovement.instance_id.is_(None),
-                             CustodyMovement.from_warehouse_id.isnot(None),
-                             CustodyMovement.to_warehouse_id.is_(None))
-                     .group_by(CustodyMovement.nomenclature_id).all()):
-        out[nid] = out.get(nid, Decimal(0)) - Decimal(qty or 0)
+    for (nid, _wid), qty in net.items():
+        if qty > 0:                      # лише позитивні залишки складів
+            out[nid] = out.get(nid, Decimal(0)) + qty
     # serial: placed instances
     for nid, cnt in (db.query(Instance.nomenclature_id, func.count(Instance.id))
                      .filter(Instance.current_warehouse_id.isnot(None))
