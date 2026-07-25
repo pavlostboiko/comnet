@@ -1,6 +1,8 @@
 /**
  * Nomenclature облік/ндм type flows to movements; /custody/totals aggregates.
  */
+const fs = require('fs')
+const path = require('path')
 const { test, expect } = require('@playwright/test')
 const { loginApi } = require('./helpers/login')
 const { postJson, bestEffortDelete } = require('./helpers/seed')
@@ -37,6 +39,31 @@ test('nomenclature is_official (ндм) flows to movement; totals aggregate', as
     expect(Number(totals[String(nom.id)])).toBe(5)
   } finally {
     await bestEffortDelete(api, cleanup)
+    await api.dispose()
+  }
+})
+
+test('totals count майно that entered via transfer only (no receipt)', async ({ request }) => {
+  const api = await loginApi(request)
+  try {
+    // Pre-create unit so «склад РотаТ» ... actually «РотаТ» becomes a unit via import.
+    const resp = await api.post('/api/admin/v2/import/movements', {
+      multipart: {
+        file: { name: 'to.xlsx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          buffer: fs.readFileSync(path.join(__dirname, 'fixtures/import_v2_transfer_only.xlsx')) },
+      },
+    }).then(r => r.json())
+    expect(resp.movements).toBe(1)
+
+    const noms = await api.get('/api/nomenclature').then(r => r.json())
+    const nom = noms.find(n => n.name === 'МайноТ')
+    expect(nom).toBeTruthy()
+
+    // Entered via transfer (no receipt) → old logic gave 0; now = destination balance
+    const totals = await api.get('/api/custody/totals').then(r => r.json())
+    expect(Number(totals[String(nom.id)] || 0)).toBeGreaterThanOrEqual(7)
+  } finally {
     await api.dispose()
   }
 })
