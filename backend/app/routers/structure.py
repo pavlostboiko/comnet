@@ -15,7 +15,7 @@ from app.database import get_db
 from app.models import Group, Mvo, Person, Service, Unit, User, Warehouse
 from app.schemas import (
     GroupCreate, GroupRead, GroupUpdate, MvoCreate, MvoRead, MvoUpdate,
-    UnitCreate, UnitRead, UnitUpdate, WarehouseRead,
+    UnitCreate, UnitRead, UnitUpdate, WarehouseRead, WarehouseUpdate,
 )
 
 router = APIRouter(prefix="/api/structure", tags=["structure"])
@@ -128,6 +128,21 @@ def delete_group(group_id: int, db: Session = Depends(get_db), _: User = Depends
 @router.get("/warehouses", response_model=List[WarehouseRead])
 def list_warehouses(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     return db.query(Warehouse).order_by(Warehouse.name).all()
+
+
+@router.put("/warehouses/{wid}", response_model=WarehouseRead)
+def rename_warehouse(wid: int, payload: WarehouseUpdate, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """Тільки перейменування — тип і прив'язка (служба/підрозділ) незмінні."""
+    wh = db.get(Warehouse, wid)
+    if not wh:
+        raise HTTPException(404, "Склад не знайдено")
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(400, "Назва не може бути порожньою")
+    wh.name = name
+    db.commit()
+    db.refresh(wh)
+    return wh
 
 
 # ── МВО (temporal assignment journal) ────────────────────────────────────────
