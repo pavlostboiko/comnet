@@ -126,7 +126,7 @@ class CustodyMovement(Base):
     is_official = Column(Boolean, nullable=False, default=True)
     card_number = Column(String, nullable=True)        # Переміщення «Поле 12»
     doc_number = Column(String, nullable=True)         # номер накладної
-    document_id = Column(Integer, nullable=True)       # v2-документи підв'яжуться у Фазі 5
+    document_id = Column(Integer, ForeignKey("custody_documents.id", ondelete="SET NULL"), nullable=True)  # шапка накладної/акта
     signed_by_person_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -135,6 +135,49 @@ class CustodyMovement(Base):
     instance = relationship("Instance")
     from_warehouse = relationship("Warehouse", foreign_keys=[from_warehouse_id])
     to_warehouse = relationship("Warehouse", foreign_keys=[to_warehouse_id])
+    document = relationship("CustodyDocument", back_populates="movements", foreign_keys=[document_id])
+
+
+class CustodyDocument(Base):
+    """v2: шапка документа (накладна/акт) над леджером custody_movements.
+
+    Реквізити тримаються тут ОДИН раз; рядки лінкуються через
+    custody_movements.document_id. status: draft (редагується) → signed (snap
+    заморожено, номер зафіксовано, доступний XLSX Дод.25). Sign/unsign НЕ рухають
+    леджер — рухи проводяться при створенні (інваріант v2)."""
+    __tablename__ = "custody_documents"
+
+    id = Column(Integer, primary_key=True)
+    operation = Column(String, nullable=False)         # receipt | transfer
+    form = Column(String, nullable=False)              # накладна | акт
+    doc_number = Column(String, nullable=True)
+    doc_date = Column(String, nullable=True)
+    date_operation = Column(String, nullable=True)
+    from_warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True)
+    to_warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True)
+    from_unit = Column(String, nullable=True)          # snap-назва складу-джерела
+    to_unit = Column(String, nullable=True)            # snap-назва складу-отримувача
+    counterparty = Column(String, nullable=True)       # від кого (приймання ззовні)
+    basis = Column(String, nullable=True)
+    service = Column(String, nullable=True)            # денормалізована назва служби
+    service_id = Column(Integer, ForeignKey("services.id", ondelete="SET NULL"), nullable=True)
+    op_type_id = Column(Integer, ForeignKey("op_types.id", ondelete="SET NULL"), nullable=True)
+    sender_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
+    receiver_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
+    fin_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String, nullable=False, default="draft")
+    signed_at = Column(DateTime, nullable=True)
+    signed_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    extra_data = Column(JSON, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    from_warehouse = relationship("Warehouse", foreign_keys=[from_warehouse_id])
+    to_warehouse = relationship("Warehouse", foreign_keys=[to_warehouse_id])
+    movements = relationship(
+        "CustodyMovement", back_populates="document",
+        foreign_keys="CustodyMovement.document_id",
+    )
 
 
 class Assignment(Base):

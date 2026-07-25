@@ -200,6 +200,8 @@
             <label class="fl">По батькові</label><input class="fi" v-model="form.patronymic" />
             <label class="fl">ІПН</label><input class="fi" v-model="form.ipn" />
             <label class="fl">Позивний</label><input class="fi" v-model="form.callsign" />
+            <label class="fl">Посада</label><input class="fi" v-model="form.position" placeholder="для підпису накладних" />
+            <label class="fl">Звання</label><input class="fi" v-model="form.rank" />
             <label class="fl">Підрозділ</label>
             <select class="fi" v-model="form.unit_id">
               <option :value="null">— не вказано —</option>
@@ -305,7 +307,7 @@ function openEditPerson(p) {
   Object.keys(form).forEach(k => delete form[k])
   Object.assign(form, {
     last_name: p.last_name, first_name: p.first_name, patronymic: p.patronymic,
-    ipn: p.ipn, callsign: p.callsign, rank: p.rank,
+    ipn: p.ipn, callsign: p.callsign, rank: p.rank, position: p.position,
     unit_id: p.unit_id || null, group_id: p.group_id || null,
   })
   addOpen.value = true
@@ -337,6 +339,7 @@ async function save() {
         last_name: form.last_name || null, first_name: form.first_name || null,
         patronymic: form.patronymic || null, ipn: form.ipn || null,
         callsign: form.callsign || null, rank: form.rank || null,
+        position: form.position || null,
         unit_id: form.unit_id || null, group_id: form.group_id || null,
       }
       if (editPersonId.value) await updatePerson(editPersonId.value, body)
@@ -428,17 +431,17 @@ th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:1
 .chip-ser { background:#dbeafe; color:#1e40af; } .chip-non { background:#f1f5f9; color:#475569; }
 .chip-svc { background:#fef3c7; color:#854d0e; } .chip-unit { background:#dcfce7; color:#166534; }
 
-.overlay { position:fixed; inset:0; background:rgba(15,23,42,0.35); display:none; align-items:flex-start; justify-content:center; padding:80px 20px; z-index:1200; }
+.overlay { position:fixed; inset:0; background:rgba(15,23,42,0.35); display:none; align-items:flex-start; justify-content:center; padding:80px 20px; z-index:1200; overflow-y:auto; }
 .overlay.open { display:flex; }
-.modal { background:var(--surface); border-radius:var(--radius); box-shadow:0 20px 50px rgba(0,0,0,0.15); width:min(460px,100%); }
-.modal-head { padding:14px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; }
+.modal { background:var(--surface); border-radius:var(--radius); box-shadow:0 20px 50px rgba(0,0,0,0.15); width:min(460px,100%); max-height:calc(100vh - 160px); display:flex; flex-direction:column; }
+.modal-head { padding:14px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; flex-shrink:0; }
 .modal-title { flex:1; font-weight:700; font-size:14px; }
 .modal-close { border:none; background:transparent; font-size:16px; color:var(--text-light); cursor:pointer; }
-.modal-body { padding:16px 20px; display:flex; flex-direction:column; gap:4px; }
+.modal-body { padding:16px 20px; display:flex; flex-direction:column; gap:4px; overflow-y:auto; }
 .fl { font-size:12px; color:var(--text-light); font-weight:600; margin-top:8px; }
 .fi { padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:inherit; font-size:14px; }
 .err { margin-top:10px; padding:8px 10px; background:#fee2e2; color:#991b1b; font-size:12.5px; border-radius:3px; }
-.modal-foot { padding:12px 20px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:8px; }
+.modal-foot { padding:12px 20px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:8px; flex-shrink:0; }
 .btn-sec { padding:7px 14px; background:transparent; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:inherit; font-size:13px; cursor:pointer; }
 .btn-pri { padding:7px 16px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; }
 .btn-pri:disabled { opacity:0.5; }

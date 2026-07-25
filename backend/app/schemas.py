@@ -187,6 +187,26 @@ class DocumentBatchCreate(BaseModel):
     items: List[DocumentItemIn]
 
 
+# --- v2 custody documents (накладна/акт-шапка над рухами) ---
+
+class CustodyDocIn(BaseModel):
+    operation: str = "transfer"                  # receipt | transfer
+    form: str = "накладна"                        # накладна | акт
+    doc_number: Optional[str] = None
+    doc_date: Optional[str] = None
+    date_operation: Optional[str] = None
+    from_warehouse_id: Optional[int] = None
+    to_warehouse_id: Optional[int] = None
+    counterparty: Optional[str] = None
+    basis: Optional[str] = None
+    service_id: Optional[int] = None
+    op_type_id: Optional[int] = None
+    sender_id: Optional[int] = None
+    receiver_id: Optional[int] = None
+    fin_id: Optional[int] = None
+    movement_ids: List[int] = []                  # рухи, що входять у документ
+
+
 # --- v2 assignments ---
 
 class AssignmentCreate(BaseModel):
