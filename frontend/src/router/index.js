@@ -67,6 +67,11 @@ const routes = [
     meta: { requiresAuth: true, label: 'Переміщення' },
   },
   {
+    path: '/docs',
+    component: () => import('../pages/documents_v2/DocumentsPage.vue'),
+    meta: { requiresAuth: true, adminOnly: true, label: 'Документи' },
+  },
+  {
     path: '/users',
     component: () => import('../pages/users/UsersPage.vue'),
     meta: { requiresAuth: true, adminOnly: true, label: 'Користувачі' },

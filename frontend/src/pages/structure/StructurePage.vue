@@ -120,15 +120,14 @@
         <!-- ═══ Особи ═══ -->
         <div v-if="tab === 'persons'" class="table-wrap">
           <table>
-            <thead><tr><th>ПІБ / позивний</th><th class="col-code">ІПН</th><th>Підрозділ</th><th>Група</th><th class="col-code">Звання</th><th class="col-acts2"></th></tr></thead>
+            <thead><tr><th>ПІБ / позивний</th><th class="col-code">ІПН</th><th>Підрозділ</th><th>Група</th><th class="col-acts2"></th></tr></thead>
             <tbody>
-              <tr v-if="!persons.length"><td colspan="6" class="empty">Немає осіб</td></tr>
+              <tr v-if="!persons.length"><td colspan="5" class="empty">Немає осіб</td></tr>
               <tr v-for="p in persons" :key="p.id">
                 <td class="td-name">{{ personLabel(p) }}</td>
                 <td class="td-mono td-dim">{{ p.ipn || '—' }}</td>
                 <td class="td-dim">{{ p.unit_id ? unitName(p.unit_id) : '—' }}</td>
                 <td class="td-dim">{{ p.group_id ? groupName(p.group_id) : '—' }}</td>
-                <td>{{ p.rank || '—' }}</td>
                 <td class="td-acts2">
                   <button class="act-e" @click="openEditPerson(p)" title="Редагувати">✎</button>
                   <button class="act-del" @click="del('person', p)">✕</button>
@@ -201,7 +200,6 @@
             <label class="fl">По батькові</label><input class="fi" v-model="form.patronymic" />
             <label class="fl">ІПН</label><input class="fi" v-model="form.ipn" />
             <label class="fl">Позивний</label><input class="fi" v-model="form.callsign" />
-            <label class="fl">Звання</label><input class="fi" v-model="form.rank" />
             <label class="fl">Підрозділ</label>
             <select class="fi" v-model="form.unit_id">
               <option :value="null">— не вказано —</option>
