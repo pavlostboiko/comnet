@@ -6,7 +6,8 @@ draft (редагується, група змінна) → signed (snap зам�
 леджер проводиться при створенні руху (інваріант v2).
 """
 import io
-from datetime import datetime
+from datetime import date as date_cls, datetime
+from decimal import Decimal
 from urllib.parse import quote
 from typing import List, Optional
 
@@ -14,7 +15,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.acl import check_movement_create, is_admin, scope_movements
+from app.acl import (
+    check_movement_create, check_nomenclature_cud, is_admin, scope_movements,
+)
 from app.auth import get_current_user
 from app.custody_export import build_xlsx_v2, has_snap
 from app.custody_snapshot import resolve_auto_number, snap_nakladna
@@ -22,7 +25,7 @@ from app.database import get_db
 from app.models import (
     CustodyDocument, CustodyMovement, Instance, Nomenclature, User, Warehouse,
 )
-from app.schemas import CustodyDocIn
+from app.schemas import CustodyDocIn, ReceiptCreate
 
 router = APIRouter(prefix="/api/custody/documents", tags=["custody-documents"])
 
@@ -198,6 +201,101 @@ def create_document(payload: CustodyDocIn, db: Session = Depends(get_db),
     db.flush()
     _apply_group(db, user, doc, movements)
     db.flush()
+    warnings = resolve_auto_number(doc, db)
+    snap_nakladna(doc, db)
+    db.commit()
+    db.refresh(doc)
+    out = _doc_dict(db, doc)
+    if warnings:
+        out["warnings"] = warnings
+    return out
+
+
+def _check_receipt(user: User, to_warehouse_id: int, nom: Nomenclature):
+    """Приймання: admin — усе; service — своя служба; mvo — свій склад."""
+    if is_admin(user):
+        return
+    if user.role == "service" and user.service_id == nom.service_id:
+        return
+    if user.role == "mvo" and user.warehouse_id == to_warehouse_id:
+        return
+    raise HTTPException(403, "Немає доступу до цього ресурсу")
+
+
+@router.post("/receive", status_code=status.HTTP_201_CREATED)
+def receive_document(payload: ReceiptCreate, db: Session = Depends(get_db),
+                     user: User = Depends(get_current_user)):
+    """Приймання майна ззовні одразу документом (акт/накладна) на склад.
+
+    Створює рухи receipt (ззовні → склад) з document_id. Номенклатуру можна
+    створити на льоту. is_official завжди береться з картки, не з payload."""
+    if payload.form not in FORMS:
+        raise HTTPException(400, "Невідома форма")
+    to = db.get(Warehouse, payload.to_warehouse_id)
+    if not to:
+        raise HTTPException(400, "Склад не знайдено")
+    if not payload.items:
+        raise HTTPException(400, "Немає позицій")
+    try:
+        mdate = date_cls.fromisoformat(payload.doc_date) if payload.doc_date else date_cls.today()
+    except ValueError:
+        mdate = date_cls.today()
+
+    doc = CustodyDocument(
+        operation="receipt", form=payload.form, doc_number=payload.doc_number,
+        doc_date=payload.doc_date, date_operation=payload.doc_date,
+        to_warehouse_id=to.id, counterparty=payload.counterparty, basis=payload.basis,
+        service_id=payload.service_id, op_type_id=payload.op_type_id,
+        sender_id=payload.sender_id, receiver_id=payload.receiver_id, fin_id=payload.fin_id,
+        status="draft", extra_data={}, created_by=user.id,
+    )
+    db.add(doc)
+    db.flush()
+
+    for it in payload.items:
+        if it.new_nomenclature:
+            nn = it.new_nomenclature
+            check_nomenclature_cud(user, nn.service_id)      # ACL: чужу службу не можна
+            nom = Nomenclature(
+                name=nn.name, service_id=nn.service_id, category=nn.category,
+                is_official=nn.is_official, is_serialized=nn.is_serialized,
+                unit_of_measure=nn.unit_of_measure, code=nn.code, price=nn.price,
+            )
+            db.add(nom); db.flush()
+        elif it.nomenclature_id:
+            nom = db.get(Nomenclature, it.nomenclature_id)
+            if not nom:
+                raise HTTPException(400, f"Номенклатуру {it.nomenclature_id} не знайдено")
+        else:
+            raise HTTPException(400, "Позиція без номенклатури")
+        _check_receipt(user, to.id, nom)
+
+        is_official = nom.is_official                        # тип обліку — з картки
+        instance = None
+        if nom.is_serialized:
+            if not it.serial_no:
+                raise HTTPException(400, f"«{nom.name}»: потрібен серійний номер")
+            if db.query(Instance).filter(Instance.serial_no == it.serial_no).first():
+                raise HTTPException(400, f"Серійний {it.serial_no} уже існує")
+            instance = Instance(
+                nomenclature_id=nom.id, serial_no=it.serial_no, card_number=it.card_number,
+                current_warehouse_id=to.id, is_official=is_official,
+            )
+            db.add(instance); db.flush()
+            qty = Decimal(1)
+        else:
+            qty = Decimal(it.quantity or 0)
+            if qty <= 0:
+                raise HTTPException(400, f"«{nom.name}»: кількість має бути > 0")
+
+        db.add(CustodyMovement(
+            date=mdate, type="receipt", nomenclature_id=nom.id,
+            from_warehouse_id=None, to_warehouse_id=to.id,
+            instance_id=instance.id if instance else None,
+            quantity=qty, is_official=is_official, card_number=it.card_number,
+            document_id=doc.id, created_by=user.id,
+        ))
+
     warnings = resolve_auto_number(doc, db)
     snap_nakladna(doc, db)
     db.commit()

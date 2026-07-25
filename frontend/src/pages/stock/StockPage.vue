@@ -14,7 +14,8 @@
               <option v-for="w in unitWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
             </optgroup>
           </select>
-          <button class="btn-sec2" :disabled="!warehouseId" @click="openDoc">Видати в підрозділ</button>
+          <button class="btn-sec2" :disabled="!warehouseId" @click="openReceive">Прийняти майно</button>
+          <button class="btn-sec3" :disabled="!warehouseId" @click="openDoc">Видати в підрозділ</button>
           <button class="btn-add" :disabled="!warehouseId" @click="openMove">+ Рух</button>
         </div>
 
@@ -119,6 +120,69 @@
       </div>
     </div>
 
+    <!-- ═══ Прийняти майно ззовні (batch receipt) ═══ -->
+    <div class="overlay" :class="{ open: recvOpen }" @click.self="recvOpen = false">
+      <div v-if="recvOpen" class="modal wide">
+        <div class="modal-head">
+          <span class="modal-title">Прийняти майно — на «{{ warehouseName(warehouseId) }}»</span>
+          <button class="modal-close" @click="recvOpen = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="doc-top">
+            <div class="fg">
+              <label class="fl">Форма</label>
+              <select class="fi" v-model="recv.form">
+                <option value="накладна">Накладна</option>
+                <option value="акт">Акт прийому-передачі</option>
+              </select>
+            </div>
+            <div class="fg"><label class="fl">№ документа</label><input class="fi" v-model="recv.doc_number" placeholder="авто" /></div>
+            <div class="fg"><label class="fl">Дата</label><input class="fi" type="date" v-model="recv.doc_date" /></div>
+          </div>
+          <div class="fg" style="margin-bottom:14px"><label class="fl">Від кого (контрагент)</label><input class="fi" v-model="recv.counterparty" placeholder="зовнішній підрозділ / постачальник" /></div>
+
+          <div class="doc-label">Позиції</div>
+          <div v-for="(r, i) in recv.items" :key="i" class="recv-row">
+            <div class="recv-line">
+              <select class="fi row-nom" v-model="r.nomenclature_id" @change="onRecvNom(r)">
+                <option :value="null" disabled>— номенклатура —</option>
+                <option v-for="n in nomenclature" :key="n.id" :value="n.id">{{ n.name }} ({{ n.is_serialized ? 'серійне' : 'несерійне' }})</option>
+                <option value="__new__">+ нова номенклатура…</option>
+              </select>
+              <template v-if="recvSerialized(r)">
+                <input class="fi row-qty" v-model="r.serial_no" placeholder="серійний №" />
+                <input class="fi row-qty" v-model="r.card_number" placeholder="№ картки" />
+              </template>
+              <template v-else>
+                <input class="fi row-qty" type="number" min="0.0001" step="0.0001" v-model="r.quantity" placeholder="к-сть" />
+              </template>
+              <button class="row-del" @click="recv.items.splice(i, 1)" :disabled="recv.items.length === 1">✕</button>
+            </div>
+            <div v-if="r.nomenclature_id === '__new__'" class="recv-new">
+              <input class="fi" v-model="r.nn_name" placeholder="назва" />
+              <select class="fi" v-model="r.nn_service_id">
+                <option :value="null" disabled>— служба —</option>
+                <option v-for="s in services" :key="s.id" :value="s.id">{{ s.name }}</option>
+              </select>
+              <select class="fi" v-model="r.nn_is_official">
+                <option :value="true">облік</option>
+                <option :value="false">ндм</option>
+              </select>
+              <label class="ser-chk"><input type="checkbox" v-model="r.nn_is_serialized" /> серійне</label>
+              <input class="fi" v-model="r.nn_uom" placeholder="од. (шт)" />
+            </div>
+          </div>
+          <button class="btn-addrow" @click="addRecvRow">+ Додати позицію</button>
+
+          <div v-if="recvErr" class="err">{{ recvErr }}</div>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-sec" @click="recvOpen = false">Скасувати</button>
+          <button class="btn-pri" :disabled="recvSaving" @click="saveReceive">Прийняти</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ═══ Видача modal ═══ -->
     <div class="overlay" :class="{ open: issueOpen }" @click.self="issueOpen = false">
       <div v-if="issueOpen" class="modal">
@@ -214,8 +278,8 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import { getWarehouses } from '../../api/structure.js'
 import { getNomenclature, createInstance } from '../../api/nomenclature.js'
-import { getBalances, getSerialAt, createMovement, createDocument } from '../../api/custody.js'
-import { getPersons } from '../../api/settings.js'
+import { getBalances, getSerialAt, createMovement, createDocument, receiveDocument } from '../../api/custody.js'
+import { getPersons, getServices } from '../../api/settings.js'
 import { getAssignments, createAssignment, returnAssignment } from '../../api/assignments.js'
 import { useAuthStore } from '../../stores/auth.js'
 
@@ -228,6 +292,7 @@ const balances = ref([])
 const serial = ref([])
 const assignments = ref([])
 const persons = ref([])
+const services = ref([])
 
 const serviceWarehouses = computed(() => warehouses.value.filter(w => w.type === 'service'))
 const unitWarehouses = computed(() => warehouses.value.filter(w => w.type === 'unit'))
@@ -283,10 +348,11 @@ function fmtQty(v) {
 }
 
 async function loadRefs() {
-  const [w, n, p] = await Promise.all([getWarehouses(), getNomenclature(), getPersons()])
+  const [w, n, p, s] = await Promise.all([getWarehouses(), getNomenclature(), getPersons(), getServices()])
   warehouses.value = w.data
   nomenclature.value = n.data
   persons.value = p.data
+  services.value = s.data
   // МВО: одразу відкриваємо свій склад
   if (auth.user?.role === 'mvo' && auth.user?.warehouse_id) {
     warehouseId.value = auth.user.warehouse_id
@@ -419,6 +485,67 @@ async function saveDoc() {
   }
 }
 
+// ── Прийняти майно ззовні (batch receipt) ────────────────────────────
+const recvOpen = ref(false)
+const recvSaving = ref(false)
+const recvErr = ref('')
+const recv = reactive({ form: 'накладна', doc_number: '', doc_date: '', counterparty: '', items: [] })
+function newRecvRow() {
+  return {
+    nomenclature_id: null, quantity: null, serial_no: '', card_number: '',
+    nn_name: '', nn_service_id: null, nn_is_official: true, nn_is_serialized: false, nn_uom: '',
+  }
+}
+function openReceive() {
+  recvErr.value = ''
+  Object.assign(recv, {
+    form: 'накладна', doc_number: '', doc_date: new Date().toISOString().slice(0, 10),
+    counterparty: '', items: [newRecvRow()],
+  })
+  recvOpen.value = true
+}
+function addRecvRow() { recv.items.push(newRecvRow()) }
+function onRecvNom(r) { r.serial_no = ''; r.card_number = ''; r.quantity = null }
+function recvSerialized(r) {
+  if (r.nomenclature_id === '__new__') return r.nn_is_serialized
+  return !!nomById(r.nomenclature_id)?.is_serialized
+}
+async function saveReceive() {
+  const items = []
+  for (const r of recv.items) {
+    if (!r.nomenclature_id) continue
+    const serialized = recvSerialized(r)
+    const base = serialized
+      ? { serial_no: r.serial_no || null, card_number: r.card_number || null }
+      : { quantity: Number(r.quantity) }
+    if (r.nomenclature_id === '__new__') {
+      if (!r.nn_name || !r.nn_service_id) { recvErr.value = 'Нова номенклатура: назва і служба обов’язкові'; return }
+      items.push({ ...base, new_nomenclature: {
+        name: r.nn_name, service_id: r.nn_service_id, is_official: r.nn_is_official,
+        is_serialized: r.nn_is_serialized, unit_of_measure: r.nn_uom || null,
+      } })
+    } else {
+      items.push({ ...base, nomenclature_id: r.nomenclature_id })
+    }
+  }
+  if (!items.length) { recvErr.value = 'Додайте хоча б одну позицію'; return }
+  recvSaving.value = true
+  recvErr.value = ''
+  try {
+    await receiveDocument({
+      to_warehouse_id: warehouseId.value, form: recv.form,
+      counterparty: recv.counterparty || null, doc_number: recv.doc_number || null,
+      doc_date: recv.doc_date, items,
+    })
+    recvOpen.value = false
+    await loadStock()
+  } catch (e) {
+    recvErr.value = e?.response?.data?.detail || 'Помилка приймання'
+  } finally {
+    recvSaving.value = false
+  }
+}
+
 async function saveMove() {
   saving.value = true
   error.value = ''
@@ -464,6 +591,12 @@ async function saveMove() {
 .btn-add:disabled { opacity:0.5; }
 .btn-sec2 { margin-left:auto; padding:6px 14px; background:transparent; border:1px solid var(--accent); color:var(--accent); border-radius:var(--radius-sm); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; }
 .btn-sec2:disabled { opacity:0.5; }
+.btn-sec3 { padding:6px 14px; background:transparent; border:1px solid var(--accent); color:var(--accent); border-radius:var(--radius-sm); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+.btn-sec3:disabled { opacity:0.5; }
+.recv-row { margin-bottom:10px; border-bottom:1px dashed var(--border-light); padding-bottom:8px; }
+.recv-line { display:flex; gap:8px; align-items:center; }
+.recv-new { display:grid; grid-template-columns:1fr 1fr 100px auto 90px; gap:8px; margin-top:6px; align-items:center; }
+.ser-chk { display:flex; align-items:center; gap:4px; font-size:12px; color:var(--text-mid); white-space:nowrap; }
 .modal.wide { width:min(640px,100%); }
 .doc-top { display:grid; grid-template-columns:1fr 140px 140px; gap:10px; margin-bottom:14px; }
 .fg { display:flex; flex-direction:column; gap:4px; }

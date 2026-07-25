@@ -50,6 +50,15 @@ test('card number links Items instance to a Переміщення movement', as
     expect(ours.doc_number).toBe('НАКЛ-777')
     expect(ours.card_number).toBe('CARD-LNK-1')
 
+    // Import backfills a custody_document from the doc_number group, and the
+    // movement is linked to it (so imported накладні show under «Документи»).
+    expect(ours.document_id).not.toBeNull()
+    const docs = await api.get('/api/custody/documents').then(r => r.json())
+    const linkedDoc = docs.find(d => d.id === ours.document_id)
+    expect(linkedDoc).toBeTruthy()
+    expect(linkedDoc.doc_number).toBe('НАКЛ-777')
+    expect(linkedDoc.status).toBe('signed')
+
     // Same card but a DIFFERENT serial → conflict: skipped + reported, no new movement
     const mv2 = await up(api, '/api/admin/v2/import/movements', 'import_v2_link_mv_mismatch.xlsx').then(r => r.json())
     expect(mv2.movements).toBe(0)

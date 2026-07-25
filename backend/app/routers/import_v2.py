@@ -9,7 +9,7 @@
 збігом з ІСНУЮЧИМИ підрозділами (тому їх варто завести до імпорту); решта = ПІБ.
 is_official за замовчуванням True (державне).
 """
-from datetime import date as date_cls
+from datetime import date as date_cls, datetime
 from decimal import Decimal
 from io import BytesIO
 from typing import Optional
@@ -20,9 +20,10 @@ from sqlalchemy.orm import Session
 
 from app.auth import require_admin
 from app.database import get_db
+from app.custody_snapshot import snap_nakladna
 from app.models import (
-    Assignment, CustodyMovement, Instance, Nomenclature, Person, Service,
-    Unit, User, Warehouse,
+    Assignment, CustodyDocument, CustodyMovement, Instance, Nomenclature, Person,
+    Service, Unit, User, Warehouse,
 )
 from app.routers.admin import _clean, _normalize_serial, _parse_decimal, _parse_date
 from app.routers.structure import ensure_warehouse_for_service, ensure_warehouse_for_unit
@@ -202,8 +203,10 @@ def import_movements_v2(
     units = {u.name.strip().lower(): u for u in db.query(Unit).all()}
     noms = {(n.name.strip().lower(), n.service_id): n for n in db.query(Nomenclature).all()}
 
-    counts = {"rows": 0, "movements": 0, "skipped": 0,
+    counts = {"rows": 0, "movements": 0, "skipped": 0, "documents_created": 0,
               "services_created": 0, "units_created": 0, "instances_created": 0}
+    # Групування рухів у накладні по (номер, звідки, куди). Заповнюється у циклі.
+    doc_groups: dict = {}
     errors = []
 
     def get_service(name):
@@ -325,21 +328,51 @@ def import_movements_v2(
             except ValueError:
                 mdate = date_cls.today()
 
-            db.add(CustodyMovement(
+            doc_number = _clean(mc(cells, "doc_number"))
+            mv = CustodyMovement(
                 date=mdate, type=mtype, nomenclature_id=nom.id,
                 from_warehouse_id=from_wh.id if from_wh else None,
                 to_warehouse_id=to_wh.id if to_wh else None,
                 instance_id=instance.id if instance else None,
                 quantity=qty, is_official=nom.is_official,
-                card_number=card, doc_number=_clean(mc(cells, "doc_number")),
+                card_number=card, doc_number=doc_number,
                 created_by=user.id,
-            ))
+            )
+            db.add(mv)
             counts["movements"] += 1
             if instance:
                 instance.current_warehouse_id = to_wh.id if to_wh else None
+            if doc_number:
+                key = (doc_number, mtype,
+                       from_wh.id if from_wh else None,
+                       to_wh.id if to_wh else None)
+                doc_groups.setdefault(key, {"date": mdate, "movements": []})["movements"].append(mv)
         except Exception as e:
             counts["skipped"] += 1
             errors.append(f"рядок {i} «{name}»: {e}")
 
+    db.flush()   # присвоїти id рухам перед лінкуванням у документи
+    _backfill_documents(db, user, doc_groups, counts)
     db.commit()
     return {**counts, "errors": errors[:100]}
+
+
+def _backfill_documents(db: Session, user: User, doc_groups: dict, counts: dict) -> None:
+    """Створити custody_documents з груп імпортованих рухів (по номеру накладної),
+    щоб імпортовані накладні одразу були повноцінними документами (не «без документа»).
+    Операція receipt/transfer/writeoff → накладна; статус signed (історичні)."""
+    for (doc_number, mtype, from_id, to_id), g in doc_groups.items():
+        operation = "receipt" if mtype == "receipt" else "transfer"
+        doc = CustodyDocument(
+            operation=operation, form="накладна", doc_number=doc_number,
+            doc_date=g["date"].isoformat(), date_operation=g["date"].isoformat(),
+            from_warehouse_id=from_id, to_warehouse_id=to_id,
+            status="signed", signed_at=datetime.utcnow(), signed_by=user.id,
+            extra_data={}, created_by=user.id,
+        )
+        db.add(doc); db.flush()
+        for mv in g["movements"]:
+            mv.document_id = doc.id
+        db.flush()
+        snap_nakladna(doc, db)
+        counts["documents_created"] += 1
