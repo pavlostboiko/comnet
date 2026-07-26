@@ -30,8 +30,6 @@ from app.routers.assignments import _active_issued
 from app.routers.custody import balance_of
 from app.routers.structure import ensure_warehouse_for_service, ensure_warehouse_for_unit
 
-import re
-
 router = APIRouter(prefix="/api/admin/v2", tags=["admin-v2"])
 
 # Значення «Де», що означають «склад служби» (не підрозділ, не видано особі).
@@ -416,10 +414,14 @@ def import_assignments_v2(
 
     services = {s.name.strip().lower(): s for s in db.query(Service).all()}
     noms = {(n.name.strip().lower(), n.service_id): n for n in db.query(Nomenclature).all()}
-    persons_by_last: dict = {}
-    for p in db.query(Person).all():
-        if p.last_name:
-            persons_by_last.setdefault(p.last_name.strip().lower(), []).append(p)
+    persons = db.query(Person).all()
+    # Внутрішні підрозділи, довші назви першими — для найдовшого префіксного матчу.
+    internal_units = sorted(
+        [u for u in db.query(Unit).all() if not u.is_external],
+        key=lambda u: len(u.name or ""), reverse=True)
+    wh_of_unit = {
+        w.unit_id: w for w in db.query(Warehouse).filter(Warehouse.type == "unit").all()
+    }
 
     counts = {"rows": 0, "assignments": 0, "skipped": 0}
     errors = []
@@ -429,6 +431,23 @@ def import_assignments_v2(
             if k == key:
                 return row[c - 1].value
         return None
+
+    def parse_de(loc):
+        """«<підрозділ> <Прізвище>» → (unit, surname). surname=None якщо лише
+        підрозділ; (None, None) якщо склад/порожньо/не розпізнано."""
+        s = _clean(loc)
+        if not s or is_service_warehouse_location(s):
+            return (None, None)
+        low = s.lower()
+        for u in internal_units:
+            n = (u.name or "").strip()
+            if not n:
+                continue
+            if low == n.lower():
+                return (u, None)
+            if low.startswith(n.lower() + " "):
+                return (u, s[len(n):].strip() or None)
+        return (None, None)
 
     def latest_move_date(inst_id=None, nom_id=None, wh_id=None):
         q = db.query(CustodyMovement)
@@ -446,10 +465,17 @@ def import_assignments_v2(
         if not name:
             continue
         loc = col(row, "location")
-        m = re.search(r"\[([^\]]+)\]", str(loc) if loc is not None else "")
-        if not m:
-            continue  # не видано особі
-        surname = m.group(1).strip()
+        unit, surname = parse_de(loc)
+        if unit is None:
+            # склад/порожньо — пропускаємо тихо; текст із нерозпізнаним підрозділом — у звіт
+            s = _clean(loc)
+            if s and not is_service_warehouse_location(s):
+                counts["rows"] += 1
+                counts["skipped"] += 1
+                errors.append(f"«{name}»: не розпізнано підрозділ у «Де»: «{s}»")
+            continue
+        if surname is None:
+            continue  # лише підрозділ — не видано особі
         counts["rows"] += 1
         try:
             svc_name = _clean(col(row, "service"))
@@ -463,14 +489,20 @@ def import_assignments_v2(
                 counts["skipped"] += 1
                 errors.append(f"«{name}»: номенклатуру не знайдено")
                 continue
-            matches = persons_by_last.get(surname.lower(), [])
+            wh = wh_of_unit.get(unit.id)
+            if not wh:
+                counts["skipped"] += 1
+                errors.append(f"«{name}»: у підрозділу «{unit.name}» немає складу")
+                continue
+            matches = [p for p in persons
+                       if (p.last_name or "").strip().lower() == surname.lower() and p.unit_id == unit.id]
             if len(matches) == 0:
                 counts["skipped"] += 1
-                errors.append(f"«{name}»: особу «{surname}» не знайдено")
+                errors.append(f"«{name}»: особу «{surname}» у підрозділі «{unit.name}» не знайдено")
                 continue
             if len(matches) > 1:
                 counts["skipped"] += 1
-                errors.append(f"«{name}»: неоднозначне прізвище «{surname}»")
+                errors.append(f"«{name}»: неоднозначне прізвище «{surname}» у «{unit.name}»")
                 continue
             person = matches[0]
 
@@ -482,14 +514,9 @@ def import_assignments_v2(
                     counts["skipped"] += 1
                     errors.append(f"«{name}»: екземпляр за карткою «{card}» не знайдено")
                     continue
-                wh = db.get(Warehouse, inst.current_warehouse_id) if inst.current_warehouse_id else None
-                if not wh or wh.type != "unit":
+                if inst.current_warehouse_id != wh.id:
                     counts["skipped"] += 1
-                    errors.append(f"«{name}» ({inst.serial_no}): не на складі підрозділу")
-                    continue
-                if person.unit_id != wh.unit_id:
-                    counts["skipped"] += 1
-                    errors.append(f"«{name}» ({inst.serial_no}): «{surname}» з іншого підрозділу")
+                    errors.append(f"«{name}» ({inst.serial_no}): не на складі підрозділу «{unit.name}»")
                     continue
                 if db.query(Assignment).filter(Assignment.instance_id == inst.id,
                                                Assignment.returned_date.is_(None)).first():
@@ -501,20 +528,10 @@ def import_assignments_v2(
                     instance_id=inst.id, quantity=Decimal(1), is_official=inst.is_official,
                     issued_date=latest_move_date(inst_id=inst.id), created_by=user.id))
             else:
-                if not person.unit_id:
-                    counts["skipped"] += 1
-                    errors.append(f"«{name}»: «{surname}» без підрозділу")
-                    continue
-                wh = db.query(Warehouse).filter(Warehouse.unit_id == person.unit_id,
-                                                Warehouse.type == "unit").first()
-                if not wh:
-                    counts["skipped"] += 1
-                    errors.append(f"«{name}»: у підрозділу «{surname}» немає складу")
-                    continue
                 free = balance_of(db, wh.id, nom.id, nom.is_official) - _active_issued(db, wh.id, nom.id, nom.is_official)
                 if free < 1:
                     counts["skipped"] += 1
-                    errors.append(f"«{name}»: недостатньо на складі підрозділу (вільно {free})")
+                    errors.append(f"«{name}»: недостатньо на складі «{unit.name}» (вільно {free})")
                     continue
                 db.add(Assignment(
                     warehouse_id=wh.id, person_id=person.id, nomenclature_id=nom.id,
