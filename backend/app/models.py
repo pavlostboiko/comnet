@@ -104,6 +104,7 @@ class Instance(Base):
     card_number = Column(String, nullable=True)       # Items «№» — join з Переміщеннями
     current_warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True)
     is_official = Column(Boolean, nullable=False, default=True)  # державне / волонтерське
+    note = Column(String, nullable=True)              # примітка на екземплярі
 
     nomenclature = relationship("Nomenclature")
     current_warehouse = relationship("Warehouse")

@@ -13,7 +13,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models import Instance, Nomenclature, Service, User, Warehouse
 from app.schemas import (
-    InstanceCreate, InstanceRead, NomenclatureCreate, NomenclatureRead,
+    InstanceCreate, InstanceRead, InstanceUpdate, NomenclatureCreate, NomenclatureRead,
     NomenclatureUpdate,
 )
 
@@ -104,3 +104,17 @@ def delete_instance(nid: int, iid: int, db: Session = Depends(get_db), user: Use
         raise HTTPException(404, "Екземпляр не знайдено")
     db.delete(inst)
     db.commit()
+
+
+@router.put("/{nid}/instances/{iid}", response_model=InstanceRead)
+def update_instance(nid: int, iid: int, payload: InstanceUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    n = _get_or_404(db, nid)
+    check_nomenclature_cud(user, n.service_id)
+    inst = db.get(Instance, iid)
+    if not inst or inst.nomenclature_id != nid:
+        raise HTTPException(404, "Екземпляр не знайдено")
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(inst, field, value)
+    db.commit()
+    db.refresh(inst)
+    return inst
