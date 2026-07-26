@@ -5,7 +5,7 @@ test('Залишки page loads with warehouse selector', async ({ page }) => {
   await uiLogin(page)
   await page.goto(`${URL}/stock`)
   await expect(page.locator('.tile-title')).toContainText('Залишки')
-  await expect(page.locator('.wh-select')).toBeVisible()
+  await expect(page.locator('.wh-tabs')).toBeVisible()
   // «+ Рух» disabled until a warehouse is chosen
   await expect(page.locator('.btn-add')).toBeDisabled()
 })
@@ -34,7 +34,7 @@ test('receipt increases the non-serial balance (full UI loop)', async ({ page })
 
   // Go to Stock, pick the service warehouse, do a receipt of 7
   await page.goto(`${URL}/stock`)
-  await page.locator('.wh-select').selectOption({ label: `Склад ${svcName}` })
+  await page.locator('.wh-btn', { hasText: `Склад ${svcName}` }).click()
   await page.locator('.btn-add', { hasText: '+ Рух' }).click()
   await page.locator('.modal select').nth(0).selectOption('receipt')       // type
   await page.locator('.modal select').nth(1).selectOption({ label: `${nomName} (несерійне)` })

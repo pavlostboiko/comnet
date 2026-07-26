@@ -24,7 +24,7 @@ test('serial issue then row-level return on Залишки', async ({ page, requ
   page.on('dialog', d => d.accept())   // confirm() on return
   await uiLogin(page)
   await page.goto(`${URL}/stock`)
-  await page.locator('.wh-select').selectOption({ label: unitWh.name })
+  await page.locator('.wh-btn', { hasText: unitWh.name }).click()
 
   const row = page.locator('tbody tr', { hasText: `SN-${ts}` }).first()
   await expect(row.locator('.btn-issue')).toBeVisible()          // free → «Видати»

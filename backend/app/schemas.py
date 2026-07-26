@@ -36,6 +36,7 @@ class UnitRead(BaseModel):
     name: str
     code: Optional[str] = None
     name_locative: Optional[str] = None
+    is_external: bool = False
     model_config = {"from_attributes": True}
 
 
@@ -43,12 +44,14 @@ class UnitCreate(BaseModel):
     name: str
     code: Optional[str] = None
     name_locative: Optional[str] = None
+    is_external: bool = False
 
 
 class UnitUpdate(BaseModel):
     name: Optional[str] = None
     code: Optional[str] = None
     name_locative: Optional[str] = None
+    is_external: Optional[bool] = None
 
 
 class GroupRead(BaseModel):

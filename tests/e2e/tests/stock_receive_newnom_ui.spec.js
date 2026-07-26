@@ -14,7 +14,7 @@ test('receive «+ нова номенклатура» uses the shared card form 
 
   await uiLogin(page)
   await page.goto(`${URL}/stock`)
-  await page.locator('.wh-select').selectOption({ label: svcWh.name })
+  await page.locator('.wh-btn', { hasText: svcWh.name }).click()
   await page.locator('button', { hasText: 'Прийняти майно' }).click()
   await page.locator('.recv-row select.row-nom').first().selectOption('__new__')
 

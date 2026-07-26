@@ -20,7 +20,7 @@ test('Залишки search filters rows and «/» focuses it', async ({ page, r
 
   await uiLogin(page)
   await page.goto(`${URL}/stock`)
-  await page.locator('.wh-select').selectOption({ label: svcWh.name })
+  await page.locator('.wh-btn', { hasText: svcWh.name }).click()
 
   // both rows visible initially
   await expect(page.locator('tbody tr', { hasText: `Alpha ${ts}` })).toBeVisible()
@@ -30,7 +30,7 @@ test('Залишки search filters rows and «/» focuses it', async ({ page, r
   await page.locator('body').click()
   await page.keyboard.press('/')
   await expect(page.locator('.search-row input')).toBeFocused()
-  await page.keyboard.type(`Alpha ${ts}`)
+  await page.locator('.search-row input').fill(`Alpha ${ts}`)
   await expect(page.locator('tbody tr', { hasText: `Alpha ${ts}` })).toBeVisible()
   await expect(page.locator('tbody tr', { hasText: `Beta ${ts}` })).toHaveCount(0)
 

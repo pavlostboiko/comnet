@@ -64,6 +64,6 @@ test('МВО login: no admin nav, stock opens on own warehouse', async ({ page }
 
   // Stock auto-opens on their warehouse (unified table visible, no «оберіть склад»)
   await page.locator('.nav-link', { hasText: 'Залишки' }).click()
-  await expect(page.locator('.wh-select')).toBeVisible()
+  await expect(page.locator('.wh-tabs')).toBeVisible()
   await expect(page.locator('.empty', { hasText: 'Оберіть склад' })).toHaveCount(0)
 })
