@@ -22,6 +22,12 @@
         <div v-if="!warehouseId" class="empty">Оберіть склад, щоб побачити залишки</div>
 
         <template v-else>
+          <!-- Пошук -->
+          <div class="search-row">
+            <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            <input ref="stockSearchRef" v-model="stockSearch" placeholder="Пошук за назвою, серійним…" @keydown.esc="stockSearch=''" />
+            <button v-if="stockSearch" class="search-clear" @click="stockSearch=''; stockSearchRef?.focus()">×</button>
+          </div>
           <!-- Фільтри стану -->
           <div v-if="isUnitWh" class="filter-row">
             <button v-for="f in FILTERS" :key="f.key" class="f-chip" :class="{ on: stockFilter === f.key }" @click="stockFilter = f.key">
@@ -275,7 +281,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import { getWarehouses } from '../../api/structure.js'
 import { getNomenclature, createInstance } from '../../api/nomenclature.js'
@@ -383,9 +389,15 @@ const stockRows = computed(() => {
   rows.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'uk') || (a.serial_no || '').localeCompare(b.serial_no || ''))
   return rows
 })
-const filteredRows = computed(() =>
-  stockFilter.value === 'all' ? stockRows.value : stockRows.value.filter(r => r.state === stockFilter.value)
-)
+const stockSearch = ref('')
+const stockSearchRef = ref(null)
+const filteredRows = computed(() => {
+  let rows = stockFilter.value === 'all' ? stockRows.value : stockRows.value.filter(r => r.state === stockFilter.value)
+  const q = stockSearch.value.trim().toLowerCase()
+  if (q) rows = rows.filter(r =>
+    (r.name || '').toLowerCase().includes(q) || (r.serial_no || '').toLowerCase().includes(q))
+  return rows
+})
 const countOf = (key) => key === 'all' ? stockRows.value.length : stockRows.value.filter(r => r.state === key).length
 
 const warehouseName = (id) => warehouses.value.find(w => w.id === id)?.name || (id ? `#${id}` : 'ззовні')
@@ -425,7 +437,13 @@ async function loadStock() {
     assignments.value = []
   }
 }
-onMounted(loadRefs)
+function onKeyDown(e) {
+  const tag = document.activeElement?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+  if (e.key === '/') { e.preventDefault(); stockSearchRef.value?.focus() }
+}
+onMounted(() => { loadRefs(); document.addEventListener('keydown', onKeyDown) })
+onUnmounted(() => document.removeEventListener('keydown', onKeyDown))
 
 // ── Видача ───────────────────────────────────────────────────────────
 const issueOpen = ref(false)
@@ -507,9 +525,26 @@ const docSaving = ref(false)
 const docErr = ref('')
 const doc = reactive({ to_warehouse_id: null, date: '', items: [] })
 
-// Пошуковий список номенклатури для autocomplete (name + code як «number»).
-const nomOptions = computed(() =>
-  nomenclature.value.map(n => ({ id: n.id, name: n.name, number: n.code || '', is_serialized: n.is_serialized })))
+// Вільний несерійний залишок картки на поточному складі (баланс − видане).
+const freeQtyOf = (nomId) => {
+  const b = balances.value.find(x => x.nomenclature_id === nomId)
+  return b ? Number(b.qty) - activeIssued(nomId, b.is_official) : 0
+}
+
+// Autocomplete: ЛИШЕ майно, що реально доступне на поточному складі для
+// переміщення — несерійне з вільним залишком або серійне з невиданими екземплярами.
+const nomOptions = computed(() => {
+  const ids = new Set()
+  for (const b of balances.value) {
+    if (Number(b.qty) - activeIssued(b.nomenclature_id, b.is_official) > 0) ids.add(b.nomenclature_id)
+  }
+  for (const s of serial.value) {
+    if (!assignmentOfInstance(s.instance_id)) ids.add(s.nomenclature_id)  // невидані
+  }
+  return nomenclature.value
+    .filter(n => ids.has(n.id))
+    .map(n => ({ id: n.id, name: n.name, number: n.code || '', is_serialized: n.is_serialized }))
+})
 
 // Вибір номенклатури в рядку: несерійну картку не даємо додати двічі.
 function onDocNom(r, i, item) {
@@ -523,11 +558,14 @@ function onDocNom(r, i, item) {
   docErr.value = ''
 }
 
-// Екземпляри на складі-джерелі для цього рядка, окрім уже обраних в інших рядках
-// (щоб один екземпляр не додати двічі).
+// Екземпляри для цього рядка: на складі-джерелі, НЕвидані, окрім уже обраних
+// в інших рядках (щоб один екземпляр не додати двічі й не переміщати видане).
 function availInstances(r, i) {
   const used = doc.items.filter((_, idx) => idx !== i).map(x => x.instance_id).filter(Boolean)
-  return serial.value.filter(s => s.nomenclature_id === r.nomenclature_id && !used.includes(s.instance_id))
+  return serial.value.filter(s =>
+    s.nomenclature_id === r.nomenclature_id &&
+    !used.includes(s.instance_id) &&
+    !assignmentOfInstance(s.instance_id))
 }
 
 function openDoc() {
@@ -542,6 +580,15 @@ async function saveDoc() {
   if (!doc.to_warehouse_id) { docErr.value = 'Оберіть склад призначення'; return }
   const items = doc.items.filter(r => r.nomenclature_id && (r.instance_id || Number(r.quantity) > 0))
   if (!items.length) { docErr.value = 'Додайте хоча б одну позицію'; return }
+  for (const r of items) {
+    if (!r.instance_id) {
+      const free = freeQtyOf(r.nomenclature_id)
+      if (Number(r.quantity) > free) {
+        docErr.value = `«${nomName(r.nomenclature_id)}»: на складі вільно ${free}`
+        return
+      }
+    }
+  }
   docSaving.value = true
   docErr.value = ''
   try {
@@ -688,6 +735,10 @@ async function saveMove() {
 .row-del:disabled { opacity:0.4; }
 .btn-addrow { margin-top:6px; background:transparent; border:1px dashed var(--border); color:var(--text-mid); border-radius:var(--radius-sm); padding:6px 12px; font-family:inherit; font-size:13px; cursor:pointer; }
 
+.search-row { padding:10px 20px; display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--border-light); }
+.search-icon { width:14px; height:14px; color:var(--text-light); flex-shrink:0; }
+.search-row input { flex:1; border:none; background:transparent; font-family:inherit; font-size:14px; outline:none; color:var(--text); }
+.search-clear { width:22px; height:22px; border:none; background:transparent; cursor:pointer; color:var(--text-light); font-size:16px; }
 .filter-row { padding:12px 20px; display:flex; gap:8px; border-bottom:1px solid var(--border-light); }
 .f-chip { border:1px solid var(--border); background:var(--bg); border-radius:var(--radius-pill); padding:5px 14px; cursor:pointer; font-family:inherit; font-size:13px; color:var(--text-mid); display:inline-flex; align-items:center; gap:6px; }
 .f-chip.on { background:var(--accent); color:#fff; border-color:var(--accent); }
