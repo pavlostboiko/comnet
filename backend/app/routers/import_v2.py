@@ -26,7 +26,11 @@ from app.models import (
     Service, Unit, User, Warehouse,
 )
 from app.routers.admin import _clean, _normalize_serial, _parse_decimal, _parse_date
+from app.routers.assignments import _active_issued
+from app.routers.custody import balance_of
 from app.routers.structure import ensure_warehouse_for_service, ensure_warehouse_for_unit
+
+import re
 
 router = APIRouter(prefix="/api/admin/v2", tags=["admin-v2"])
 
@@ -387,3 +391,139 @@ def _backfill_documents(db: Session, user: User, doc_groups: dict, counts: dict)
         db.flush()
         snap_nakladna(doc, db)
         counts["documents_created"] += 1
+
+
+# ── Видачі (assignments) — 3-й крок з файлу Items («Де» → «[Прізвище]») ───────
+
+@router.post("/import/assignments", status_code=status.HTTP_200_OK)
+def import_assignments_v2(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    """Видачі особам з колонки «Де» файлу Items («<підрозділ> [Прізвище]»).
+    Запускати ПІСЛЯ Items + Переміщень (майно має бути вже розміщене). К-сть = 1;
+    дата = дата накладної руху, що розмістив майно. Матч особи по прізвищу."""
+    try:
+        wb = load_workbook(BytesIO(file.file.read()), data_only=True)
+    except Exception as e:
+        raise HTTPException(400, f"Не вдалось прочитати XLSX: {e}")
+    ws = wb.active
+    header_row = _find_header_row(ws)
+    if not header_row:
+        raise HTTPException(400, "Не знайдено заголовок «Назва»/«Товар»")
+    cmap = _col_map(ws, header_row)
+
+    services = {s.name.strip().lower(): s for s in db.query(Service).all()}
+    noms = {(n.name.strip().lower(), n.service_id): n for n in db.query(Nomenclature).all()}
+    persons_by_last: dict = {}
+    for p in db.query(Person).all():
+        if p.last_name:
+            persons_by_last.setdefault(p.last_name.strip().lower(), []).append(p)
+
+    counts = {"rows": 0, "assignments": 0, "skipped": 0}
+    errors = []
+
+    def col(row, key):
+        for c, k in cmap.items():
+            if k == key:
+                return row[c - 1].value
+        return None
+
+    def latest_move_date(inst_id=None, nom_id=None, wh_id=None):
+        q = db.query(CustodyMovement)
+        if inst_id:
+            q = q.filter(CustodyMovement.instance_id == inst_id)
+        else:
+            q = q.filter(CustodyMovement.nomenclature_id == nom_id,
+                         CustodyMovement.to_warehouse_id == wh_id,
+                         CustodyMovement.instance_id.is_(None))
+        m = q.order_by(CustodyMovement.date.desc(), CustodyMovement.id.desc()).first()
+        return m.date if m else date_cls.today()
+
+    for row in ws.iter_rows(min_row=header_row + 1):
+        name = _clean(col(row, "name"))
+        if not name:
+            continue
+        loc = col(row, "location")
+        m = re.search(r"\[([^\]]+)\]", str(loc) if loc is not None else "")
+        if not m:
+            continue  # не видано особі
+        surname = m.group(1).strip()
+        counts["rows"] += 1
+        try:
+            svc_name = _clean(col(row, "service"))
+            service = services.get(svc_name.strip().lower()) if svc_name else None
+            if not service:
+                counts["skipped"] += 1
+                errors.append(f"«{name}»: службу «{svc_name}» не знайдено")
+                continue
+            nom = noms.get((name.strip().lower(), service.id))
+            if not nom:
+                counts["skipped"] += 1
+                errors.append(f"«{name}»: номенклатуру не знайдено")
+                continue
+            matches = persons_by_last.get(surname.lower(), [])
+            if len(matches) == 0:
+                counts["skipped"] += 1
+                errors.append(f"«{name}»: особу «{surname}» не знайдено")
+                continue
+            if len(matches) > 1:
+                counts["skipped"] += 1
+                errors.append(f"«{name}»: неоднозначне прізвище «{surname}»")
+                continue
+            person = matches[0]
+
+            if nom.is_serialized:
+                card = _clean(col(row, "card_number"))
+                inst = (db.query(Instance).filter(Instance.card_number == card,
+                        Instance.nomenclature_id == nom.id).first()) if card else None
+                if not inst:
+                    counts["skipped"] += 1
+                    errors.append(f"«{name}»: екземпляр за карткою «{card}» не знайдено")
+                    continue
+                wh = db.get(Warehouse, inst.current_warehouse_id) if inst.current_warehouse_id else None
+                if not wh or wh.type != "unit":
+                    counts["skipped"] += 1
+                    errors.append(f"«{name}» ({inst.serial_no}): не на складі підрозділу")
+                    continue
+                if person.unit_id != wh.unit_id:
+                    counts["skipped"] += 1
+                    errors.append(f"«{name}» ({inst.serial_no}): «{surname}» з іншого підрозділу")
+                    continue
+                if db.query(Assignment).filter(Assignment.instance_id == inst.id,
+                                               Assignment.returned_date.is_(None)).first():
+                    counts["skipped"] += 1
+                    errors.append(f"«{name}» ({inst.serial_no}): вже видано")
+                    continue
+                db.add(Assignment(
+                    warehouse_id=wh.id, person_id=person.id, nomenclature_id=nom.id,
+                    instance_id=inst.id, quantity=Decimal(1), is_official=inst.is_official,
+                    issued_date=latest_move_date(inst_id=inst.id), created_by=user.id))
+            else:
+                if not person.unit_id:
+                    counts["skipped"] += 1
+                    errors.append(f"«{name}»: «{surname}» без підрозділу")
+                    continue
+                wh = db.query(Warehouse).filter(Warehouse.unit_id == person.unit_id,
+                                                Warehouse.type == "unit").first()
+                if not wh:
+                    counts["skipped"] += 1
+                    errors.append(f"«{name}»: у підрозділу «{surname}» немає складу")
+                    continue
+                free = balance_of(db, wh.id, nom.id, nom.is_official) - _active_issued(db, wh.id, nom.id, nom.is_official)
+                if free < 1:
+                    counts["skipped"] += 1
+                    errors.append(f"«{name}»: недостатньо на складі підрозділу (вільно {free})")
+                    continue
+                db.add(Assignment(
+                    warehouse_id=wh.id, person_id=person.id, nomenclature_id=nom.id,
+                    instance_id=None, quantity=Decimal(1), is_official=nom.is_official,
+                    issued_date=latest_move_date(nom_id=nom.id, wh_id=wh.id), created_by=user.id))
+            counts["assignments"] += 1
+        except Exception as e:
+            counts["skipped"] += 1
+            errors.append(f"«{name}»: {e}")
+
+    db.commit()
+    return {**counts, "errors": errors[:100]}
