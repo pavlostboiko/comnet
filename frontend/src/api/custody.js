@@ -6,7 +6,7 @@ export const createDocument  = (data)  => http.post('/custody/document', data)
 export const getBalances    = (whId)   => http.get(`/custody/balances?warehouse_id=${whId}`)
 export const getSerialAt     = (whId)  => http.get(`/custody/serial?warehouse_id=${whId}`)
 export const whereIs         = (nomId) => http.get(`/custody/where?nomenclature_id=${nomId}`)
-export const itemHistory     = (nomId) => http.get('/custody/history', { params: { nomenclature_id: nomId } })
+export const itemHistory     = (nomId, instanceId) => http.get('/custody/history', { params: { nomenclature_id: nomId, instance_id: instanceId || undefined } })
 export const getTotals       = ()      => http.get('/custody/totals')
 
 // v2 documents (накладна/акт над рухами)

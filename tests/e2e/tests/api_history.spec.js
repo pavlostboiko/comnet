@@ -47,3 +47,31 @@ test('history merges movements and issue/return chronologically', async ({ reque
     await api.dispose()
   }
 })
+
+test('history scoped to a single serial instance', async ({ request }) => {
+  const api = await loginApi(request)
+  const cleanup = []
+  try {
+    const tag = `hins-${Date.now()}-${Math.floor(Math.random() * 9999)}`
+    const svc = await postJson(api, '/api/settings/services', { name: `HISvc ${tag}` })
+    cleanup.push(`/api/settings/services/${svc.id}`)
+    const whs = await api.get('/api/structure/warehouses').then(r => r.json())
+    const svcWh = whs.find(w => w.service_id === svc.id)
+    const nom = await postJson(api, '/api/nomenclature', { name: `Рація ${tag}`, service_id: svc.id, unit_of_measure: 'шт', is_serialized: true })
+    cleanup.push(`/api/nomenclature/${nom.id}`)
+    const i1 = await postJson(api, `/api/nomenclature/${nom.id}/instances`, { serial_no: `A-${tag}` })
+    const i2 = await postJson(api, `/api/nomenclature/${nom.id}/instances`, { serial_no: `B-${tag}` })
+    await postJson(api, '/api/custody/movements', { date: '2026-07-01', type: 'receipt', nomenclature_id: nom.id, instance_id: i1.id, to_warehouse_id: svcWh.id })
+    await postJson(api, '/api/custody/movements', { date: '2026-07-02', type: 'receipt', nomenclature_id: nom.id, instance_id: i2.id, to_warehouse_id: svcWh.id })
+
+    // whole-card history has both; instance-scoped has only i1
+    const all = await api.get(`/api/custody/history?nomenclature_id=${nom.id}`).then(r => r.json())
+    expect(all.events.length).toBe(2)
+    const one = await api.get(`/api/custody/history?nomenclature_id=${nom.id}&instance_id=${i1.id}`).then(r => r.json())
+    expect(one.events.length).toBe(1)
+    expect(one.events[0].serial_no).toBe(`A-${tag}`)
+  } finally {
+    await bestEffortDelete(api, cleanup)
+    await api.dispose()
+  }
+})

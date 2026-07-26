@@ -110,18 +110,7 @@
          <!-- ── Історія ── -->
          <template v-if="whereTab==='history'">
            <div v-if="historyLoading" class="empty">Завантаження…</div>
-           <table v-else class="w-table">
-             <thead><tr><th class="wc-date">Дата</th><th class="wc-ev">Подія</th><th>Деталі</th><th class="wc-num">К-сть</th></tr></thead>
-             <tbody>
-               <tr v-if="!history.length"><td colspan="4" class="empty">Історія порожня</td></tr>
-               <tr v-for="(e, i) in history" :key="i">
-                 <td class="td-mono td-dim">{{ e.date || '—' }}</td>
-                 <td><span class="chip" :class="evChipClass(e)">{{ evLabel(e) }}</span></td>
-                 <td>{{ evDetails(e) }}<span v-if="e.serial_no" class="td-mono td-dim"> · {{ e.serial_no }}</span><span v-if="e.doc_number" class="td-dim"> · накл. {{ e.doc_number }}</span></td>
-                 <td class="td-num">{{ fmtQty(e.qty) }}</td>
-               </tr>
-             </tbody>
-           </table>
+           <HistoryTimeline v-else :events="history" />
          </template>
           <!-- ── Де знаходиться ── -->
           <!-- Несерійне: по складах -->
@@ -165,6 +154,7 @@ import TopBar from '../../components/TopBar.vue'
 import { getServices } from '../../api/settings.js'
 import { getNomenclature, createNomenclature, updateNomenclature, deleteNomenclature } from '../../api/nomenclature.js'
 import { whereIs, getTotals, itemHistory } from '../../api/custody.js'
+import HistoryTimeline from '../../components/HistoryTimeline.vue'
 import { useSort } from '../../composables/useSort.js'
 import { useAuthStore } from '../../stores/auth.js'
 
@@ -280,22 +270,6 @@ async function showHistory() {
   } finally {
     historyLoading.value = false
   }
-}
-const MOVE_LABEL = { receipt: 'надходження', transfer: 'переміщення', writeoff: 'списання' }
-function evLabel(e) {
-  if (e.kind === 'issued') return 'видано'
-  if (e.kind === 'returned') return 'повернено'
-  return MOVE_LABEL[e.type] || e.type
-}
-function evChipClass(e) {
-  if (e.kind === 'issued') return 'chip-issue'
-  if (e.kind === 'returned') return 'chip-return'
-  return `chip-${e.type}`
-}
-function evDetails(e) {
-  if (e.kind === 'issued') return `на особу: ${e.person || '—'} (${e.warehouse || '—'})`
-  if (e.kind === 'returned') return `від особи: ${e.person || '—'} → ${e.warehouse || '—'}`
-  return `${e.from_warehouse || 'ззовні'} → ${e.to_warehouse || '—'}`
 }
 </script>
 

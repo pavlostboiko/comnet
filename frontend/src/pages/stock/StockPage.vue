@@ -48,6 +48,7 @@
                   <td class="td-num">{{ r.price != null ? Number(r.price).toFixed(2) : '—' }}</td>
                   <td class="td-dim">{{ r.holder || '—' }}</td>
                   <td class="td-issue">
+                    <button v-if="r.kind === 'serial'" class="btn-hist" @click="openHistory(r)">Історія</button>
                     <button v-if="isUnitWh && r.state === 'issued'" class="btn-return" @click="doReturn(r.assignment)">Повернути</button>
                     <button v-else-if="isUnitWh && r.state === 'stock'" class="btn-issue" @click="openIssue(r)">Видати</button>
                   </td>
@@ -257,6 +258,20 @@
         </div>
       </div>
     </div>
+
+    <!-- ═══ Історія екземпляра ═══ -->
+    <div class="overlay" :class="{ open: histOpen }" @click.self="histOpen = false">
+      <div v-if="histOpen" class="modal wide">
+        <div class="modal-head">
+          <span class="modal-title">Історія: {{ histTitle }}</span>
+          <button class="modal-close" @click="histOpen = false">✕</button>
+        </div>
+        <div class="modal-body">
+          <div v-if="histLoading" class="empty">Завантаження…</div>
+          <HistoryTimeline v-else :events="histEvents" />
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -265,8 +280,9 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import { getWarehouses } from '../../api/structure.js'
 import { getNomenclature, createInstance } from '../../api/nomenclature.js'
-import { getBalances, getSerialAt, createMovement, createDocument, receiveDocument } from '../../api/custody.js'
+import { getBalances, getSerialAt, createMovement, createDocument, receiveDocument, itemHistory } from '../../api/custody.js'
 import { getPersons, getServices } from '../../api/settings.js'
+import HistoryTimeline from '../../components/HistoryTimeline.vue'
 import { getAssignments, createAssignment, returnAssignment } from '../../api/assignments.js'
 import { useAuthStore } from '../../stores/auth.js'
 
@@ -297,6 +313,26 @@ const personName = (id) => {
   return p ? personLabel(p) : '—'
 }
 const assignmentOfInstance = (instId) => assignments.value.find(x => x.instance_id === instId) || null
+
+// ── Історія екземпляра ───────────────────────────────────────────────
+const histOpen = ref(false)
+const histLoading = ref(false)
+const histTitle = ref('')
+const histEvents = ref([])
+async function openHistory(r) {
+  histTitle.value = `${r.name}${r.serial_no ? ' · ' + r.serial_no : ''}`
+  histEvents.value = []
+  histLoading.value = true
+  histOpen.value = true
+  try {
+    const { data } = await itemHistory(r.nomenclature_id, r.instance_id)
+    histEvents.value = data.events || []
+  } catch (e) {
+    alert(e?.response?.data?.detail || 'Не вдалось завантажити історію')
+  } finally {
+    histLoading.value = false
+  }
+}
 
 const FILTERS = [
   { key: 'all', label: 'Все' },
@@ -634,10 +670,11 @@ async function saveMove() {
 table { width:100%; border-collapse:collapse; table-layout:fixed; }
 th, td { padding:9px 14px; text-align:left; font-size:13px; border-bottom:1px solid var(--border-light); }
 th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; }
-.col-off { width:130px; } .col-num { width:110px; text-align:right; } .col-uom { width:70px; } .col-date { width:110px; } .col-issue { width:100px; text-align:center; }
+.col-off { width:130px; } .col-num { width:110px; text-align:right; } .col-uom { width:70px; } .col-date { width:110px; } .col-issue { width:180px; text-align:right; white-space:nowrap; }
 .td-issue { text-align:center; }
 .btn-issue { background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); padding:3px 10px; font-size:12px; font-family:inherit; font-weight:500; cursor:pointer; }
 .btn-return { background:transparent; border:1px solid #d97706; color:#b45309; border-radius:var(--radius-sm); padding:3px 10px; font-size:12px; font-family:inherit; cursor:pointer; }
+.btn-hist { background:transparent; border:1px solid var(--border); color:var(--text-mid); border-radius:var(--radius-sm); padding:3px 10px; font-size:12px; font-family:inherit; cursor:pointer; margin-right:6px; }
 .td-name { font-weight:600; color:var(--text); }
 .td-dim { color:var(--text-light); }
 .td-center { text-align:center; }

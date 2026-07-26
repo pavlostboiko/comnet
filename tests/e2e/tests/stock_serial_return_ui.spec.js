@@ -41,6 +41,11 @@ test('serial issue then row-level return on Залишки', async ({ page, requ
   // returned → row is issuable again
   await expect(page.locator('tbody tr', { hasText: `SN-${ts}` }).first().locator('.btn-issue')).toBeVisible()
 
+  // per-instance history lists the issue/return events
+  await page.locator('tbody tr', { hasText: `SN-${ts}` }).first().locator('.btn-hist').click()
+  await expect(page.locator('.modal-title', { hasText: 'Історія' })).toBeVisible()
+  await expect(page.locator('.modal').filter({ hasText: 'видано' })).toBeVisible()
+
   await api.delete(`/api/settings/persons/${person.id}`).catch(() => {})
   await api.delete(`/api/structure/units/${unit.id}`).catch(() => {})
   await api.delete(`/api/settings/services/${svc.id}`).catch(() => {})
