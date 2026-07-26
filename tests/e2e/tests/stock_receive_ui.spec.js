@@ -14,10 +14,10 @@ test('Stock «Прийняти майно» modal opens with receipt fields', as
 
   await uiLogin(page)
   await page.goto(`${URL}/stock`)
-  await page.locator('.wh-select').selectOption({ label: svcWh.name })
+  await page.locator('.wh-btn', { hasText: svcWh.name }).click()
   await page.locator('button', { hasText: 'Прийняти майно' }).click()
   await expect(page.locator('.modal-title', { hasText: 'Прийняти майно' })).toBeVisible()
-  await expect(page.locator('.modal input[placeholder*="контрагент"], .modal input[placeholder*="постачальник"]')).toBeVisible()
+  await expect(page.locator('.modal .fl', { hasText: 'Від кого' })).toBeVisible()   // external-unit dropdown
   await expect(page.locator('.modal .btn-addrow', { hasText: 'Додати позицію' })).toBeVisible()
 
   await api.delete(`/api/settings/services/${svc.id}`).catch(() => {})

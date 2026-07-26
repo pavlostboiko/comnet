@@ -45,7 +45,7 @@ test('issue non-serial to a person; custody balance unchanged', async ({ page })
 
   // ── Stock: receipt to service warehouse, then transfer to unit warehouse ──
   await page.goto(`${URL}/stock`)
-  await page.locator('.wh-select').selectOption({ label: `Склад ${svc}` })
+  await page.locator('.wh-btn', { hasText: `Склад ${svc}` }).click()
   // receipt 10
   await page.locator('.btn-add', { hasText: '+ Рух' }).click()
   await page.locator('.modal select').nth(0).selectOption('receipt')
@@ -63,7 +63,7 @@ test('issue non-serial to a person; custody balance unchanged', async ({ page })
   await expect(page.locator('.overlay.open')).toHaveCount(0)
 
   // ── Switch to the unit warehouse; balance should be 10 ──
-  await page.locator('.wh-select').selectOption({ label: `Склад ${unit}` })
+  await page.locator('.wh-btn', { hasText: `Склад ${unit}` }).click()
   const balRow = page.locator('tbody tr', { hasText: nom }).first()
   await expect(balRow.locator('.td-num').first()).toContainText('10')
 

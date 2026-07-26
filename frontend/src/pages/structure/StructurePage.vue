@@ -31,14 +31,17 @@
         <!-- ═══ Підрозділи ═══ -->
         <div v-if="tab === 'units'" class="table-wrap">
           <table>
-            <thead><tr><th>Назва</th><th class="col-code">Код</th><th>Місцевий відмінок</th><th class="col-acts"></th></tr></thead>
+            <thead><tr><th>Назва</th><th class="col-code">Код</th><th>Місцевий відмінок</th><th class="col-acts2"></th></tr></thead>
             <tbody>
               <tr v-if="!units.length"><td colspan="4" class="empty">Немає підрозділів</td></tr>
               <tr v-for="u in units" :key="u.id">
-                <td class="td-name">{{ u.name }}</td>
+                <td class="td-name">{{ u.name }} <span v-if="u.is_external" class="chip chip-ext">зовнішній</span></td>
                 <td>{{ u.code || '—' }}</td>
                 <td class="td-dim">{{ u.name_locative || '—' }}</td>
-                <td class="td-acts"><button class="act-del" @click="del('unit', u)">✕</button></td>
+                <td class="td-acts2">
+                  <button class="act-e" @click="openEditUnit(u)" title="Редагувати">✎</button>
+                  <button class="act-del" @click="del('unit', u)">✕</button>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -156,6 +159,7 @@
             <label class="fl">Назва *</label><input class="fi" v-model="form.name" />
             <label class="fl">Код</label><input class="fi" v-model="form.code" />
             <label class="fl">Місцевий відмінок («у 1-й роті»)</label><input class="fi" v-model="form.name_locative" />
+            <label class="fl"><input type="checkbox" v-model="form.is_external" /> Зовнішній підрозділ (джерело приймання)</label>
           </template>
           <template v-else-if="tab === 'nomenclature'">
             <label class="fl">Назва *</label><input class="fi" v-model="form.name" />
@@ -229,7 +233,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import { getServices, createService, deleteService, getPersons, createPerson, updatePerson, deletePerson } from '../../api/settings.js'
 import {
-  getUnits, createUnit, deleteUnit, getWarehouses, renameWarehouse,
+  getUnits, createUnit, updateUnit, deleteUnit, getWarehouses, renameWarehouse,
   getGroups, createGroup, deleteGroup,
   getMvo, createMvo, updateMvo,
 } from '../../api/structure.js'
@@ -291,18 +295,22 @@ const saving = ref(false)
 const error = ref('')
 const form = reactive({})
 const editPersonId = ref(null)
+const editUnitId = ref(null)
 function openAdd() {
   error.value = ''
   editPersonId.value = null
+  editUnitId.value = null
   Object.keys(form).forEach(k => delete form[k])
   if (tab.value === 'nomenclature') { form.service_id = null; form.is_serialized = false }
   else if (tab.value === 'mvo') { form.warehouse_id = null; form.person_id = null; form.from_date = new Date().toISOString().slice(0, 10) }
   else if (tab.value === 'groups') { form.unit_id = null; form.commander_id = null }
   else if (tab.value === 'persons') { form.unit_id = null; form.group_id = null }
+  else if (tab.value === 'units') { form.is_external = false }
   addOpen.value = true
 }
 function openEditPerson(p) {
   error.value = ''
+  editPersonId.value = null; editUnitId.value = null
   editPersonId.value = p.id
   Object.keys(form).forEach(k => delete form[k])
   Object.assign(form, {
@@ -312,13 +320,27 @@ function openEditPerson(p) {
   })
   addOpen.value = true
 }
+function openEditUnit(u) {
+  error.value = ''
+  editPersonId.value = null; editUnitId.value = u.id
+  Object.keys(form).forEach(k => delete form[k])
+  Object.assign(form, {
+    name: u.name, code: u.code || '', name_locative: u.name_locative || '',
+    is_external: !!u.is_external,
+  })
+  addOpen.value = true
+}
 
 async function save() {
   saving.value = true
   error.value = ''
   try {
     if (tab.value === 'services') await createService({ name: form.name, code: form.code || null, chief_name: form.chief_name || null })
-    else if (tab.value === 'units') await createUnit({ name: form.name, code: form.code || null, name_locative: form.name_locative || null })
+    else if (tab.value === 'units') {
+      const body = { name: form.name, code: form.code || null, name_locative: form.name_locative || null, is_external: !!form.is_external }
+      if (editUnitId.value) await updateUnit(editUnitId.value, body)
+      else await createUnit(body)
+    }
     else if (tab.value === 'nomenclature') {
       if (!form.service_id) { error.value = 'Оберіть службу'; saving.value = false; return }
       await createNomenclature({
@@ -430,6 +452,7 @@ th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:1
 .chip { display:inline-block; padding:2px 8px; border-radius:3px; font-size:11px; font-weight:600; }
 .chip-ser { background:#dbeafe; color:#1e40af; } .chip-non { background:#f1f5f9; color:#475569; }
 .chip-svc { background:#fef3c7; color:#854d0e; } .chip-unit { background:#dcfce7; color:#166534; }
+.chip-ext { background:#fee2e2; color:#991b1b; }
 
 .overlay { position:fixed; inset:0; background:rgba(15,23,42,0.35); display:none; align-items:flex-start; justify-content:center; padding:80px 20px; z-index:1200; overflow-y:auto; }
 .overlay.open { display:flex; }

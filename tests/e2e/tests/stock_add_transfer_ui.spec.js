@@ -14,7 +14,7 @@ test('«Додати переміщення» modal: renamed, no invoice-number 
 
   await uiLogin(page)
   await page.goto(`${URL}/stock`)
-  await page.locator('.wh-select').selectOption({ label: svcWh.name })
+  await page.locator('.wh-btn', { hasText: svcWh.name }).click()
   await page.locator('button', { hasText: 'Додати переміщення' }).click()
 
   await expect(page.locator('.modal-title', { hasText: 'Додати переміщення' })).toBeVisible()

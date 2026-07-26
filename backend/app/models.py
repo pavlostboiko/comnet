@@ -27,6 +27,7 @@ class Unit(Base):
     name = Column(String, nullable=False, unique=True)
     code = Column(String, nullable=True)
     name_locative = Column(String, nullable=True)     # «у 1-й роті» — для документів
+    is_external = Column(Boolean, nullable=False, default=False)  # зовнішній підрозділ (джерело приймання)
 
 
 class Group(Base):

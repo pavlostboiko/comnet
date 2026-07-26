@@ -49,7 +49,7 @@ test('transfer dropdown shows only available stock on the current warehouse', as
   }
 
   // From the SERVICE warehouse: A and C available; B, D absent
-  await page.locator('.wh-select').selectOption({ label: svcWh.name })
+  await page.locator('.wh-btn', { hasText: svcWh.name }).click()
   await page.locator('button', { hasText: 'Додати переміщення' }).click()
   await search(`Ая ${ts}`); await expect(page.locator('.ac-item', { hasText: `Ая ${ts}` })).toHaveCount(1)
   await search(`Ця ${ts}`); await expect(page.locator('.ac-item', { hasText: `Ця ${ts}` })).toHaveCount(1)
@@ -58,7 +58,7 @@ test('transfer dropdown shows only available stock on the current warehouse', as
   await page.locator('.modal-close').click()
 
   // From the UNIT warehouse: B available (here, not issued); E absent (issued)
-  await page.locator('.wh-select').selectOption({ label: unitWh.name })
+  await page.locator('.wh-btn', { hasText: unitWh.name }).click()
   await page.locator('button', { hasText: 'Додати переміщення' }).click()
   await search(`Бя ${ts}`); await expect(page.locator('.ac-item', { hasText: `Бя ${ts}` })).toHaveCount(1)
   await search(`Ея ${ts}`); await expect(page.locator('.ac-item', { hasText: `Ея ${ts}` })).toHaveCount(0)

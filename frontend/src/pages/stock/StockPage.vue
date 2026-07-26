@@ -5,18 +5,15 @@
       <div class="tile">
         <div class="tile-header">
           <span class="tile-title">Залишки</span>
-          <select class="wh-select" v-model="warehouseId" @change="loadStock">
-            <option :value="null" disabled>— оберіть склад —</option>
-            <optgroup label="Склади служб">
-              <option v-for="w in serviceWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
-            </optgroup>
-            <optgroup label="Склади підрозділів">
-              <option v-for="w in unitWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
-            </optgroup>
-          </select>
           <button class="btn-sec2" :disabled="!warehouseId" @click="openReceive">Прийняти майно</button>
           <button class="btn-sec3" :disabled="!warehouseId" @click="openDoc">Додати переміщення</button>
           <button class="btn-add" :disabled="!warehouseId" @click="openMove">+ Рух</button>
+        </div>
+        <!-- Кнопки-склади: служби + внутрішні підрозділи (зовнішні не показуємо) -->
+        <div class="wh-tabs">
+          <button v-for="w in selectableWarehouses" :key="w.id" class="wh-btn"
+            :class="{ on: warehouseId === w.id }" @click="selectWarehouse(w.id)">{{ w.name }}</button>
+          <span v-if="!selectableWarehouses.length" class="wh-empty">Немає складів</span>
         </div>
 
         <div v-if="!warehouseId" class="empty">Оберіть склад, щоб побачити залишки</div>
@@ -132,7 +129,13 @@
             <div class="fg"><label class="fl">№ документа</label><input class="fi" v-model="recv.doc_number" placeholder="авто" /></div>
             <div class="fg"><label class="fl">Дата</label><input class="fi" type="date" v-model="recv.doc_date" /></div>
           </div>
-          <div class="fg" style="margin-bottom:14px"><label class="fl">Від кого (контрагент)</label><input class="fi" v-model="recv.counterparty" placeholder="зовнішній підрозділ / постачальник" /></div>
+          <div class="fg" style="margin-bottom:14px">
+            <label class="fl">Від кого (зовнішній підрозділ)</label>
+            <select class="fi" v-model="recv.counterparty">
+              <option value="">— оберіть —</option>
+              <option v-for="u in externalUnits" :key="u.id" :value="u.name">{{ u.name }}</option>
+            </select>
+          </div>
 
           <div class="doc-label">Позиції</div>
           <div v-for="(r, i) in recv.items" :key="i" class="recv-row">
@@ -274,7 +277,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
-import { getWarehouses } from '../../api/structure.js'
+import { getWarehouses, getUnits } from '../../api/structure.js'
 import { getNomenclature, createInstance } from '../../api/nomenclature.js'
 import { getBalances, getSerialAt, createMovement, createDocument, receiveDocument, itemHistory } from '../../api/custody.js'
 import { getPersons, getServices } from '../../api/settings.js'
@@ -294,13 +297,21 @@ const serial = ref([])
 const assignments = ref([])
 const persons = ref([])
 const services = ref([])
+const units = ref([])
 
+const externalUnitIds = computed(() => new Set(units.value.filter(u => u.is_external).map(u => u.id)))
+const externalUnits = computed(() => units.value.filter(u => u.is_external))
 const serviceWarehouses = computed(() => warehouses.value.filter(w => w.type === 'service'))
-const unitWarehouses = computed(() => warehouses.value.filter(w => w.type === 'unit'))
-const otherWarehouses = computed(() => warehouses.value.filter(w => w.id !== warehouseId.value))
+// Лише внутрішні склади підрозділів (зовнішні — джерело приймання, не облік залишків).
+const unitWarehouses = computed(() => warehouses.value.filter(w => w.type === 'unit' && !externalUnitIds.value.has(w.unit_id)))
+// Склади для кнопок-перемикачів і напрямків переміщення: служби + внутрішні підрозділи.
+const selectableWarehouses = computed(() => [...serviceWarehouses.value, ...unitWarehouses.value])
+const otherWarehouses = computed(() => selectableWarehouses.value.filter(w => w.id !== warehouseId.value))
 const selectedWarehouse = computed(() => warehouses.value.find(w => w.id === warehouseId.value) || null)
 const isUnitWh = computed(() => selectedWarehouse.value?.type === 'unit')
 const unitPersons = computed(() => persons.value.filter(p => p.unit_id === selectedWarehouse.value?.unit_id))
+
+function selectWarehouse(id) { warehouseId.value = id; loadStock() }
 
 function personLabel(p) {
   const full = [p.last_name, p.first_name].filter(Boolean).join(' ')
@@ -405,11 +416,12 @@ function fmtQty(v) {
 }
 
 async function loadRefs() {
-  const [w, n, p, s] = await Promise.all([getWarehouses(), getNomenclature(), getPersons(), getServices()])
+  const [w, n, p, s, u] = await Promise.all([getWarehouses(), getNomenclature(), getPersons(), getServices(), getUnits()])
   warehouses.value = w.data
   nomenclature.value = n.data
   persons.value = p.data
   services.value = s.data
+  units.value = u.data
   // МВО: одразу відкриваємо свій склад
   if (auth.user?.role === 'mvo' && auth.user?.warehouse_id) {
     warehouseId.value = auth.user.warehouse_id
@@ -713,6 +725,10 @@ async function saveMove() {
 .tile-header { padding:14px 20px; border-bottom:1px solid var(--border-light); display:flex; align-items:center; gap:16px; }
 .tile-title { font-weight:700; font-size:15px; }
 .wh-select { padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:inherit; font-size:13px; min-width:240px; }
+.wh-tabs { padding:12px 20px; display:flex; flex-wrap:wrap; gap:8px; border-bottom:1px solid var(--border-light); }
+.wh-btn { border:1px solid var(--border); background:var(--bg); border-radius:var(--radius-pill); padding:5px 14px; cursor:pointer; font-family:inherit; font-size:13px; color:var(--text-mid); }
+.wh-btn.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+.wh-empty { color:var(--text-light); font-style:italic; font-size:13px; }
 .btn-add { padding:6px 14px; background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; }
 .btn-add:disabled { opacity:0.5; }
 .btn-sec2 { margin-left:auto; padding:6px 14px; background:transparent; border:1px solid var(--accent); color:var(--accent); border-radius:var(--radius-sm); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; }
