@@ -348,6 +348,89 @@ def where_is(nomenclature_id: int, db: Session = Depends(get_db), user: User = D
     return result
 
 
+@router.get("/history")
+def item_history(nomenclature_id: int, instance_id: Optional[int] = None,
+                 db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Об'єднана історія майна: рухи склад↔склад + видачі/повернення особам,
+    хронологічно (новіші зверху). ACL як у /where (service — своя служба;
+    mvo — лише події, що торкаються його складу)."""
+    nom = db.get(Nomenclature, nomenclature_id)
+    if not nom:
+        raise HTTPException(404, "Номенклатуру не знайдено")
+
+    only_warehouse = None
+    if not is_admin(user):
+        if user.role == "service":
+            if user.service_id != nom.service_id:
+                raise HTTPException(403, "Немає доступу до цієї номенклатури")
+        elif user.role == "mvo" and user.warehouse_id:
+            only_warehouse = user.warehouse_id
+        else:
+            raise HTTPException(403, "Немає доступу")
+
+    wh_cache: dict = {}
+    def wh_name(wid):
+        if not wid:
+            return None
+        if wid not in wh_cache:
+            w = db.get(Warehouse, wid)
+            wh_cache[wid] = w.name if w else None
+        return wh_cache[wid]
+
+    def serial_of(iid):
+        if not iid:
+            return None
+        inst = db.get(Instance, iid)
+        return inst.serial_no if inst else None
+
+    def person_name(pid):
+        p = db.get(Person, pid) if pid else None
+        if not p:
+            return None
+        return " ".join(x for x in [p.last_name, p.first_name] if x) or p.callsign
+
+    mq = db.query(CustodyMovement).filter(CustodyMovement.nomenclature_id == nom.id)
+    aq = db.query(Assignment).filter(Assignment.nomenclature_id == nom.id)
+    if instance_id:
+        mq = mq.filter(CustodyMovement.instance_id == instance_id)
+        aq = aq.filter(Assignment.instance_id == instance_id)
+
+    events = []
+    for m in mq.all():
+        if only_warehouse is not None and only_warehouse not in (m.from_warehouse_id, m.to_warehouse_id):
+            continue
+        events.append({
+            "date": m.date.isoformat() if m.date else None,
+            "kind": "movement", "type": m.type,
+            "from_warehouse": wh_name(m.from_warehouse_id),
+            "to_warehouse": wh_name(m.to_warehouse_id),
+            "qty": str(m.quantity), "serial_no": serial_of(m.instance_id),
+            "card_number": m.card_number, "doc_number": m.doc_number,
+            "source": "movement", "source_id": m.id,
+        })
+    for a in aq.all():
+        if only_warehouse is not None and a.warehouse_id != only_warehouse:
+            continue
+        serial = serial_of(a.instance_id)
+        events.append({
+            "date": a.issued_date.isoformat() if a.issued_date else None,
+            "kind": "issued", "person": person_name(a.person_id),
+            "warehouse": wh_name(a.warehouse_id), "qty": str(a.quantity),
+            "serial_no": serial, "source": "assignment", "source_id": a.id,
+        })
+        if a.returned_date is not None:
+            events.append({
+                "date": a.returned_date.isoformat(),
+                "kind": "returned", "person": person_name(a.person_id),
+                "warehouse": wh_name(a.warehouse_id), "qty": str(a.quantity),
+                "serial_no": serial, "source": "assignment", "source_id": a.id,
+            })
+
+    events.sort(key=lambda e: (e["date"] is None, e["date"] or "", e["source_id"]), reverse=True)
+    return {"nomenclature_id": nom.id, "name": nom.name,
+            "is_serialized": nom.is_serialized, "events": events}
+
+
 @router.get("/serial")
 def serial_at_warehouse(warehouse_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Серійні екземпляри, що зараз на складі."""

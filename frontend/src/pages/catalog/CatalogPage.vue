@@ -99,12 +99,33 @@
     <div class="overlay" :class="{ open: !!whereData }" @click.self="whereData=null">
       <div v-if="whereData" class="modal wide">
         <div class="modal-head">
-          <span class="modal-title">Де знаходиться: <b>{{ whereData.name }}</b></span>
+          <span class="modal-title"><b>{{ whereData.name }}</b></span>
+          <div class="wtabs">
+            <button :class="{ on: whereTab==='where' }" @click="whereTab='where'">Де знаходиться</button>
+            <button :class="{ on: whereTab==='history' }" @click="showHistory">Історія</button>
+          </div>
           <button class="modal-close" @click="whereData=null">✕</button>
         </div>
         <div class="modal-body">
+         <!-- ── Історія ── -->
+         <template v-if="whereTab==='history'">
+           <div v-if="historyLoading" class="empty">Завантаження…</div>
+           <table v-else class="w-table">
+             <thead><tr><th class="wc-date">Дата</th><th class="wc-ev">Подія</th><th>Деталі</th><th class="wc-num">К-сть</th></tr></thead>
+             <tbody>
+               <tr v-if="!history.length"><td colspan="4" class="empty">Історія порожня</td></tr>
+               <tr v-for="(e, i) in history" :key="i">
+                 <td class="td-mono td-dim">{{ e.date || '—' }}</td>
+                 <td><span class="chip" :class="evChipClass(e)">{{ evLabel(e) }}</span></td>
+                 <td>{{ evDetails(e) }}<span v-if="e.serial_no" class="td-mono td-dim"> · {{ e.serial_no }}</span><span v-if="e.doc_number" class="td-dim"> · накл. {{ e.doc_number }}</span></td>
+                 <td class="td-num">{{ fmtQty(e.qty) }}</td>
+               </tr>
+             </tbody>
+           </table>
+         </template>
+          <!-- ── Де знаходиться ── -->
           <!-- Несерійне: по складах -->
-          <template v-if="!whereData.is_serialized">
+          <template v-else-if="!whereData.is_serialized">
             <table class="w-table">
               <thead><tr><th>Склад</th><th class="wc-off">Тип</th><th class="wc-num">К-сть</th></tr></thead>
               <tbody>
@@ -143,7 +164,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import { getServices } from '../../api/settings.js'
 import { getNomenclature, createNomenclature, updateNomenclature, deleteNomenclature } from '../../api/nomenclature.js'
-import { whereIs, getTotals } from '../../api/custody.js'
+import { whereIs, getTotals, itemHistory } from '../../api/custody.js'
 import { useSort } from '../../composables/useSort.js'
 import { useAuthStore } from '../../stores/auth.js'
 
@@ -233,14 +254,48 @@ async function del(n) {
 }
 
 const whereData = ref(null)
+const whereTab = ref('where')
+const history = ref([])
+const historyLoading = ref(false)
 async function openWhere(n) {
   whereData.value = null
+  whereTab.value = 'where'
+  history.value = []
   try {
     const { data } = await whereIs(n.id)
     whereData.value = data
   } catch (e) {
     alert(e?.response?.data?.detail || 'Не вдалось завантажити')
   }
+}
+async function showHistory() {
+  whereTab.value = 'history'
+  if (history.value.length || !whereData.value) return
+  historyLoading.value = true
+  try {
+    const { data } = await itemHistory(whereData.value.nomenclature_id)
+    history.value = data.events || []
+  } catch (e) {
+    alert(e?.response?.data?.detail || 'Не вдалось завантажити історію')
+  } finally {
+    historyLoading.value = false
+  }
+}
+const MOVE_LABEL = { receipt: 'надходження', transfer: 'переміщення', writeoff: 'списання' }
+function evLabel(e) {
+  if (e.kind === 'issued') return 'видано'
+  if (e.kind === 'returned') return 'повернено'
+  return MOVE_LABEL[e.type] || e.type
+}
+function evChipClass(e) {
+  if (e.kind === 'issued') return 'chip-issue'
+  if (e.kind === 'returned') return 'chip-return'
+  return `chip-${e.type}`
+}
+function evDetails(e) {
+  if (e.kind === 'issued') return `на особу: ${e.person || '—'} (${e.warehouse || '—'})`
+  if (e.kind === 'returned') return `від особи: ${e.person || '—'} → ${e.warehouse || '—'}`
+  return `${e.from_warehouse || 'ззовні'} → ${e.to_warehouse || '—'}`
 }
 </script>
 
@@ -276,6 +331,12 @@ th.sortable { cursor:pointer; user-select:none; }
 .chip { display:inline-block; padding:2px 8px; border-radius:3px; font-size:11px; font-weight:600; }
 .chip-ser { background:#dbeafe; color:#1e40af; } .chip-non { background:#f1f5f9; color:#475569; }
 .chip-gov { background:#dbeafe; color:#1e40af; } .chip-vol { background:#fef3c7; color:#854d0e; }
+.chip-receipt { background:#dcfce7; color:#166534; } .chip-transfer { background:#e0e7ff; color:#3730a3; }
+.chip-writeoff { background:#fee2e2; color:#991b1b; }
+.chip-issue { background:#fef3c7; color:#854d0e; } .chip-return { background:#dcfce7; color:#166534; }
+.wtabs { display:flex; gap:6px; margin-left:16px; }
+.wtabs button { border:1px solid var(--border); background:var(--bg); border-radius:var(--radius-sm); padding:4px 10px; cursor:pointer; font-family:inherit; font-size:12.5px; color:var(--text-mid); }
+.wtabs button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
 .click-row { cursor:pointer; }
 .click-row:hover { background:var(--bg); }
 .modal.wide { width:min(680px,100%); }
@@ -283,6 +344,8 @@ th.sortable { cursor:pointer; user-select:none; }
 .w-table th, .w-table td { padding:8px 12px; text-align:left; font-size:13px; border-bottom:1px solid var(--border-light); }
 .w-table th { color:var(--text-light); font-size:11px; text-transform:uppercase; letter-spacing:0.05em; }
 .wc-off { width:130px; } .wc-num { width:100px; text-align:right; }
+.wc-date { width:110px; } .wc-ev { width:120px; }
+.modal-head { align-items:center; }
 .t-foot { padding:10px 20px; font-size:12px; color:var(--text-light); border-top:1px solid var(--border-light); background:var(--bg); }
 .t-foot b { color:var(--text-mid); font-weight:600; }
 .overlay { position:fixed; inset:0; background:rgba(15,23,42,0.35); display:none; align-items:flex-start; justify-content:center; padding:60px 20px; z-index:1200; }
