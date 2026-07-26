@@ -270,10 +270,11 @@ def import_movements_v2(
                 continue
             service = get_service(svc_name)
             serial = _normalize_serial(mc(cells, "serial_number"))
-            is_serial = serial is not None
+            is_serial_row = serial is not None
             uom = _clean(mc(cells, "unit_of_measure"))
             price = _parse_decimal(mc(cells, "price"))
-            nom = get_nomenclature(name, service, is_serial, uom, price)
+            card = _clean(mc(cells, "card_number"))
+            nom = get_nomenclature(name, service, is_serial_row, uom, price)
 
             qin = _parse_decimal(mc(cells, "qty_in")) or Decimal(0)
             qout = _parse_decimal(mc(cells, "qty_out")) or Decimal(0)
@@ -291,27 +292,37 @@ def import_movements_v2(
                 errors.append(f"рядок {i} «{name}»: немає складів (from/to)")
                 continue
 
-            card = _clean(mc(cells, "card_number"))
             instance = None
-            if is_serial:
-                # join з Items: спершу по номеру картки, тоді по серійному.
-                by_card = db.query(Instance).filter(Instance.card_number == card).first() if card else None
-                # Крос-перевірка: якщо картка вказує на екземпляр з ІНШИМ серійним
-                # (колонка P), це конфлікт — не розміщуємо, повідомляємо.
-                if by_card and by_card.serial_no != serial:
+            # Серійність визначає КАРТКА (номенклатура), а не наявність серійника
+            # в рядку руху: рядок може мати лише № картки (Поле 12) без колонки P.
+            if nom.is_serialized:
+                # матч екземпляра: спершу по номеру картки (Items№ ↔ Поле 12),
+                # тоді по серійному (якщо він у рядку є).
+                by_card = (db.query(Instance)
+                           .filter(Instance.card_number == card,
+                                   Instance.nomenclature_id == nom.id).first()) if card else None
+                # Крос-перевірка лише коли серійник у рядку заданий.
+                if by_card and serial and by_card.serial_no != serial:
                     counts["skipped"] += 1
                     errors.append(
                         f"рядок {i} «{name}»: картка {card} → серійний {by_card.serial_no} "
                         f"у каталозі, а в Переміщеннях {serial} — не збігається")
                     continue
                 instance = by_card
-                if not instance:
+                if not instance and serial:
                     instance = db.query(Instance).filter(Instance.serial_no == serial).first()
                 if not instance:
-                    instance = Instance(nomenclature_id=nom.id, serial_no=serial,
-                                        card_number=card, is_official=nom.is_official)
-                    db.add(instance); db.flush()
-                    counts["instances_created"] += 1
+                    if serial:
+                        instance = Instance(nomenclature_id=nom.id, serial_no=serial,
+                                            card_number=card, is_official=nom.is_official)
+                        db.add(instance); db.flush()
+                        counts["instances_created"] += 1
+                    else:
+                        counts["skipped"] += 1
+                        errors.append(
+                            f"рядок {i} «{name}»: серійна картка, але екземпляр за "
+                            f"карткою «{card}» не знайдено (у рядку немає серійного)")
+                        continue
                 elif card and not instance.card_number:
                     instance.card_number = card
                 qty = Decimal(1)
