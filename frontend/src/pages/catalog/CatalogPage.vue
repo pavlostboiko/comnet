@@ -61,39 +61,10 @@
       </div>
     </div>
 
-    <!-- Add/Edit modal -->
-    <div class="overlay" :class="{ open: modalOpen }" @click.self="modalOpen=false">
-      <div v-if="modalOpen" class="modal">
-        <div class="modal-head">
-          <span class="modal-title">{{ editId ? 'Редагувати' : 'Додати' }} майно</span>
-          <button class="modal-close" @click="modalOpen=false">✕</button>
-        </div>
-        <div class="modal-body">
-          <label class="fl">Назва *</label><input class="fi" v-model="form.name" />
-          <label class="fl">Служба *</label>
-          <select class="fi" v-model="form.service_id">
-            <option :value="null" disabled>— оберіть —</option>
-            <option v-for="s in services" :key="s.id" :value="s.id">{{ s.name }}</option>
-          </select>
-          <label class="fl">Категорія</label><input class="fi" v-model="form.category" list="cats" />
-          <datalist id="cats"><option v-for="c in categories" :key="c" :value="c" /></datalist>
-          <label class="fl">Тип обліку</label>
-          <select class="fi" v-model="form.is_official">
-            <option :value="true">облік</option>
-            <option :value="false">ндм</option>
-          </select>
-          <label class="fl"><input type="checkbox" v-model="form.is_serialized" /> Серійне майно</label>
-          <label class="fl">Одиниця виміру</label><input class="fi" v-model="form.unit_of_measure" placeholder="шт" />
-          <label class="fl">Вартість</label><input class="fi" type="number" v-model="form.price" />
-          <label class="fl">Код номер</label><input class="fi" v-model="form.code" />
-          <div v-if="error" class="err">{{ error }}</div>
-        </div>
-        <div class="modal-foot">
-          <button class="btn-sec" @click="modalOpen=false">Скасувати</button>
-          <button class="btn-pri" :disabled="saving" @click="save">Зберегти</button>
-        </div>
-      </div>
-    </div>
+    <!-- Add/Edit modal (спільний компонент — однакова форма створення й редагування) -->
+    <NomenclatureModal :open="modalOpen" :item="editItem" :services="services"
+      :categories="categories" :default-service-id="serviceId"
+      @saved="onSaved" @close="modalOpen=false" />
 
     <!-- Де знаходиться modal -->
     <div class="overlay" :class="{ open: !!whereData }" @click.self="whereData=null">
@@ -149,12 +120,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import { getServices } from '../../api/settings.js'
-import { getNomenclature, createNomenclature, updateNomenclature, deleteNomenclature } from '../../api/nomenclature.js'
+import { getNomenclature, deleteNomenclature } from '../../api/nomenclature.js'
 import { whereIs, getTotals, itemHistory } from '../../api/custody.js'
 import HistoryTimeline from '../../components/HistoryTimeline.vue'
+import NomenclatureModal from '../../components/NomenclatureModal.vue'
 import { useSort } from '../../composables/useSort.js'
 import { useAuthStore } from '../../stores/auth.js'
 
@@ -205,38 +177,10 @@ async function load() {
 onMounted(load)
 
 const modalOpen = ref(false)
-const editId = ref(null)
-const saving = ref(false)
-const error = ref('')
-const form = reactive({})
-function openAdd() {
-  editId.value = null; error.value = ''
-  Object.assign(form, { name: '', service_id: serviceId.value, category: '', is_official: true, is_serialized: false, unit_of_measure: '', price: null, code: '' })
-  modalOpen.value = true
-}
-function openEdit(n) {
-  editId.value = n.id; error.value = ''
-  Object.assign(form, { name: n.name, service_id: n.service_id, category: n.category || '', is_official: n.is_official, is_serialized: n.is_serialized, unit_of_measure: n.unit_of_measure || '', price: n.price, code: n.code || '' })
-  modalOpen.value = true
-}
-async function save() {
-  if (!form.name || !form.service_id) { error.value = 'Назва і служба обов’язкові'; return }
-  saving.value = true; error.value = ''
-  try {
-    const payload = {
-      name: form.name, service_id: form.service_id, category: form.category || null,
-      is_official: form.is_official !== false, is_serialized: !!form.is_serialized,
-      unit_of_measure: form.unit_of_measure || null,
-      price: form.price ? Number(form.price) : null, code: form.code || null,
-    }
-    if (editId.value) await updateNomenclature(editId.value, payload)
-    else await createNomenclature(payload)
-    modalOpen.value = false
-    await load()
-  } catch (e) {
-    error.value = e?.response?.data?.detail || 'Помилка збереження'
-  } finally { saving.value = false }
-}
+const editItem = ref(null)
+function openAdd() { editItem.value = null; modalOpen.value = true }
+function openEdit(n) { editItem.value = n; modalOpen.value = true }
+async function onSaved() { modalOpen.value = false; await load() }
 async function del(n) {
   if (!confirm(`Видалити «${n.name}»?`)) return
   try { await deleteNomenclature(n.id); await load() }
