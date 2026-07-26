@@ -8,7 +8,7 @@
           <button class="btn-wipe" @click="doWipe">Очистити інвентар</button>
         </div>
         <div class="body">
-          <p class="flow">Порядок: <b>1.</b> Каталог (Items) → <b>2.</b> Переміщення (розміщення по складах) → далі видача вручну.</p>
+          <p class="flow">Порядок: <b>1.</b> Каталог (Items) → <b>2.</b> Переміщення (розміщення по складах) → <b>3.</b> Видачі (з колонки «Де» файлу Items).</p>
 
           <!-- 1. Каталог -->
           <div class="block">
@@ -31,6 +31,17 @@
             </div>
             <Result :data="results.movements" :err="errors.movements" />
           </div>
+
+          <!-- 3. Видачі -->
+          <div class="block">
+            <div class="block-title">3. Видачі особам</div>
+            <p class="hint">Той самий файл <b>Items</b>. З колонки <b>«Де»</b> («&lt;підрозділ&gt; [Прізвище]») бере особу з дужок і створює видачу (по 1 шт) на склад підрозділу, де майно вже лежить. Дата = дата накладної розміщення. Запускати ПІСЛЯ кроків 1–2.</p>
+            <div class="upload-row">
+              <input type="file" accept=".xlsx" @change="e => pick('assignments', e)" />
+              <button class="btn-pri" :disabled="!files.assignments || busy" @click="run('assignments')">Імпортувати видачі</button>
+            </div>
+            <Result :data="results.assignments" :err="errors.assignments" />
+          </div>
         </div>
       </div>
     </div>
@@ -40,11 +51,11 @@
 <script setup>
 import { reactive, h } from 'vue'
 import TopBar from '../../components/TopBar.vue'
-import { importItems, importMovements, wipeV2 } from '../../api/importV2.js'
+import { importItems, importMovements, importAssignments, wipeV2 } from '../../api/importV2.js'
 
-const files = reactive({ items: null, movements: null })
-const results = reactive({ items: null, movements: null })
-const errors = reactive({ items: '', movements: '' })
+const files = reactive({ items: null, movements: null, assignments: null })
+const results = reactive({ items: null, movements: null, assignments: null })
+const errors = reactive({ items: '', movements: '', assignments: '' })
 let busy = false
 
 function pick(kind, e) {
@@ -58,7 +69,7 @@ async function run(kind) {
   errors[kind] = ''
   results[kind] = null
   try {
-    const fn = kind === 'items' ? importItems : importMovements
+    const fn = { items: importItems, movements: importMovements, assignments: importAssignments }[kind]
     const { data } = await fn(files[kind])
     results[kind] = data
   } catch (e) {
@@ -72,7 +83,7 @@ async function doWipe() {
   try {
     await wipeV2()
     alert('Інвентар очищено')
-    results.items = null; results.movements = null
+    results.items = null; results.movements = null; results.assignments = null
   } catch (e) {
     alert(e?.response?.data?.detail || 'Помилка')
   }
