@@ -137,7 +137,7 @@
           <div class="doc-label">Позиції</div>
           <div v-for="(r, i) in recv.items" :key="i" class="recv-row">
             <div class="recv-line">
-              <select class="fi row-nom" v-model="r.nomenclature_id" @change="onRecvNom(r)">
+              <select class="fi row-nom" v-model="r.nomenclature_id" @change="onRecvNom(r, i)">
                 <option :value="null" disabled>— номенклатура —</option>
                 <option v-for="n in nomenclature" :key="n.id" :value="n.id">{{ n.name }} ({{ n.is_serialized ? 'серійне' : 'несерійне' }})</option>
                 <option value="__new__">+ нова номенклатура…</option>
@@ -146,23 +146,10 @@
                 <input class="fi row-qty" v-model="r.serial_no" placeholder="серійний №" />
                 <input class="fi row-qty" v-model="r.card_number" placeholder="№ картки" />
               </template>
-              <template v-else>
+              <template v-else-if="r.nomenclature_id">
                 <input class="fi row-qty" type="number" min="0.0001" step="0.0001" v-model="r.quantity" placeholder="к-сть" />
               </template>
               <button class="row-del" @click="recv.items.splice(i, 1)" :disabled="recv.items.length === 1">✕</button>
-            </div>
-            <div v-if="r.nomenclature_id === '__new__'" class="recv-new">
-              <input class="fi" v-model="r.nn_name" placeholder="назва" />
-              <select class="fi" v-model="r.nn_service_id">
-                <option :value="null" disabled>— служба —</option>
-                <option v-for="s in services" :key="s.id" :value="s.id">{{ s.name }}</option>
-              </select>
-              <select class="fi" v-model="r.nn_is_official">
-                <option :value="true">облік</option>
-                <option :value="false">ндм</option>
-              </select>
-              <label class="ser-chk"><input type="checkbox" v-model="r.nn_is_serialized" /> серійне</label>
-              <input class="fi" v-model="r.nn_uom" placeholder="од. (шт)" />
             </div>
           </div>
           <button class="btn-addrow" @click="addRecvRow">+ Додати позицію</button>
@@ -277,6 +264,10 @@
         </div>
       </div>
     </div>
+
+    <!-- Нова номенклатура (спільна форма з «Майно») -->
+    <NomenclatureModal :open="newNomOpen" :services="services" :categories="recvCategories"
+      :default-service-id="recvDefaultService" @saved="onNewNomSaved" @close="newNomOpen=false" />
   </div>
 </template>
 
@@ -289,6 +280,7 @@ import { getBalances, getSerialAt, createMovement, createDocument, receiveDocume
 import { getPersons, getServices } from '../../api/settings.js'
 import HistoryTimeline from '../../components/HistoryTimeline.vue'
 import ItemAutocomplete from '../../components/ItemAutocomplete.vue'
+import NomenclatureModal from '../../components/NomenclatureModal.vue'
 import { getAssignments, createAssignment, returnAssignment } from '../../api/assignments.js'
 import { useAuthStore } from '../../stores/auth.js'
 
@@ -615,10 +607,7 @@ const recvSaving = ref(false)
 const recvErr = ref('')
 const recv = reactive({ form: 'накладна', doc_number: '', doc_date: '', counterparty: '', items: [] })
 function newRecvRow() {
-  return {
-    nomenclature_id: null, quantity: null, serial_no: '', card_number: '',
-    nn_name: '', nn_service_id: null, nn_is_official: true, nn_is_serialized: false, nn_uom: '',
-  }
+  return { nomenclature_id: null, quantity: null, serial_no: '', card_number: '' }
 }
 function openReceive() {
   recvErr.value = ''
@@ -629,28 +618,41 @@ function openReceive() {
   recvOpen.value = true
 }
 function addRecvRow() { recv.items.push(newRecvRow()) }
-function onRecvNom(r) { r.serial_no = ''; r.card_number = ''; r.quantity = null }
-function recvSerialized(r) {
-  if (r.nomenclature_id === '__new__') return r.nn_is_serialized
-  return !!nomById(r.nomenclature_id)?.is_serialized
+function onRecvNom(r, i) {
+  if (r.nomenclature_id === '__new__') {   // «+ нова номенклатура» → спільна форма
+    r.nomenclature_id = null
+    newNomRow.value = i
+    newNomOpen.value = true
+    return
+  }
+  r.serial_no = ''; r.card_number = ''; r.quantity = null
 }
+function recvSerialized(r) { return !!nomById(r.nomenclature_id)?.is_serialized }
+
+// Нова номенклатура через спільний компонент NomenclatureModal.
+const newNomOpen = ref(false)
+const newNomRow = ref(null)
+const recvCategories = computed(() =>
+  [...new Set(nomenclature.value.map(n => n.category).filter(Boolean))].sort())
+const recvDefaultService = computed(() => selectedWarehouse.value?.service_id || null)
+function onNewNomSaved(nom) {
+  nomenclature.value.push(nom)
+  if (newNomRow.value != null && recv.items[newNomRow.value]) {
+    const r = recv.items[newNomRow.value]
+    r.nomenclature_id = nom.id
+    r.serial_no = ''; r.card_number = ''; r.quantity = null
+  }
+  newNomRow.value = null
+}
+
 async function saveReceive() {
   const items = []
   for (const r of recv.items) {
     if (!r.nomenclature_id) continue
-    const serialized = recvSerialized(r)
-    const base = serialized
+    const base = recvSerialized(r)
       ? { serial_no: r.serial_no || null, card_number: r.card_number || null }
       : { quantity: Number(r.quantity) }
-    if (r.nomenclature_id === '__new__') {
-      if (!r.nn_name || !r.nn_service_id) { recvErr.value = 'Нова номенклатура: назва і служба обов’язкові'; return }
-      items.push({ ...base, new_nomenclature: {
-        name: r.nn_name, service_id: r.nn_service_id, is_official: r.nn_is_official,
-        is_serialized: r.nn_is_serialized, unit_of_measure: r.nn_uom || null,
-      } })
-    } else {
-      items.push({ ...base, nomenclature_id: r.nomenclature_id })
-    }
+    items.push({ ...base, nomenclature_id: r.nomenclature_id })
   }
   if (!items.length) { recvErr.value = 'Додайте хоча б одну позицію'; return }
   recvSaving.value = true
