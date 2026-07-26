@@ -15,7 +15,7 @@
             </optgroup>
           </select>
           <button class="btn-sec2" :disabled="!warehouseId" @click="openReceive">Прийняти майно</button>
-          <button class="btn-sec3" :disabled="!warehouseId" @click="openDoc">Видати в підрозділ</button>
+          <button class="btn-sec3" :disabled="!warehouseId" @click="openDoc">Додати переміщення</button>
           <button class="btn-add" :disabled="!warehouseId" @click="openMove">+ Рух</button>
         </div>
 
@@ -64,7 +64,7 @@
     <div class="overlay" :class="{ open: docOpen }" @click.self="docOpen = false">
       <div v-if="docOpen" class="modal wide">
         <div class="modal-head">
-          <span class="modal-title">Видати в підрозділ — з «{{ warehouseName(warehouseId) }}»</span>
+          <span class="modal-title">Додати переміщення — з «{{ warehouseName(warehouseId) }}»</span>
           <button class="modal-close" @click="docOpen = false">✕</button>
         </div>
         <div class="modal-body">
@@ -76,9 +76,9 @@
                 <option v-for="w in otherWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
               </select>
             </div>
-            <div class="fg"><label class="fl">№ накладної</label><input class="fi" v-model="doc.doc_number" /></div>
             <div class="fg"><label class="fl">Дата</label><input class="fi" type="date" v-model="doc.date" /></div>
           </div>
+          <p class="doc-hint">Накладну сформуєш пізніше на «Документи» → «Без документа».</p>
 
           <div class="doc-label">Позиції</div>
           <div v-for="(r, i) in doc.items" :key="i" class="doc-row">
@@ -103,7 +103,7 @@
         </div>
         <div class="modal-foot">
           <button class="btn-sec" @click="docOpen = false">Скасувати</button>
-          <button class="btn-pri" :disabled="docSaving" @click="saveDoc">Провести накладну</button>
+          <button class="btn-pri" :disabled="docSaving" @click="saveDoc">Провести</button>
         </div>
       </div>
     </div>
@@ -505,11 +505,11 @@ function onNomChange() { mv.instance_id = null }
 const docOpen = ref(false)
 const docSaving = ref(false)
 const docErr = ref('')
-const doc = reactive({ to_warehouse_id: null, doc_number: '', date: '', items: [] })
+const doc = reactive({ to_warehouse_id: null, date: '', items: [] })
 function openDoc() {
   docErr.value = ''
   Object.assign(doc, {
-    to_warehouse_id: null, doc_number: '', date: new Date().toISOString().slice(0, 10),
+    to_warehouse_id: null, date: new Date().toISOString().slice(0, 10),
     items: [{ nomenclature_id: null, quantity: null, instance_id: null }],
   })
   docOpen.value = true
@@ -523,7 +523,6 @@ async function saveDoc() {
   try {
     await createDocument({
       date: doc.date, from_warehouse_id: warehouseId.value, to_warehouse_id: doc.to_warehouse_id,
-      doc_number: doc.doc_number || null,
       items: items.map(r => ({
         nomenclature_id: r.nomenclature_id,
         instance_id: r.instance_id || null,
@@ -652,7 +651,8 @@ async function saveMove() {
 .recv-new { display:grid; grid-template-columns:1fr 1fr 100px auto 90px; gap:8px; margin-top:6px; align-items:center; }
 .ser-chk { display:flex; align-items:center; gap:4px; font-size:12px; color:var(--text-mid); white-space:nowrap; }
 .modal.wide { width:min(640px,100%); }
-.doc-top { display:grid; grid-template-columns:1fr 140px 140px; gap:10px; margin-bottom:14px; }
+.doc-top { display:grid; grid-template-columns:1fr 140px; gap:10px; margin-bottom:6px; }
+.doc-hint { margin:0 0 14px; font-size:12px; color:var(--text-light); }
 .fg { display:flex; flex-direction:column; gap:4px; }
 .doc-label { font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-light); font-weight:600; margin-bottom:6px; }
 .doc-row { display:flex; gap:8px; margin-bottom:6px; align-items:center; }
