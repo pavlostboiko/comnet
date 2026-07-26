@@ -117,7 +117,11 @@ test.describe('v2 custody API', () => {
       instance_id: inst.id, to_warehouse_id: s.svcWh.id,
     })
     let serial = await api.get(`/api/custody/serial?warehouse_id=${s.svcWh.id}`).then(r => r.json())
-    expect(serial.find(x => x.instance_id === inst.id)).toBeTruthy()
+    const placed = serial.find(x => x.instance_id === inst.id)
+    expect(placed).toBeTruthy()
+    // serial rows carry price + unit from the card (so «Залишки» can show them)
+    expect(Number(placed.price)).toBe(100)
+    expect(placed.unit_of_measure).toBe('шт')
 
     // Wrong-location transfer (from unit A where it is NOT) → 400
     const bad = await api.post('/api/custody/movements', {

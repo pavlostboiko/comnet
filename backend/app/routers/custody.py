@@ -365,6 +365,8 @@ def serial_at_warehouse(warehouse_id: int, db: Session = Depends(get_db), user: 
             "nomenclature_id": it.nomenclature_id,
             "name": nom.name if nom else None,
             "is_official": it.is_official,
+            "unit_of_measure": nom.unit_of_measure if nom else None,
+            "price": str(nom.price) if nom and nom.price is not None else None,
         })
     out.sort(key=lambda x: (x["name"] or "", x["serial_no"]))
     return out
