@@ -22,6 +22,13 @@
         <div v-if="!warehouseId" class="empty">Оберіть склад, щоб побачити залишки</div>
 
         <template v-else>
+          <!-- Фільтри стану -->
+          <div v-if="isUnitWh" class="filter-row">
+            <button v-for="f in FILTERS" :key="f.key" class="f-chip" :class="{ on: stockFilter === f.key }" @click="stockFilter = f.key">
+              {{ f.label }} <span class="f-count">{{ countOf(f.key) }}</span>
+            </button>
+          </div>
+
           <!-- Об'єднана таблиця майна на складі -->
           <div class="table-wrap">
             <table>
@@ -31,8 +38,8 @@
                 <th>На кому</th><th class="col-issue"></th>
               </tr></thead>
               <tbody>
-                <tr v-if="!stockRows.length"><td colspan="8" class="empty">Порожньо</td></tr>
-                <tr v-for="r in stockRows" :key="r.key">
+                <tr v-if="!filteredRows.length"><td colspan="8" class="empty">Порожньо</td></tr>
+                <tr v-for="r in filteredRows" :key="r.key">
                   <td class="td-name">{{ r.name }}</td>
                   <td class="td-mono td-dim">{{ r.serial_no || '—' }}</td>
                   <td><span class="chip" :class="r.is_official ? 'chip-gov' : 'chip-vol'">{{ r.is_official ? 'облік' : 'ндм' }}</span></td>
@@ -41,34 +48,13 @@
                   <td class="td-num">{{ r.price != null ? Number(r.price).toFixed(2) : '—' }}</td>
                   <td class="td-dim">{{ r.holder || '—' }}</td>
                   <td class="td-issue">
-                    <button v-if="isUnitWh && r.kind === 'serial' && r.holder" class="btn-return" @click="doReturn(assignmentOfInstance(r.instance_id))">Повернути</button>
-                    <button v-else-if="isUnitWh && r.canIssue" class="btn-issue" @click="openIssue(r)">Видати</button>
+                    <button v-if="isUnitWh && r.state === 'issued'" class="btn-return" @click="doReturn(r.assignment)">Повернути</button>
+                    <button v-else-if="isUnitWh && r.state === 'stock'" class="btn-issue" @click="openIssue(r)">Видати</button>
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
-
-          <!-- Видано особам -->
-          <template v-if="isUnitWh">
-            <div class="section-label">Видано особам</div>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>Особа</th><th>Найменування</th><th class="col-serial">Серійний</th><th class="col-num">К-сть</th><th class="col-date">Дата</th><th class="col-issue"></th></tr></thead>
-                <tbody>
-                  <tr v-if="!assignments.length"><td colspan="6" class="empty">Нічого не видано</td></tr>
-                  <tr v-for="a in assignments" :key="a.id">
-                    <td class="td-name">{{ personName(a.person_id) }}</td>
-                    <td>{{ nomName(a.nomenclature_id) }}</td>
-                    <td class="td-mono td-dim">{{ a.instance_id ? serialOfInstance(a.instance_id) : '—' }}</td>
-                    <td class="td-num">{{ fmtQty(a.quantity) }}</td>
-                    <td class="td-mono">{{ a.issued_date }}</td>
-                    <td class="td-issue"><button class="btn-return" @click="doReturn(a)">Повернути</button></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </template>
         </template>
       </div>
     </div>
@@ -310,32 +296,61 @@ const personName = (id) => {
   const p = persons.value.find(x => x.id === id)
   return p ? personLabel(p) : '—'
 }
-const serialOfInstance = (id) => serial.value.find(s => s.instance_id === id)?.serial_no || `#${id}`
 const assignmentOfInstance = (instId) => assignments.value.find(x => x.instance_id === instId) || null
-const holderOfInstance = (instId) => {
-  const a = assignmentOfInstance(instId)
-  return a ? personName(a.person_id) : null
-}
 
-// Об'єднана таблиця майна: несерійні лінії балансу + серійні екземпляри
+const FILTERS = [
+  { key: 'all', label: 'Все' },
+  { key: 'stock', label: 'На складі' },
+  { key: 'issued', label: 'Видане' },
+]
+const stockFilter = ref('all')
+
+// Скільки несерійного (nom, is_official) зараз на руках (активні видачі).
+const activeIssued = (nomId, isOfficial) => assignments.value
+  .filter(a => a.nomenclature_id === nomId && !a.instance_id && a.is_official === isOfficial)
+  .reduce((s, a) => s + Number(a.quantity), 0)
+
+// Єдиний список рядків зі станом: 'stock' (фізично на складі) / 'issued' (на особі).
+// Несерійне: вільний залишок (баланс − видане) як 'stock' + кожна видача як 'issued'.
+// Серійне: кожен екземпляр — 'issued' якщо на руках, інакше 'stock'.
 const stockRows = computed(() => {
   const rows = []
-  for (const b of balances.value) rows.push({
-    key: `n${b.nomenclature_id}-${b.is_official}`, kind: 'nonserial',
-    name: b.name, serial_no: null, is_official: b.is_official, qty: b.qty,
-    unit_of_measure: b.unit_of_measure, price: b.price, holder: null,
-    canIssue: true, nomenclature_id: b.nomenclature_id,
-  })
-  for (const s of serial.value) rows.push({
-    key: `s${s.instance_id}`, kind: 'serial',
-    name: s.name, serial_no: s.serial_no, is_official: s.is_official, qty: 1,
-    unit_of_measure: s.unit_of_measure, price: s.price, holder: holderOfInstance(s.instance_id),
-    canIssue: !holderOfInstance(s.instance_id), instance_id: s.instance_id,
-    nomenclature_id: s.nomenclature_id,
-  })
+  for (const b of balances.value) {
+    const free = Number(b.qty) - activeIssued(b.nomenclature_id, b.is_official)
+    if (free > 0) rows.push({
+      key: `n${b.nomenclature_id}-${b.is_official}`, kind: 'nonserial', state: 'stock',
+      name: b.name, serial_no: null, is_official: b.is_official, qty: free,
+      unit_of_measure: b.unit_of_measure, price: b.price, holder: null,
+      nomenclature_id: b.nomenclature_id, assignment: null,
+    })
+  }
+  for (const a of assignments.value.filter(a => !a.instance_id)) {
+    const nom = nomById(a.nomenclature_id)
+    rows.push({
+      key: `a${a.id}`, kind: 'nonserial', state: 'issued',
+      name: nom?.name || nomName(a.nomenclature_id), serial_no: null, is_official: a.is_official,
+      qty: Number(a.quantity), unit_of_measure: nom?.unit_of_measure,
+      price: nom?.price, holder: personName(a.person_id),
+      nomenclature_id: a.nomenclature_id, assignment: a,
+    })
+  }
+  for (const s of serial.value) {
+    const a = assignmentOfInstance(s.instance_id)
+    rows.push({
+      key: `s${s.instance_id}`, kind: 'serial', state: a ? 'issued' : 'stock',
+      name: s.name, serial_no: s.serial_no, is_official: s.is_official, qty: 1,
+      unit_of_measure: s.unit_of_measure, price: s.price,
+      holder: a ? personName(a.person_id) : null,
+      instance_id: s.instance_id, nomenclature_id: s.nomenclature_id, assignment: a,
+    })
+  }
   rows.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'uk') || (a.serial_no || '').localeCompare(b.serial_no || ''))
   return rows
 })
+const filteredRows = computed(() =>
+  stockFilter.value === 'all' ? stockRows.value : stockRows.value.filter(r => r.state === stockFilter.value)
+)
+const countOf = (key) => key === 'all' ? stockRows.value.length : stockRows.value.filter(r => r.state === key).length
 
 const warehouseName = (id) => warehouses.value.find(w => w.id === id)?.name || (id ? `#${id}` : 'ззовні')
 const nomName = (id) => nomenclature.value.find(n => n.id === id)?.name || '—'
@@ -610,6 +625,10 @@ async function saveMove() {
 .row-del:disabled { opacity:0.4; }
 .btn-addrow { margin-top:6px; background:transparent; border:1px dashed var(--border); color:var(--text-mid); border-radius:var(--radius-sm); padding:6px 12px; font-family:inherit; font-size:13px; cursor:pointer; }
 
+.filter-row { padding:12px 20px; display:flex; gap:8px; border-bottom:1px solid var(--border-light); }
+.f-chip { border:1px solid var(--border); background:var(--bg); border-radius:var(--radius-pill); padding:5px 14px; cursor:pointer; font-family:inherit; font-size:13px; color:var(--text-mid); display:inline-flex; align-items:center; gap:6px; }
+.f-chip.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+.f-count { font-size:11px; opacity:0.8; font-family:'DM Mono',monospace; }
 .section-label { padding:14px 20px 6px; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-light); font-weight:600; }
 .table-wrap { overflow-x:auto; }
 table { width:100%; border-collapse:collapse; table-layout:fixed; }
