@@ -74,10 +74,13 @@ test('issue non-serial to a person; custody balance unchanged', async ({ page })
   await page.locator('.btn-pri', { hasText: 'Видати' }).click()
   await expect(page.locator('.overlay.open')).toHaveCount(0)
 
-  // «Видано особам» shows the soldier; custody balance still 10
+  // «Видане» filter shows the soldier with 3
+  await page.locator('.f-chip', { hasText: 'Видане' }).click()
   const issuedRow = page.locator('tbody tr', { hasText: soldier }).first()
   await expect(issuedRow).toBeVisible()
   await expect(issuedRow).toContainText('3')
-  const balRow2 = page.locator('tbody tr', { hasText: nom }).first()
-  await expect(balRow2.locator('.td-num').first()).toContainText('10')  // unchanged
+  // «На складі» shows the remaining 7 (custody 10 unchanged, split by location)
+  await page.locator('.f-chip', { hasText: 'На складі' }).click()
+  const stockRow = page.locator('tbody tr', { hasText: nom }).first()
+  await expect(stockRow.locator('.td-num').first()).toContainText('7')
 })
