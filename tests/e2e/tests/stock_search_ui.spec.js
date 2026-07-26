@@ -26,13 +26,18 @@ test('Залишки search filters rows and «/» focuses it', async ({ page, r
   await expect(page.locator('tbody tr', { hasText: `Alpha ${ts}` })).toBeVisible()
   await expect(page.locator('tbody tr', { hasText: `Beta ${ts}` })).toBeVisible()
 
-  // «/» focuses the search input, then typing filters
-  await page.locator('body').click()
-  await page.keyboard.press('/')
-  await expect(page.locator('.search-row input')).toBeFocused()
-  await page.locator('.search-row input').fill(`Alpha ${ts}`)
-  await expect(page.locator('tbody tr', { hasText: `Alpha ${ts}` })).toBeVisible()
+  // search filters the rows
+  const searchInput = page.locator('.search-row input')
+  await searchInput.click()
+  await searchInput.fill(`Alpha ${ts}`)
   await expect(page.locator('tbody tr', { hasText: `Beta ${ts}` })).toHaveCount(0)
+  await expect(page.locator('tbody tr', { hasText: `Alpha ${ts}` })).toHaveCount(1)
+
+  // «/» focuses the search input
+  await searchInput.fill('')
+  await page.locator('.tile-title').click()   // move focus off the input
+  await page.keyboard.press('/')
+  await expect(searchInput).toBeFocused()
 
   await api.delete(`/api/settings/services/${svc.id}`).catch(() => {})
   await api.dispose()
