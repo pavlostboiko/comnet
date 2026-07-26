@@ -82,17 +82,16 @@
 
           <div class="doc-label">Позиції</div>
           <div v-for="(r, i) in doc.items" :key="i" class="doc-row">
-            <select class="fi row-nom" v-model="r.nomenclature_id" @change="r.instance_id=null">
-              <option :value="null" disabled>— номенклатура —</option>
-              <option v-for="n in nomenclature" :key="n.id" :value="n.id">{{ n.name }} ({{ n.is_serialized ? 'серійне' : 'несерійне' }})</option>
-            </select>
+            <div class="row-nom">
+              <ItemAutocomplete :items="nomOptions" :model-value="nomById(r.nomenclature_id)?.name || ''" @select="onDocNom(r, i, $event)" />
+            </div>
             <template v-if="nomById(r.nomenclature_id)?.is_serialized">
               <select class="fi row-qty" v-model="r.instance_id">
                 <option :value="null" disabled>екземпляр</option>
-                <option v-for="s in serial.filter(x => x.nomenclature_id === r.nomenclature_id)" :key="s.instance_id" :value="s.instance_id">{{ s.serial_no }}</option>
+                <option v-for="s in availInstances(r, i)" :key="s.instance_id" :value="s.instance_id">{{ s.serial_no }}</option>
               </select>
             </template>
-            <template v-else>
+            <template v-else-if="r.nomenclature_id">
               <input class="fi row-qty" type="number" min="0.0001" step="0.0001" v-model="r.quantity" placeholder="к-сть" />
             </template>
             <button class="row-del" @click="doc.items.splice(i, 1)" :disabled="doc.items.length === 1">✕</button>
@@ -283,6 +282,7 @@ import { getNomenclature, createInstance } from '../../api/nomenclature.js'
 import { getBalances, getSerialAt, createMovement, createDocument, receiveDocument, itemHistory } from '../../api/custody.js'
 import { getPersons, getServices } from '../../api/settings.js'
 import HistoryTimeline from '../../components/HistoryTimeline.vue'
+import ItemAutocomplete from '../../components/ItemAutocomplete.vue'
 import { getAssignments, createAssignment, returnAssignment } from '../../api/assignments.js'
 import { useAuthStore } from '../../stores/auth.js'
 
@@ -506,6 +506,30 @@ const docOpen = ref(false)
 const docSaving = ref(false)
 const docErr = ref('')
 const doc = reactive({ to_warehouse_id: null, date: '', items: [] })
+
+// Пошуковий список номенклатури для autocomplete (name + code як «number»).
+const nomOptions = computed(() =>
+  nomenclature.value.map(n => ({ id: n.id, name: n.name, number: n.code || '', is_serialized: n.is_serialized })))
+
+// Вибір номенклатури в рядку: несерійну картку не даємо додати двічі.
+function onDocNom(r, i, item) {
+  if (!item.is_serialized) {
+    const dup = doc.items.some((x, idx) => idx !== i && x.nomenclature_id === item.id && !x.instance_id)
+    if (dup) { docErr.value = `«${item.name}» вже додано — змініть кількість у наявному рядку`; return }
+  }
+  r.nomenclature_id = item.id
+  r.instance_id = null
+  r.quantity = item.is_serialized ? null : (r.quantity || 1)
+  docErr.value = ''
+}
+
+// Екземпляри на складі-джерелі для цього рядка, окрім уже обраних в інших рядках
+// (щоб один екземпляр не додати двічі).
+function availInstances(r, i) {
+  const used = doc.items.filter((_, idx) => idx !== i).map(x => x.instance_id).filter(Boolean)
+  return serial.value.filter(s => s.nomenclature_id === r.nomenclature_id && !used.includes(s.instance_id))
+}
+
 function openDoc() {
   docErr.value = ''
   Object.assign(doc, {
@@ -656,7 +680,10 @@ async function saveMove() {
 .fg { display:flex; flex-direction:column; gap:4px; }
 .doc-label { font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-light); font-weight:600; margin-bottom:6px; }
 .doc-row { display:flex; gap:8px; margin-bottom:6px; align-items:center; }
-.row-nom { flex:1; } .row-qty { width:130px; }
+.row-nom { flex:1; }
+.row-nom :deep(.cell-input) { width:100%; box-sizing:border-box; border:1px solid var(--border); background:var(--surface); padding:7px 10px; font-size:14px; border-radius:var(--radius-sm); }
+.row-nom :deep(.cell-input:focus) { background:var(--surface); }
+.row-qty { width:130px; }
 .row-del { width:28px; border:1px solid var(--border); background:transparent; border-radius:var(--radius-sm); cursor:pointer; color:var(--text-light); }
 .row-del:disabled { opacity:0.4; }
 .btn-addrow { margin-top:6px; background:transparent; border:1px dashed var(--border); color:var(--text-mid); border-radius:var(--radius-sm); padding:6px 12px; font-family:inherit; font-size:13px; cursor:pointer; }
