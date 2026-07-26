@@ -315,7 +315,7 @@ def where_is(nomenclature_id: int, db: Session = Depends(get_db), user: User = D
             result["serial"].append({
                 "instance_id": it.id, "serial_no": it.serial_no, "card_number": it.card_number,
                 "warehouse_id": it.current_warehouse_id, "warehouse_name": wh_name(it.current_warehouse_id),
-                "is_official": it.is_official, "holder": holder,
+                "is_official": it.is_official, "holder": holder, "note": it.note,
             })
         result["serial"].sort(key=lambda x: (x["warehouse_name"] or "", x["serial_no"] or ""))
     else:
@@ -450,6 +450,7 @@ def serial_at_warehouse(warehouse_id: int, db: Session = Depends(get_db), user: 
             "is_official": it.is_official,
             "unit_of_measure": nom.unit_of_measure if nom else None,
             "price": str(nom.price) if nom and nom.price is not None else None,
+            "note": it.note,
         })
     out.sort(key=lambda x: (x["name"] or "", x["serial_no"]))
     return out

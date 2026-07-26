@@ -38,10 +38,10 @@
               <thead><tr>
                 <th>Найменування</th><th class="col-serial">Серійний №</th><th class="col-off">Тип</th>
                 <th class="col-num">К-сть</th><th class="col-uom">Од.</th><th class="col-num">Вартість</th>
-                <th>На кому</th><th class="col-issue"></th>
+                <th>На кому</th><th class="col-note">Примітка</th><th class="col-issue"></th>
               </tr></thead>
               <tbody>
-                <tr v-if="!filteredRows.length"><td colspan="8" class="empty">Порожньо</td></tr>
+                <tr v-if="!filteredRows.length"><td colspan="9" class="empty">Порожньо</td></tr>
                 <tr v-for="r in filteredRows" :key="r.key">
                   <td class="td-name">{{ r.name }}</td>
                   <td class="td-mono td-dim">{{ r.serial_no || '—' }}</td>
@@ -50,6 +50,11 @@
                   <td class="td-center">{{ r.unit_of_measure || '—' }}</td>
                   <td class="td-num">{{ r.price != null ? Number(r.price).toFixed(2) : '—' }}</td>
                   <td class="td-dim">{{ r.holder || '—' }}</td>
+                  <td class="col-note">
+                    <input v-if="r.kind === 'serial'" class="note-inp" :value="r.note || ''"
+                      placeholder="—" @change="saveNote(r, $event.target.value)" />
+                    <span v-else class="td-dim">—</span>
+                  </td>
                   <td class="td-issue">
                     <button v-if="r.kind === 'serial'" class="btn-hist" @click="openHistory(r)">Історія</button>
                     <button v-if="isUnitWh && r.state === 'issued'" class="btn-return" @click="doReturn(r.assignment)">Повернути</button>
@@ -278,7 +283,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import { getWarehouses, getUnits } from '../../api/structure.js'
-import { getNomenclature, createInstance } from '../../api/nomenclature.js'
+import { getNomenclature, createInstance, updateInstance } from '../../api/nomenclature.js'
 import { getBalances, getSerialAt, createMovement, createDocument, receiveDocument, itemHistory } from '../../api/custody.js'
 import { getPersons, getServices } from '../../api/settings.js'
 import HistoryTimeline from '../../components/HistoryTimeline.vue'
@@ -312,6 +317,17 @@ const isUnitWh = computed(() => selectedWarehouse.value?.type === 'unit')
 const unitPersons = computed(() => persons.value.filter(p => p.unit_id === selectedWarehouse.value?.unit_id))
 
 function selectWarehouse(id) { warehouseId.value = id; loadStock() }
+
+async function saveNote(r, val) {
+  const note = (val || '').trim() || null
+  try {
+    await updateInstance(r.nomenclature_id, r.instance_id, { note })
+    const s = serial.value.find(x => x.instance_id === r.instance_id)
+    if (s) s.note = note
+  } catch (e) {
+    alert(e?.response?.data?.detail || 'Не вдалось зберегти примітку')
+  }
+}
 
 function personLabel(p) {
   const full = [p.last_name, p.first_name].filter(Boolean).join(' ')
@@ -385,7 +401,7 @@ const stockRows = computed(() => {
       key: `s${s.instance_id}`, kind: 'serial', state: a ? 'issued' : 'stock',
       name: s.name, serial_no: s.serial_no, is_official: s.is_official, qty: 1,
       unit_of_measure: s.unit_of_measure, price: s.price,
-      holder: a ? personName(a.person_id) : null,
+      holder: a ? personName(a.person_id) : null, note: s.note,
       instance_id: s.instance_id, nomenclature_id: s.nomenclature_id, assignment: a,
     })
   }
@@ -767,6 +783,9 @@ table { width:100%; border-collapse:collapse; table-layout:fixed; }
 th, td { padding:9px 14px; text-align:left; font-size:13px; border-bottom:1px solid var(--border-light); }
 th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; }
 .col-off { width:130px; } .col-num { width:110px; text-align:right; } .col-uom { width:70px; } .col-date { width:110px; } .col-issue { width:180px; text-align:right; white-space:nowrap; }
+.col-note { width:160px; }
+.note-inp { width:100%; box-sizing:border-box; border:1px solid transparent; background:transparent; border-radius:var(--radius-sm); padding:4px 6px; font-family:inherit; font-size:13px; color:var(--text); }
+.note-inp:hover { border-color:var(--border-light); } .note-inp:focus { border-color:var(--border); background:var(--surface); outline:none; }
 .td-issue { text-align:center; }
 .btn-issue { background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); padding:3px 10px; font-size:12px; font-family:inherit; font-weight:500; cursor:pointer; }
 .btn-return { background:transparent; border:1px solid #d97706; color:#b45309; border-radius:var(--radius-sm); padding:3px 10px; font-size:12px; font-family:inherit; cursor:pointer; }

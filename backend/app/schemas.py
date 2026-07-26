@@ -151,6 +151,7 @@ class InstanceRead(BaseModel):
     card_number: Optional[str] = None
     current_warehouse_id: Optional[int] = None
     is_official: bool
+    note: Optional[str] = None
     model_config = {"from_attributes": True}
 
 
@@ -158,6 +159,11 @@ class InstanceCreate(BaseModel):
     serial_no: str
     is_official: bool = True
     current_warehouse_id: Optional[int] = None
+    note: Optional[str] = None
+
+
+class InstanceUpdate(BaseModel):
+    note: Optional[str] = None
 
 
 # --- v2 custody movements ---
