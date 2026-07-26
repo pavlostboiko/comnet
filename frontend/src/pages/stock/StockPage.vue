@@ -41,7 +41,8 @@
                   <td class="td-num">{{ r.price != null ? Number(r.price).toFixed(2) : '—' }}</td>
                   <td class="td-dim">{{ r.holder || '—' }}</td>
                   <td class="td-issue">
-                    <button v-if="isUnitWh && r.canIssue" class="btn-issue" @click="openIssue(r)">Видати</button>
+                    <button v-if="isUnitWh && r.kind === 'serial' && r.holder" class="btn-return" @click="doReturn(assignmentOfInstance(r.instance_id))">Повернути</button>
+                    <button v-else-if="isUnitWh && r.canIssue" class="btn-issue" @click="openIssue(r)">Видати</button>
                   </td>
                 </tr>
               </tbody>
@@ -310,8 +311,9 @@ const personName = (id) => {
   return p ? personLabel(p) : '—'
 }
 const serialOfInstance = (id) => serial.value.find(s => s.instance_id === id)?.serial_no || `#${id}`
+const assignmentOfInstance = (instId) => assignments.value.find(x => x.instance_id === instId) || null
 const holderOfInstance = (instId) => {
-  const a = assignments.value.find(x => x.instance_id === instId)
+  const a = assignmentOfInstance(instId)
   return a ? personName(a.person_id) : null
 }
 
@@ -421,6 +423,7 @@ async function saveIssue() {
   }
 }
 async function doReturn(a) {
+  if (!a) return
   if (!confirm(`Повернути «${nomName(a.nomenclature_id)}» від «${personName(a.person_id)}»?`)) return
   try {
     await returnAssignment(a.id)
