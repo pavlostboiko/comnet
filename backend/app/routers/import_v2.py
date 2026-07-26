@@ -423,7 +423,7 @@ def import_assignments_v2(
         w.unit_id: w for w in db.query(Warehouse).filter(Warehouse.type == "unit").all()
     }
 
-    counts = {"rows": 0, "assignments": 0, "skipped": 0}
+    counts = {"rows": 0, "assignments": 0, "persons_created": 0, "skipped": 0}
     errors = []
 
     def col(row, key):
@@ -496,15 +496,18 @@ def import_assignments_v2(
                 continue
             matches = [p for p in persons
                        if (p.last_name or "").strip().lower() == surname.lower() and p.unit_id == unit.id]
-            if len(matches) == 0:
-                counts["skipped"] += 1
-                errors.append(f"«{name}»: особу «{surname}» у підрозділі «{unit.name}» не знайдено")
-                continue
             if len(matches) > 1:
                 counts["skipped"] += 1
                 errors.append(f"«{name}»: неоднозначне прізвище «{surname}» у «{unit.name}»")
                 continue
-            person = matches[0]
+            if matches:
+                person = matches[0]
+            else:
+                # особи нема — створюємо (last_name + підрозділ; решту дозаповнити вручну)
+                person = Person(last_name=surname, unit_id=unit.id, is_active=True)
+                db.add(person); db.flush()
+                persons.append(person)          # щоб наступні рядки цієї особи не дублювали
+                counts["persons_created"] += 1
 
             if nom.is_serialized:
                 card = _clean(col(row, "card_number"))
