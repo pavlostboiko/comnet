@@ -145,11 +145,10 @@
           <div class="doc-label">Позиції</div>
           <div v-for="(r, i) in recv.items" :key="i" class="recv-row">
             <div class="recv-line">
-              <select class="fi row-nom" v-model="r.nomenclature_id" @change="onRecvNom(r, i)">
-                <option :value="null" disabled>— номенклатура —</option>
-                <option v-for="n in nomenclature" :key="n.id" :value="n.id">{{ n.name }} ({{ n.is_serialized ? 'серійне' : 'несерійне' }})</option>
-                <option value="__new__">+ нова номенклатура…</option>
-              </select>
+              <div class="row-nom">
+                <ItemAutocomplete :items="allNomOptions" :model-value="nomById(r.nomenclature_id)?.name || ''" @select="onRecvNomSelect(r, i, $event)" />
+              </div>
+              <button class="btn-newnom" @click="openNewNom(i)" title="Нова номенклатура">+ нова</button>
               <template v-if="recvSerialized(r)">
                 <input class="fi row-qty" v-model="r.serial_no" placeholder="серійний №" />
                 <input class="fi row-qty" v-model="r.card_number" placeholder="№ картки" />
@@ -646,15 +645,14 @@ function openReceive() {
   recvOpen.value = true
 }
 function addRecvRow() { recv.items.push(newRecvRow()) }
-function onRecvNom(r, i) {
-  if (r.nomenclature_id === '__new__') {   // «+ нова номенклатура» → спільна форма
-    r.nomenclature_id = null
-    newNomRow.value = i
-    newNomOpen.value = true
-    return
-  }
+// Приймання: у пошуку — вся номенклатура (завозимо нове, склад не фільтрує).
+const allNomOptions = computed(() =>
+  nomenclature.value.map(n => ({ id: n.id, name: n.name, number: n.code || '', is_serialized: n.is_serialized })))
+function onRecvNomSelect(r, i, item) {
+  r.nomenclature_id = item.id
   r.serial_no = ''; r.card_number = ''; r.quantity = null
 }
+function openNewNom(i) { newNomRow.value = i; newNomOpen.value = true }
 function recvSerialized(r) { return !!nomById(r.nomenclature_id)?.is_serialized }
 
 // Нова номенклатура через спільний компонент NomenclatureModal.
@@ -753,6 +751,7 @@ async function saveMove() {
 .btn-sec3:disabled { opacity:0.5; }
 .recv-row { margin-bottom:10px; border-bottom:1px dashed var(--border-light); padding-bottom:8px; }
 .recv-line { display:flex; gap:8px; align-items:center; }
+.btn-newnom { flex-shrink:0; border:1px dashed var(--border); background:transparent; color:var(--text-mid); border-radius:var(--radius-sm); padding:6px 10px; font-family:inherit; font-size:12px; cursor:pointer; white-space:nowrap; }
 .recv-new { display:grid; grid-template-columns:1fr 1fr 100px auto 90px; gap:8px; margin-top:6px; align-items:center; }
 .ser-chk { display:flex; align-items:center; gap:4px; font-size:12px; color:var(--text-mid); white-space:nowrap; }
 .modal.wide { width:min(640px,100%); }

@@ -16,7 +16,7 @@ test('receive «+ нова номенклатура» uses the shared card form 
   await page.goto(`${URL}/stock`)
   await page.locator('.wh-btn', { hasText: svcWh.name }).click()
   await page.locator('button', { hasText: 'Прийняти майно' }).click()
-  await page.locator('.recv-row select.row-nom').first().selectOption('__new__')
+  await page.locator('.recv-row .btn-newnom').first().click()
 
   // The shared card modal opens and includes the price field
   const nm = page.locator('.overlay:has(.modal-title:has-text("Додати майно"))')
