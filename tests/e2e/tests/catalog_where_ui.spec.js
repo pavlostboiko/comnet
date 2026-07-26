@@ -22,8 +22,8 @@ test('clicking a Майно row opens the «Де знаходиться» modal'
   await page.locator('.modal select').first().selectOption({ label: svc })
   await page.locator('.btn-pri', { hasText: 'Зберегти' }).click()
 
-  // click the row → «Де знаходиться» modal opens
+  // click the row → item modal opens with the «Де знаходиться» tab
   await page.locator('tbody tr.click-row', { hasText: name }).first().click()
-  await expect(page.locator('.modal-title', { hasText: 'Де знаходиться' })).toBeVisible()
+  await expect(page.locator('.wtabs button', { hasText: 'Де знаходиться' })).toBeVisible()
   await expect(page.locator('.modal-title')).toContainText(name)
 })
