@@ -327,7 +327,7 @@ const stockRows = computed(() => {
   for (const s of serial.value) rows.push({
     key: `s${s.instance_id}`, kind: 'serial',
     name: s.name, serial_no: s.serial_no, is_official: s.is_official, qty: 1,
-    unit_of_measure: null, price: null, holder: holderOfInstance(s.instance_id),
+    unit_of_measure: s.unit_of_measure, price: s.price, holder: holderOfInstance(s.instance_id),
     canIssue: !holderOfInstance(s.instance_id), instance_id: s.instance_id,
     nomenclature_id: s.nomenclature_id,
   })
