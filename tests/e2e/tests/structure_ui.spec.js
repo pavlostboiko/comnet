@@ -1,0 +1,51 @@
+const { test, expect } = require('@playwright/test')
+const { URL, uiLogin } = require('./helpers/login')
+
+test('Довідники page loads with all tabs', async ({ page }) => {
+  await uiLogin(page)
+  await page.goto(`${URL}/structure`)
+  await expect(page.locator('.tile-title')).toContainText('Довідники')
+  for (const label of ['Служби', 'Підрозділи', 'Склади', 'МВО', 'Групи', 'Особи']) {
+    await expect(page.locator('.tt-btn', { hasText: label })).toBeVisible()
+  }
+})
+
+test('creating a unit shows an auto-created warehouse in the Склади tab', async ({ page }) => {
+  await uiLogin(page)
+  await page.goto(`${URL}/structure`)
+
+  // Switch to Підрозділи, add one
+  await page.locator('.tt-btn', { hasText: 'Підрозділи' }).click()
+  await page.locator('.btn-add').click()
+  const name = `UI Рота ${Date.now()}`
+  await page.locator('.modal .fi').first().fill(name)
+  await page.locator('.btn-pri').click()
+  await expect(page.locator('td.td-name', { hasText: name })).toBeVisible()
+
+  // Its warehouse appears under Склади
+  await page.locator('.tt-btn', { hasText: 'Склади' }).click()
+  await expect(page.locator('td.td-name', { hasText: `Склад ${name}` })).toBeVisible()
+})
+
+test('creating a group via the Групи tab', async ({ page }) => {
+  await uiLogin(page)
+  await page.goto(`${URL}/structure`)
+
+  // Need a unit first
+  await page.locator('.tt-btn', { hasText: 'Підрозділи' }).click()
+  await page.locator('.btn-add').click()
+  const unitName = `UI Гр-рота ${Date.now()}`
+  await page.locator('.modal .fi').first().fill(unitName)
+  await page.locator('.btn-pri').click()
+  await expect(page.locator('td.td-name', { hasText: unitName })).toBeVisible()
+
+  // Create a group in it
+  await page.locator('.tt-btn', { hasText: 'Групи' }).click()
+  await page.locator('.btn-add').click()
+  const groupName = `Група ${Date.now()}`
+  await page.locator('.modal .fi').first().fill(groupName)
+  // select the unit (second .fi is the unit <select>)
+  await page.locator('.modal select').first().selectOption({ label: unitName })
+  await page.locator('.btn-pri').click()
+  await expect(page.locator('td.td-name', { hasText: groupName })).toBeVisible()
+})

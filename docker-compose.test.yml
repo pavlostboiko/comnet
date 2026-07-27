@@ -1,0 +1,68 @@
+# Isolated e2e/integration stack — own Postgres + backend + frontend on a
+# separate compose project (comnet_test) with an EPHEMERAL database (tmpfs), so
+# integration tests never touch the developer's dev database.
+#
+# Service names match the dev stack on purpose (backend/frontend/postgres) so
+# nginx.conf (proxy_pass http://backend:8000) and the Playwright defaults
+# (http://backend:8000, http://frontend) work unchanged.
+#
+# Run the whole suite:
+#   scripts/e2e.sh                       # up → migrate → test → down
+# Or manually:
+#   docker compose -f docker-compose.test.yml -p comnet_test --profile test \
+#     run --rm -v "$PWD/tests/e2e/tests:/e2e/tests" playwright \
+#     npx playwright test
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-comnet}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-comnet_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-comnet}
+    tmpfs:
+      - /var/lib/postgresql/data      # ephemeral: fresh DB per `up`, nothing persisted
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-comnet} -d ${POSTGRES_DB:-comnet}"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build: ./backend
+    env_file: .env                    # DATABASE_URL points at «postgres» → the test DB here
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app                # run against current code (entrypoint runs alembic)
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')\" 2>/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_BASE_URL: ${VITE_BASE_URL:-/}
+    depends_on:
+      - backend
+    # no host port — Playwright reaches it over the internal network
+
+  playwright:
+    profiles: ["test"]
+    build:
+      context: ./tests/e2e
+    env_file: .env
+    environment:
+      TEST_USER: ${FIRST_ADMIN_USERNAME:-admin}
+      TEST_PASS: ${FIRST_ADMIN_PASSWORD:-admin123}
+    depends_on:
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./tests/e2e/results:/results

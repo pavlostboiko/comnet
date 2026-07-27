@@ -21,7 +21,7 @@ from app.schemas import PasswordSet, UserAdminCreate, UserAdminUpdate, UserOut
 router = APIRouter(prefix="/api/users", tags=["users"])
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-VALID_ROLES = ("admin", "operator")
+VALID_ROLES = ("admin", "operator", "service", "mvo")
 
 
 def _hash(password: str) -> str:
@@ -59,6 +59,9 @@ def create_user(
         role=payload.role,
         is_active=payload.is_active,
         person_id=payload.person_id,
+        service_id=payload.service_id,
+        unit_id=payload.unit_id,
+        warehouse_id=payload.warehouse_id,
     )
     db.add(user)
     db.commit()
@@ -104,6 +107,11 @@ def update_user(
     if payload.person_id is not None:
         # None → unset; positive → link. Explicit 0 or -1 treated as unset.
         user.person_id = payload.person_id or None
+
+    for field in ("service_id", "unit_id", "warehouse_id"):
+        val = getattr(payload, field)
+        if val is not None:
+            setattr(user, field, val or None)
 
     db.commit()
     db.refresh(user)

@@ -17,7 +17,7 @@ async function uiLogin(page, { user = USER, pass = PASS } = {}) {
   await page.fill('input[id="f-username"]', user)
   await page.fill('input[id="f-password"]', pass)
   await page.click('button.btn-login')
-  await page.waitForURL(/\/items/)
+  await page.waitForURL(/\/catalog/)
 }
 
 async function getToken(requestContext, { user = USER, pass = PASS } = {}) {

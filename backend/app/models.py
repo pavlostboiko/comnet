@@ -13,8 +13,200 @@ class Service(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
-    chief_name = Column(String, nullable=True)
+    code = Column(String, nullable=True)              # v2: коротка абревіатура
+    chief_name = Column(String, nullable=True)        # для тексту накладних
     chief_position = Column(String, nullable=True)
+
+
+class Unit(Base):
+    """v2: підрозділ як окрема сутність (замість free-text persons.unit).
+    Плоска структура — без ієрархії."""
+    __tablename__ = "units"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False, unique=True)
+    code = Column(String, nullable=True)
+    name_locative = Column(String, nullable=True)     # «у 1-й роті» — для документів
+    is_external = Column(Boolean, nullable=False, default=False)  # зовнішній підрозділ (джерело приймання)
+
+
+class Group(Base):
+    """v2: група всередині підрозділу; командир — person."""
+    __tablename__ = "groups"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    unit_id = Column(Integer, ForeignKey("units.id", ondelete="CASCADE"), nullable=False)
+    commander_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
+
+    unit = relationship("Unit")
+    commander = relationship("Person", foreign_keys=[commander_id])
+
+
+class Warehouse(Base):
+    """v2: облікова точка (склад служби АБО склад підрозділу).
+    Стабільна — прив'язана до служби/підрозділу, НЕ до особи.
+    Інваріант: type=service → service_id заповнено, unit_id порожньо (і навпаки)."""
+    __tablename__ = "warehouses"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    type = Column(String, nullable=False)             # 'service' | 'unit'
+    service_id = Column(Integer, ForeignKey("services.id", ondelete="CASCADE"), nullable=True)
+    unit_id = Column(Integer, ForeignKey("units.id", ondelete="CASCADE"), nullable=True)
+
+    service = relationship("Service")
+    unit = relationship("Unit")
+
+
+class Mvo(Base):
+    """v2: журнал призначень МВО на склад підрозділу (історичний).
+    Діючий = to_date IS NULL; максимум один діючий на склад."""
+    __tablename__ = "mvo"
+
+    id = Column(Integer, primary_key=True)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False)
+    person_id = Column(Integer, ForeignKey("persons.id", ondelete="CASCADE"), nullable=False)
+    from_date = Column(Date, nullable=False)
+    to_date = Column(Date, nullable=True)
+
+    warehouse = relationship("Warehouse")
+    person = relationship("Person", foreign_keys=[person_id])
+
+
+class Nomenclature(Base):
+    """v2: тип майна («АК-74 взагалі»), не фізичний предмет.
+    `service` — вісь розмежування доступу. `is_serialized` — гілка обліку."""
+    __tablename__ = "nomenclature"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    service_id = Column(Integer, ForeignKey("services.id", ondelete="RESTRICT"), nullable=False)
+    category = Column(String, nullable=True)          # група майна всередині служби
+    is_official = Column(Boolean, nullable=False, default=True)  # облік / ндм
+    is_serialized = Column(Boolean, nullable=False, default=False)
+    unit_of_measure = Column(String, nullable=True)   # шт, компл, пара, кг, м, л
+    code = Column(String, nullable=True)              # номенклатурний номер / артикул
+    price = Column(Numeric(15, 2), nullable=True)     # вартісний облік
+
+    service = relationship("Service")
+
+
+class Instance(Base):
+    """v2: екземпляр серійного майна (1 запис = 1 предмет).
+    current_warehouse — денормалізоване: to_warehouse останнього руху (заповниться
+    у Фазі 3, коли з'являться v2-рухи)."""
+    __tablename__ = "instances"
+
+    id = Column(Integer, primary_key=True)
+    nomenclature_id = Column(Integer, ForeignKey("nomenclature.id", ondelete="CASCADE"), nullable=False)
+    serial_no = Column(String, nullable=False, unique=True)
+    card_number = Column(String, nullable=True)       # Items «№» — join з Переміщеннями
+    current_warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True)
+    is_official = Column(Boolean, nullable=False, default=True)  # державне / волонтерське
+    note = Column(String, nullable=True)              # примітка на екземплярі
+
+    nomenclature = relationship("Nomenclature")
+    current_warehouse = relationship("Warehouse")
+
+
+class CustodyMovement(Base):
+    """v2: рух custody між обліковими точками (склад → склад). Ядро леджера.
+
+    Серійне: instance заповнено, quantity=1. Несерійне: instance порожньо, quantity>0.
+    is_official — державне/волонтерське; для несерійного визначає лінію балансу."""
+    __tablename__ = "custody_movements"
+
+    id = Column(Integer, primary_key=True)
+    date = Column(Date, nullable=False)
+    type = Column(String, nullable=False)             # receipt | transfer | writeoff
+    from_warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True)
+    to_warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True)
+    nomenclature_id = Column(Integer, ForeignKey("nomenclature.id", ondelete="RESTRICT"), nullable=False)
+    instance_id = Column(Integer, ForeignKey("instances.id", ondelete="SET NULL"), nullable=True)
+    quantity = Column(Numeric(15, 4), nullable=False)
+    is_official = Column(Boolean, nullable=False, default=True)
+    card_number = Column(String, nullable=True)        # Переміщення «Поле 12»
+    doc_number = Column(String, nullable=True)         # номер накладної
+    document_id = Column(Integer, ForeignKey("custody_documents.id", ondelete="SET NULL"), nullable=True)  # шапка накладної/акта
+    signed_by_person_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    nomenclature = relationship("Nomenclature")
+    instance = relationship("Instance")
+    from_warehouse = relationship("Warehouse", foreign_keys=[from_warehouse_id])
+    to_warehouse = relationship("Warehouse", foreign_keys=[to_warehouse_id])
+    document = relationship("CustodyDocument", back_populates="movements", foreign_keys=[document_id])
+
+
+class CustodyDocument(Base):
+    """v2: шапка документа (накладна/акт) над леджером custody_movements.
+
+    Реквізити тримаються тут ОДИН раз; рядки лінкуються через
+    custody_movements.document_id. status: draft (редагується) → signed (snap
+    заморожено, номер зафіксовано, доступний XLSX Дод.25). Sign/unsign НЕ рухають
+    леджер — рухи проводяться при створенні (інваріант v2)."""
+    __tablename__ = "custody_documents"
+
+    id = Column(Integer, primary_key=True)
+    operation = Column(String, nullable=False)         # receipt | transfer
+    form = Column(String, nullable=False)              # накладна | акт
+    doc_number = Column(String, nullable=True)
+    doc_date = Column(String, nullable=True)
+    date_operation = Column(String, nullable=True)
+    from_warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True)
+    to_warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True)
+    from_unit = Column(String, nullable=True)          # snap-назва складу-джерела
+    to_unit = Column(String, nullable=True)            # snap-назва складу-отримувача
+    counterparty = Column(String, nullable=True)       # від кого (приймання ззовні)
+    basis = Column(String, nullable=True)
+    service = Column(String, nullable=True)            # денормалізована назва служби
+    service_id = Column(Integer, ForeignKey("services.id", ondelete="SET NULL"), nullable=True)
+    op_type_id = Column(Integer, ForeignKey("op_types.id", ondelete="SET NULL"), nullable=True)
+    sender_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
+    receiver_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
+    fin_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String, nullable=False, default="draft")
+    signed_at = Column(DateTime, nullable=True)
+    signed_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    extra_data = Column(JSON, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    from_warehouse = relationship("Warehouse", foreign_keys=[from_warehouse_id])
+    to_warehouse = relationship("Warehouse", foreign_keys=[to_warehouse_id])
+    movements = relationship(
+        "CustodyMovement", back_populates="document",
+        foreign_keys="CustodyMovement.document_id",
+    )
+
+
+class Assignment(Base):
+    """v2: видача особовому складу (фізичне тримання). НЕ рухає custody.
+
+    warehouse — склад підрозділу; person.unit має = warehouse.unit.
+    Активна = returned_date IS NULL. Серійне: instance заповнено, один активний
+    на екземпляр. is_official — для несерійного визначає лінію балансу-джерела."""
+    __tablename__ = "assignments"
+
+    id = Column(Integer, primary_key=True)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False)
+    person_id = Column(Integer, ForeignKey("persons.id", ondelete="CASCADE"), nullable=False)
+    nomenclature_id = Column(Integer, ForeignKey("nomenclature.id", ondelete="RESTRICT"), nullable=False)
+    instance_id = Column(Integer, ForeignKey("instances.id", ondelete="SET NULL"), nullable=True)
+    quantity = Column(Numeric(15, 4), nullable=False)
+    is_official = Column(Boolean, nullable=False, default=True)
+    issued_date = Column(Date, nullable=False)
+    returned_date = Column(Date, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    returned_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    warehouse = relationship("Warehouse")
+    person = relationship("Person", foreign_keys=[person_id])
+    nomenclature = relationship("Nomenclature")
+    instance = relationship("Instance")
 
 
 class UnitSettings(Base):
@@ -53,9 +245,13 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     username = Column(String, nullable=False, unique=True)
     hashed_password = Column(String, nullable=False)
-    role = Column(String, nullable=False, default="operator")
+    role = Column(String, nullable=False, default="operator")  # admin|operator|service|mvo
     is_active = Column(Boolean, nullable=False, default=True)
     person_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
+    # v2 two-axis scope
+    service_id = Column(Integer, ForeignKey("services.id", ondelete="SET NULL"), nullable=True)
+    unit_id = Column(Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True)
 
     person = relationship("Person", foreign_keys=[person_id])
 
@@ -79,9 +275,17 @@ class Person(Base):
     patronymic = Column(String, nullable=True)
     patronymic_genitive = Column(String, nullable=True)
     search_name = Column(String, nullable=True)
-    unit = Column(String, nullable=True)
+    unit = Column(String, nullable=True)              # v1 free-text; прибереться в пізній фазі
     unit_locative = Column(String, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
+    # v2 additions
+    unit_id = Column(Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True)
+    callsign = Column(String, nullable=True)          # влиті recipients (позивні)
+    group_id = Column(Integer, ForeignKey("groups.id", ondelete="SET NULL"), nullable=True)
+    ipn = Column(String, nullable=True)               # ІПН — заповнюється вручну
+
+    unit_ref = relationship("Unit", foreign_keys=[unit_id])
+    group = relationship("Group", foreign_keys=[group_id])
 
 
 class Recipient(Base):

@@ -13,12 +13,14 @@
     </div>
 
     <nav class="nav-links">
-      <router-link class="nav-link" to="/items">Майно</router-link>
-      <router-link class="nav-link" to="/movements">Переміщення</router-link>
-      <router-link v-if="isAdmin" class="nav-link" to="/documents">Документи</router-link>
-      <router-link class="nav-link" to="/residues">Залишки</router-link>
+      <router-link class="nav-link" to="/catalog">Майно</router-link>
+      <router-link class="nav-link" to="/stock">Залишки</router-link>
+      <router-link class="nav-link" to="/custody">Переміщення</router-link>
+      <router-link v-if="isAdmin" class="nav-link" to="/docs">Документи</router-link>
       <router-link v-if="isAdmin" class="nav-link" to="/reports">Звіти</router-link>
-      <router-link v-if="isAdmin" class="nav-link" to="/settings">Налаштування</router-link>
+      <router-link v-if="isAdmin" class="nav-link" to="/structure">Довідники</router-link>
+      <router-link v-if="isAdmin" class="nav-link" to="/users">Користувачі</router-link>
+      <router-link v-if="isAdmin" class="nav-link" to="/import">Імпорт</router-link>
     </nav>
 
     <div class="tb-right">

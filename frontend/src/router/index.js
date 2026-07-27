@@ -2,11 +2,11 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
 
 // Routes an operator (non-admin) can access. Everything else redirects
-// to /residues (their default landing).
-const OPERATOR_ALLOWED = new Set(['/residues', '/items', '/movements', '/login'])
+// to /stock (their default landing).
+const OPERATOR_ALLOWED = new Set(['/catalog', '/stock', '/custody', '/login'])
 
 const routes = [
-  { path: '/', redirect: '/items' },
+  { path: '/', redirect: '/catalog' },
   {
     path: '/login',
     component: () => import('../pages/auth/LoginPage.vue'),
@@ -28,7 +28,7 @@ const routes = [
   },
   {
     path: '/reports',
-    component: () => import('../pages/PlaceholderPage.vue'),
+    component: () => import('../pages/reports/ReportsPage.vue'),
     meta: { requiresAuth: true, label: 'Звіти', adminOnly: true },
   },
   {
@@ -45,6 +45,46 @@ const routes = [
     path: '/settings',
     component: () => import('../pages/settings/SettingsPage.vue'),
     meta: { requiresAuth: true, adminOnly: true },
+  },
+  {
+    path: '/structure',
+    component: () => import('../pages/structure/StructurePage.vue'),
+    meta: { requiresAuth: true, adminOnly: true, label: 'Довідники' },
+  },
+  {
+    path: '/catalog',
+    component: () => import('../pages/catalog/CatalogPage.vue'),
+    meta: { requiresAuth: true, label: 'Майно' },
+  },
+  {
+    path: '/stock',
+    component: () => import('../pages/stock/StockPage.vue'),
+    meta: { requiresAuth: true, label: 'Залишки' },
+  },
+  {
+    path: '/custody',
+    component: () => import('../pages/custody/MovementsPage.vue'),
+    meta: { requiresAuth: true, label: 'Переміщення' },
+  },
+  {
+    path: '/docs',
+    component: () => import('../pages/documents_v2/DocumentsPage.vue'),
+    meta: { requiresAuth: true, adminOnly: true, label: 'Документи' },
+  },
+  {
+    path: '/docs/:id',
+    component: () => import('../pages/documents_v2/DocumentFormPage.vue'),
+    meta: { requiresAuth: true, adminOnly: true },
+  },
+  {
+    path: '/users',
+    component: () => import('../pages/users/UsersPage.vue'),
+    meta: { requiresAuth: true, adminOnly: true, label: 'Користувачі' },
+  },
+  {
+    path: '/import',
+    component: () => import('../pages/import/ImportPage.vue'),
+    meta: { requiresAuth: true, adminOnly: true, label: 'Імпорт' },
   },
 ]
 
@@ -72,11 +112,11 @@ router.beforeEach(async (to) => {
 
   // Non-admin scoping: block admin-only pages, land on /residues instead.
   if (role !== 'admin' && to.meta.adminOnly) {
-    return { path: '/residues' }
+    return { path: '/catalog' }
   }
   // Non-admin visiting '/' — redirect straight to their landing.
   if (role !== 'admin' && to.path === '/') {
-    return { path: '/residues' }
+    return { path: '/catalog' }
   }
 })
 

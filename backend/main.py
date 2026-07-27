@@ -16,7 +16,13 @@ from app.routers import settings as settings_router
 from app.routers import admin as admin_router
 from app.routers import recipients as recipients_router
 from app.routers import residues as residues_router
+from app.routers import assignments as assignments_router
+from app.routers import custody as custody_router
+from app.routers import custody_documents as custody_documents_router
+from app.routers import import_v2 as import_v2_router
+from app.routers import nomenclature as nomenclature_router
 from app.routers import splits as splits_router
+from app.routers import structure as structure_router
 from app.routers import users as users_router
 
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -65,6 +71,12 @@ app.include_router(residues_router.router)
 app.include_router(splits_router.router)
 app.include_router(users_router.router)
 app.include_router(admin_router.router)
+app.include_router(structure_router.router)
+app.include_router(nomenclature_router.router)
+app.include_router(custody_router.router)
+app.include_router(custody_documents_router.router)
+app.include_router(assignments_router.router)
+app.include_router(import_v2_router.router)
 
 
 @app.get("/api/health")
