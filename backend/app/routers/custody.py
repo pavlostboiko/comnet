@@ -140,6 +140,44 @@ def create_movement(payload: CustodyMovementCreate, db: Session = Depends(get_db
     return _mv_dict(mv)
 
 
+@router.delete("/movements/{mid}", status_code=status.HTTP_200_OK)
+def delete_movement(mid: int, db: Session = Depends(get_db),
+                    user: User = Depends(get_current_user)):
+    """Відкликати НЕПРОВЕДЕНИЙ рух (без документа): видалити леджер-рядок і
+    відкотити розміщення (запис зникає з історії, ніби руху не було). Дозволено
+    лише для `document_id IS NULL`. Серійне — тільки ОСТАННІЙ рух екземпляра
+    (щоб не рвати ланцюг); склад перераховується з решти рухів (той самий
+    `doc_sort_key`). Несерійне — блокуємо, якщо відкат зробив би баланс складу-
+    отримувача від'ємним (майно вже розійшлося далі)."""
+    mv = db.get(CustodyMovement, mid)
+    if not mv:
+        raise HTTPException(404, "Рух не знайдено")
+    if mv.document_id is not None:
+        raise HTTPException(400, "Рух у документі — спершу відкріпіть його від документа")
+    nom = db.get(Nomenclature, mv.nomenclature_id)
+    check_movement_create(user, mv.from_warehouse_id, nom)  # ACL
+
+    if nom and nom.is_serialized and mv.instance_id:
+        inst = db.get(Instance, mv.instance_id)
+        all_mvs = db.query(CustodyMovement).filter(
+            CustodyMovement.instance_id == mv.instance_id).all()
+        key = lambda m: (m.date, doc_sort_key(m.doc_number), m.id)
+        if max(all_mvs, key=key).id != mv.id:
+            raise HTTPException(400, "Можна відкликати лише останній рух екземпляра")
+        db.delete(mv)
+        remaining = [m for m in all_mvs if m.id != mv.id]
+        inst.current_warehouse_id = (
+            max(remaining, key=key).to_warehouse_id if remaining else None)
+    else:
+        if mv.to_warehouse_id is not None:
+            bal = balance_of(db, mv.to_warehouse_id, mv.nomenclature_id, mv.is_official)
+            if bal - mv.quantity < 0:
+                raise HTTPException(400, "Не можна відкликати: майно вже розійшлося далі")
+        db.delete(mv)
+    db.commit()
+    return {"deleted": mid}
+
+
 @router.post("/document", status_code=status.HTTP_201_CREATED)
 def create_document(payload: DocumentBatchCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Накладна на переміщення: N позицій зі складу-джерела на склад-отримувач

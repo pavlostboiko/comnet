@@ -58,6 +58,7 @@
                   <th class="col-chk"><input type="checkbox" :checked="allChecked(g)" @change="toggleAll(g, $event)" /></th>
                   <th class="col-date">Дата</th><th>Номенклатура</th>
                   <th class="col-serial">Картка/серійний</th><th class="col-num">К-сть</th>
+                  <th class="col-acts"></th>
                 </tr></thead>
                 <tbody>
                   <tr v-for="m in g.rows" :key="m.id">
@@ -66,6 +67,7 @@
                     <td>{{ nomName(m.nomenclature_id) }}</td>
                     <td class="td-mono td-dim">{{ m.card_number || (m.instance_id ? '№' + m.instance_id : '—') }}</td>
                     <td class="td-num">{{ fmtQty(m.quantity) }}</td>
+                    <td><button class="btn-revoke" :disabled="busy" @click="revoke(m)">Відкликати</button></td>
                   </tr>
                 </tbody>
               </table>
@@ -83,7 +85,7 @@ import { useRouter } from 'vue-router'
 import TopBar from '../../components/TopBar.vue'
 import { getWarehouses } from '../../api/structure.js'
 import { getNomenclature } from '../../api/nomenclature.js'
-import { getMovements, getDocs, createDoc } from '../../api/custody.js'
+import { getMovements, getDocs, createDoc, deleteMovement } from '../../api/custody.js'
 
 const router = useRouter()
 const tab = ref('docs')
@@ -151,6 +153,17 @@ async function makeDoc(g) {
   } finally { busy.value = false }
 }
 
+async function revoke(m) {
+  if (!confirm('Відкликати це переміщення? Майно повернеться на попередній склад, запис зникне з історії. Дію не можна скасувати.')) return
+  busy.value = true
+  try {
+    await deleteMovement(m.id)
+    await load()
+  } catch (e) {
+    alert('Не вдалося відкликати: ' + (e.response?.data?.detail || e.message))
+  } finally { busy.value = false }
+}
+
 async function load() {
   loading.value = true
   const [d, m, w, n] = await Promise.all([getDocs(), getMovements(), getWarehouses(), getNomenclature()])
@@ -181,6 +194,8 @@ th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:1
 .col-date { width:120px; } .col-type { width:150px; } .col-serial { width:160px; } .col-num { width:90px; text-align:right; } .col-acts { width:60px; } .col-chk { width:40px; }
 .td-name { font-weight:600; } .td-dim { color:var(--text-light); }
 .td-num { text-align:right; font-family:'DM Mono',monospace; }
+.btn-revoke { padding:3px 10px; background:transparent; border:1px solid #dc2626; color:#dc2626; border-radius:var(--radius-sm); font-family:inherit; font-size:12px; cursor:pointer; white-space:nowrap; }
+.btn-revoke:disabled { opacity:0.5; }
 .td-mono { font-family:'DM Mono',monospace; font-size:12px; }
 .td-acts { text-align:center; }
 .click-row { cursor:pointer; } .click-row:hover { background:var(--bg); }
