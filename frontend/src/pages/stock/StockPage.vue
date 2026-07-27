@@ -6,8 +6,7 @@
         <div class="tile-header">
           <span class="tile-title">Залишки</span>
           <button class="btn-sec2" :disabled="!warehouseId" @click="openReceive">Прийняти майно</button>
-          <button class="btn-sec3" :disabled="!warehouseId" @click="openDoc">Додати переміщення</button>
-          <button class="btn-add" :disabled="!warehouseId" @click="openMove">+ Рух</button>
+          <button class="btn-add" :disabled="!warehouseId" @click="openDoc">Додати переміщення</button>
         </div>
         <!-- Кнопки-склади: служби + внутрішні підрозділи (зовнішні не показуємо) -->
         <div class="wh-tabs">
@@ -79,7 +78,7 @@
           <div class="doc-top">
             <div class="fg">
               <label class="fl">Куди (склад)</label>
-              <select class="fi" v-model="doc.to_warehouse_id">
+              <select class="fi" v-model="doc.to_warehouse_id" @change="onDestChange">
                 <option :value="null" disabled>— оберіть —</option>
                 <option v-for="w in otherWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
               </select>
@@ -102,9 +101,15 @@
             <template v-else-if="r.nomenclature_id">
               <input class="fi row-qty" type="number" min="0.0001" step="0.0001" v-model="r.quantity" placeholder="к-сть" />
             </template>
+            <div v-if="isDestUnit" class="row-person">
+              <ItemAutocomplete :items="destPersonOptions" placeholder="кому (опц.)"
+                :model-value="r.assign_person_id ? personName(r.assign_person_id) : ''"
+                @select="onDocPerson(r, $event)" />
+              <button v-if="r.assign_person_id" class="row-clearp" title="прибрати особу" @click="r.assign_person_id = null">✕</button>
+            </div>
             <button class="row-del" @click="doc.items.splice(i, 1)" :disabled="doc.items.length === 1">✕</button>
           </div>
-          <button class="btn-addrow" @click="doc.items.push({ nomenclature_id: null, quantity: null, instance_id: null })">+ Додати позицію</button>
+          <button class="btn-addrow" @click="doc.items.push({ nomenclature_id: null, quantity: null, instance_id: null, assign_person_id: null })">+ Додати позицію</button>
 
           <div v-if="docErr" class="err">{{ docErr }}</div>
         </div>
@@ -198,65 +203,6 @@
       </div>
     </div>
 
-    <!-- ═══ Рух modal ═══ -->
-    <div class="overlay" :class="{ open: moveOpen }" @click.self="moveOpen = false">
-      <div v-if="moveOpen" class="modal">
-        <div class="modal-head">
-          <span class="modal-title">Новий рух — {{ warehouseName(warehouseId) }}</span>
-          <button class="modal-close" @click="moveOpen = false">✕</button>
-        </div>
-        <div class="modal-body">
-          <label class="fl">Тип</label>
-          <select class="fi" v-model="mv.type" @change="onTypeChange">
-            <option value="receipt">Надходження (ззовні → цей склад)</option>
-            <option value="transfer">Переміщення (цей склад → інший)</option>
-            <option value="writeoff">Списання (з цього складу)</option>
-          </select>
-
-          <label class="fl">Номенклатура</label>
-          <select class="fi" v-model="mv.nomenclature_id" @change="onNomChange">
-            <option :value="null" disabled>— оберіть —</option>
-            <option v-for="n in nomenclature" :key="n.id" :value="n.id">
-              {{ n.name }} ({{ n.is_serialized ? 'серійне' : 'несерійне' }})
-            </option>
-          </select>
-
-          <template v-if="mv.type === 'transfer'">
-            <label class="fl">Куди (склад)</label>
-            <select class="fi" v-model="mv.to_warehouse_id">
-              <option :value="null" disabled>— оберіть —</option>
-              <option v-for="w in otherWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
-            </select>
-          </template>
-
-          <template v-if="selectedNom && selectedNom.is_serialized">
-            <template v-if="mv.type === 'receipt'">
-              <label class="fl">Серійний номер</label>
-              <input class="fi" v-model="mv.serial_no" placeholder="напр. SN-12345" />
-            </template>
-            <template v-else>
-              <label class="fl">Екземпляр (на цьому складі)</label>
-              <select class="fi" v-model="mv.instance_id">
-                <option :value="null" disabled>— оберіть —</option>
-                <option v-for="s in serialOfNom" :key="s.instance_id" :value="s.instance_id">{{ s.serial_no }}</option>
-              </select>
-            </template>
-          </template>
-          <template v-else-if="selectedNom">
-            <label class="fl">Кількість</label>
-            <input class="fi" type="number" min="0.0001" step="0.0001" v-model="mv.quantity" />
-          </template>
-
-          <label class="fl">Дата</label>
-          <input class="fi" type="date" v-model="mv.date" />
-          <div v-if="error" class="err">{{ error }}</div>
-        </div>
-        <div class="modal-foot">
-          <button class="btn-sec" @click="moveOpen = false">Скасувати</button>
-          <button class="btn-pri" :disabled="saving" @click="saveMove">Провести</button>
-        </div>
-      </div>
-    </div>
 
     <!-- ═══ Історія екземпляра ═══ -->
     <div class="overlay" :class="{ open: histOpen }" @click.self="histOpen = false">
@@ -282,8 +228,8 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import { getWarehouses, getUnits } from '../../api/structure.js'
-import { getNomenclature, createInstance, updateInstance } from '../../api/nomenclature.js'
-import { getBalances, getSerialAt, createMovement, createDocument, receiveDocument, itemHistory } from '../../api/custody.js'
+import { getNomenclature, updateInstance } from '../../api/nomenclature.js'
+import { getBalances, getSerialAt, createDocument, receiveDocument, itemHistory } from '../../api/custody.js'
 import { getPersons, getServices } from '../../api/settings.js'
 import HistoryTimeline from '../../components/HistoryTimeline.vue'
 import ItemAutocomplete from '../../components/ItemAutocomplete.vue'
@@ -314,6 +260,13 @@ const otherWarehouses = computed(() => selectableWarehouses.value.filter(w => w.
 const selectedWarehouse = computed(() => warehouses.value.find(w => w.id === warehouseId.value) || null)
 const isUnitWh = computed(() => selectedWarehouse.value?.type === 'unit')
 const unitPersons = computed(() => persons.value.filter(p => p.unit_id === selectedWarehouse.value?.unit_id))
+
+// «Додати переміщення»: якщо призначення = склад підрозділу, можна одразу видати особі
+const destWarehouse = computed(() => warehouses.value.find(w => w.id === doc.to_warehouse_id) || null)
+const isDestUnit = computed(() => destWarehouse.value?.type === 'unit')
+const destPersonOptions = computed(() => persons.value
+  .filter(p => p.unit_id === destWarehouse.value?.unit_id)
+  .map(p => ({ id: p.id, name: personLabel(p), number: [p.rank, p.position].filter(Boolean).join(', ') })))
 
 function selectWarehouse(id) { warehouseId.value = id; loadStock() }
 
@@ -421,8 +374,6 @@ const countOf = (key) => key === 'all' ? stockRows.value.length : stockRows.valu
 const warehouseName = (id) => warehouses.value.find(w => w.id === id)?.name || (id ? `#${id}` : 'ззовні')
 const nomName = (id) => nomenclature.value.find(n => n.id === id)?.name || '—'
 const nomById = (id) => nomenclature.value.find(n => n.id === id) || null
-const selectedNom = computed(() => nomenclature.value.find(n => n.id === mv.nomenclature_id) || null)
-const serialOfNom = computed(() => serial.value.filter(s => s.nomenclature_id === mv.nomenclature_id))
 
 function fmtQty(v) {
   if (v == null || v === '') return '—'
@@ -521,23 +472,6 @@ async function doReturn(a) {
   }
 }
 
-// Move modal
-const moveOpen = ref(false)
-const saving = ref(false)
-const error = ref('')
-const mv = reactive({})
-function openMove() {
-  error.value = ''
-  Object.assign(mv, {
-    type: 'receipt', nomenclature_id: null, to_warehouse_id: null,
-    instance_id: null, serial_no: '', quantity: null, is_official: true,
-    date: new Date().toISOString().slice(0, 10),
-  })
-  moveOpen.value = true
-}
-function onTypeChange() { mv.instance_id = null }
-function onNomChange() { mv.instance_id = null }
-
 // ── Накладна на переміщення (batch) ──────────────────────────────────
 const docOpen = ref(false)
 const docSaving = ref(false)
@@ -591,10 +525,13 @@ function openDoc() {
   docErr.value = ''
   Object.assign(doc, {
     to_warehouse_id: null, date: new Date().toISOString().slice(0, 10),
-    items: [{ nomenclature_id: null, quantity: null, instance_id: null }],
+    items: [{ nomenclature_id: null, quantity: null, instance_id: null, assign_person_id: null }],
   })
   docOpen.value = true
 }
+function onDocPerson(r, person) { r.assign_person_id = person.id }
+// Зміна складу-призначення → скидаємо обраних осіб (вони прив'язані до підрозділу)
+function onDestChange() { doc.items.forEach(r => { r.assign_person_id = null }) }
 async function saveDoc() {
   if (!doc.to_warehouse_id) { docErr.value = 'Оберіть склад призначення'; return }
   const items = doc.items.filter(r => r.nomenclature_id && (r.instance_id || Number(r.quantity) > 0))
@@ -617,6 +554,7 @@ async function saveDoc() {
         nomenclature_id: r.nomenclature_id,
         instance_id: r.instance_id || null,
         quantity: r.instance_id ? 1 : Number(r.quantity),
+        assign_person_id: isDestUnit.value ? (r.assign_person_id || null) : null,
       })),
     })
     docOpen.value = false
@@ -698,38 +636,6 @@ async function saveReceive() {
   }
 }
 
-async function saveMove() {
-  saving.value = true
-  error.value = ''
-  try {
-    if (!mv.nomenclature_id) { error.value = 'Оберіть номенклатуру'; saving.value = false; return }
-    const W = warehouseId.value
-    const from = mv.type === 'receipt' ? null : W
-    const to = mv.type === 'receipt' ? W : (mv.type === 'transfer' ? mv.to_warehouse_id : null)
-    if (mv.type === 'transfer' && !to) { error.value = 'Оберіть склад призначення'; saving.value = false; return }
-
-    let instanceId = mv.instance_id
-    if (selectedNom.value?.is_serialized && mv.type === 'receipt') {
-      if (!mv.serial_no) { error.value = 'Вкажіть серійний номер'; saving.value = false; return }
-      const inst = await createInstance(mv.nomenclature_id, { serial_no: mv.serial_no, is_official: mv.is_official })
-      instanceId = inst.data.id
-    }
-
-    await createMovement({
-      date: mv.date, type: mv.type, nomenclature_id: mv.nomenclature_id,
-      from_warehouse_id: from, to_warehouse_id: to,
-      instance_id: selectedNom.value?.is_serialized ? instanceId : null,
-      quantity: selectedNom.value?.is_serialized ? 1 : Number(mv.quantity),
-      is_official: mv.is_official,
-    })
-    moveOpen.value = false
-    await loadStock()
-  } catch (e) {
-    error.value = e?.response?.data?.detail || 'Помилка проведення'
-  } finally {
-    saving.value = false
-  }
-}
 </script>
 
 <style scoped>
@@ -764,6 +670,10 @@ async function saveMove() {
 .row-nom :deep(.cell-input) { width:100%; box-sizing:border-box; border:1px solid var(--border); background:var(--surface); padding:7px 10px; font-size:14px; border-radius:var(--radius-sm); }
 .row-nom :deep(.cell-input:focus) { background:var(--surface); }
 .row-qty { width:130px; }
+.row-person { width:200px; display:flex; align-items:center; gap:2px; border:1px solid var(--border); background:var(--surface); border-radius:var(--radius-sm); padding:0 4px; }
+.row-person :deep(.autocomplete-wrap) { flex:1; }
+.row-person :deep(.cell-input) { width:100%; box-sizing:border-box; padding:7px 6px; font-size:13px; }
+.row-clearp { border:none; background:transparent; cursor:pointer; color:var(--text-light); font-size:14px; padding:0 2px; }
 .row-del { width:28px; border:1px solid var(--border); background:transparent; border-radius:var(--radius-sm); cursor:pointer; color:var(--text-light); }
 .row-del:disabled { opacity:0.4; }
 .btn-addrow { margin-top:6px; background:transparent; border:1px dashed var(--border); color:var(--text-mid); border-radius:var(--radius-sm); padding:6px 12px; font-family:inherit; font-size:13px; cursor:pointer; }

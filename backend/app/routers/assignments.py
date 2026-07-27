@@ -79,29 +79,31 @@ def list_assignments(
     return out
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
-def create_assignment(payload: AssignmentCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    wh = db.get(Warehouse, payload.warehouse_id)
+def issue_row(db: Session, user: User, warehouse_id: int, person_id: int,
+              nomenclature_id: int, instance_id: Optional[int],
+              quantity: Optional[Decimal], issued_date) -> Assignment:
+    """Validate + create one Assignment (NO commit). Shared by the assignments
+    endpoint and by movement flows that issue on transfer, so the rules live in
+    one place. Caller commits."""
+    wh = db.get(Warehouse, warehouse_id)
     if not wh:
         raise HTTPException(400, "Склад не знайдено")
     if wh.type != "unit":
         raise HTTPException(400, "Видача лише зі складу підрозділу")
     check_assignment_create(user, wh.id)  # ACL: mvo свого складу / admin
-    person = db.get(Person, payload.person_id)
+    person = db.get(Person, person_id)
     if not person:
         raise HTTPException(400, "Особу не знайдено")
     if person.unit_id is None or person.unit_id != wh.unit_id:
         raise HTTPException(400, "Особа з іншого підрозділу")
-    nom = db.get(Nomenclature, payload.nomenclature_id)
+    nom = db.get(Nomenclature, nomenclature_id)
     if not nom:
         raise HTTPException(400, "Номенклатуру не знайдено")
 
-    issued_date = date_cls.fromisoformat(payload.issued_date) if payload.issued_date else date_cls.today()
-
     if nom.is_serialized:
-        if not payload.instance_id:
+        if not instance_id:
             raise HTTPException(400, "Серійна видача потребує екземпляр")
-        inst = db.get(Instance, payload.instance_id)
+        inst = db.get(Instance, instance_id)
         if not inst or inst.nomenclature_id != nom.id:
             raise HTTPException(400, "Екземпляр не відповідає номенклатурі")
         if inst.current_warehouse_id != wh.id:
@@ -111,27 +113,35 @@ def create_assignment(payload: AssignmentCreate, db: Session = Depends(get_db), 
         ).first()
         if dup:
             raise HTTPException(400, "Екземпляр уже на руках")
-        quantity = Decimal(1)
+        qty = Decimal(1)
         is_official = inst.is_official
     else:
-        if payload.instance_id:
+        if instance_id:
             raise HTTPException(400, "Несерійна номенклатура — без екземпляра")
-        quantity = Decimal(payload.quantity or 0)
-        if quantity <= 0:
+        qty = Decimal(quantity or 0)
+        if qty <= 0:
             raise HTTPException(400, "Кількість має бути > 0")
         is_official = nom.is_official  # тип обліку — з картки
         bal = balance_of(db, wh.id, nom.id, is_official)
         issued = _active_issued(db, wh.id, nom.id, is_official)
-        if issued + quantity > bal:
+        if issued + qty > bal:
             free = bal - issued
             raise HTTPException(400, f"Видано більше, ніж є: вільно {free} з {bal}")
 
     a = Assignment(
         warehouse_id=wh.id, person_id=person.id, nomenclature_id=nom.id,
-        instance_id=payload.instance_id, quantity=quantity, is_official=is_official,
+        instance_id=instance_id, quantity=qty, is_official=is_official,
         issued_date=issued_date, created_by=user.id,
     )
     db.add(a)
+    return a
+
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+def create_assignment(payload: AssignmentCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    issued_date = date_cls.fromisoformat(payload.issued_date) if payload.issued_date else date_cls.today()
+    a = issue_row(db, user, payload.warehouse_id, payload.person_id, payload.nomenclature_id,
+                  payload.instance_id, payload.quantity, issued_date)
     db.commit()
     db.refresh(a)
     return _dict(a)

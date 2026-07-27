@@ -186,6 +186,7 @@ class DocumentItemIn(BaseModel):
     nomenclature_id: int
     instance_id: Optional[int] = None
     quantity: Optional[Decimal] = None          # серійне → 1
+    assign_person_id: Optional[int] = None      # опц.: одразу видати особі (склад-отримувач = підрозділ)
 
 
 class DocumentBatchCreate(BaseModel):
