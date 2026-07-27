@@ -90,6 +90,25 @@ def wipe_v2_inventory(db: Session = Depends(get_db), _: User = Depends(require_a
     return {"deleted": counts}
 
 
+@router.post("/wipe-persons", status_code=status.HTTP_200_OK)
+def wipe_persons_v2(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """Очистити список осіб (для повного переналаштування перед реімпортом).
+    Особи, прив'язані до облікового запису (МВО-логіну), НЕ видаляються — інакше
+    логін втратить auto-scope на підрозділ. Якщо є активні видачі — блокуємо
+    (спершу «Очистити інвентар»), щоб не втратити видачі каскадом разом з особами."""
+    if db.query(Assignment).count() > 0:
+        raise HTTPException(
+            400, "Спершу очистіть інвентар — у осіб є видачі (assignments)")
+    linked_ids = [pid for (pid,) in
+                  db.query(User.person_id).filter(User.person_id.isnot(None)).all()]
+    q = db.query(Person)
+    if linked_ids:
+        q = q.filter(~Person.id.in_(linked_ids))
+    deleted = q.delete(synchronize_session=False)
+    db.commit()
+    return {"deleted_persons": deleted, "kept_linked_to_users": len(linked_ids)}
+
+
 @router.post("/import/items", status_code=status.HTTP_200_OK)
 def import_items_v2(
     file: UploadFile = File(...),

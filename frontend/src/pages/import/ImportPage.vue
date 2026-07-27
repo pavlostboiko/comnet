@@ -5,6 +5,7 @@
       <div class="tile">
         <div class="tile-header">
           <span class="tile-title">Імпорт</span>
+          <button class="btn-wipe" @click="doWipePersons">Очистити людей</button>
           <button class="btn-wipe" @click="doWipe">Очистити інвентар</button>
         </div>
         <div class="body">
@@ -51,7 +52,7 @@
 <script setup>
 import { reactive, h } from 'vue'
 import TopBar from '../../components/TopBar.vue'
-import { importItems, importMovements, importAssignments, wipeV2 } from '../../api/importV2.js'
+import { importItems, importMovements, importAssignments, wipeV2, wipePersonsV2 } from '../../api/importV2.js'
 
 const files = reactive({ items: null, movements: null, assignments: null })
 const results = reactive({ items: null, movements: null, assignments: null })
@@ -88,6 +89,15 @@ async function doWipe() {
     alert(e?.response?.data?.detail || 'Помилка')
   }
 }
+async function doWipePersons() {
+  if (!confirm('Очистити список людей? Особи, привʼязані до логінів (МВО), лишаться. Спершу треба очистити інвентар.')) return
+  try {
+    const { data } = await wipePersonsV2()
+    alert(`Видалено осіб: ${data.deleted_persons}. Залишено (логіни): ${data.kept_linked_to_users}`)
+  } catch (e) {
+    alert(e?.response?.data?.detail || 'Помилка')
+  }
+}
 
 // Inline result renderer
 const Result = (props) => {
@@ -110,9 +120,10 @@ const Result = (props) => {
 .page-wrap { height:100vh; display:flex; flex-direction:column; overflow:hidden; }
 .content-scroll { flex:1; overflow-y:auto; padding:20px 24px; }
 .tile { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); }
-.tile-header { padding:14px 20px; border-bottom:1px solid var(--border-light); display:flex; align-items:center; }
+.tile-header { padding:14px 20px; border-bottom:1px solid var(--border-light); display:flex; align-items:center; gap:8px; }
 .tile-title { font-weight:700; font-size:15px; }
-.btn-wipe { margin-left:auto; padding:6px 12px; background:transparent; border:1px solid #dc2626; color:#dc2626; border-radius:var(--radius-sm); font-family:inherit; font-size:12.5px; cursor:pointer; }
+.btn-wipe { padding:6px 12px; background:transparent; border:1px solid #dc2626; color:#dc2626; border-radius:var(--radius-sm); font-family:inherit; font-size:12.5px; cursor:pointer; }
+.btn-wipe:first-of-type { margin-left:auto; }
 .body { padding:20px; }
 .flow { font-size:13px; color:var(--text-mid); margin:0 0 20px; }
 .block { border:1px solid var(--border-light); border-radius:var(--radius-sm); padding:16px; margin-bottom:16px; }
