@@ -76,11 +76,13 @@ def _col_map(ws, header_row: int) -> dict:
 @router.post("/wipe", status_code=status.HTTP_200_OK)
 def wipe_v2_inventory(db: Session = Depends(get_db), _: User = Depends(require_admin)):
     """Скидає v2 інвентарний шар для повторного імпорту: видачі, рухи,
-    екземпляри, номенклатуру. Довідники (служби/підрозділи/склади/особи)
-    лишаються — імпорт їх find-or-create."""
+    документи, екземпляри, номенклатуру. Довідники (служби/підрозділи/склади/
+    особи) лишаються — імпорт їх find-or-create. Документи чистимо теж, бо
+    backfill створює їх під час імпорту «Переміщення» — інакше накопичуються."""
     counts = {
         "assignments": db.query(Assignment).delete(synchronize_session=False),
         "custody_movements": db.query(CustodyMovement).delete(synchronize_session=False),
+        "custody_documents": db.query(CustodyDocument).delete(synchronize_session=False),
         "instances": db.query(Instance).delete(synchronize_session=False),
         "nomenclature": db.query(Nomenclature).delete(synchronize_session=False),
     }
