@@ -8,8 +8,9 @@ and snap-key set from `document_snapshot`.
 `snap_*` values are read at export time; a signed doc's snap is frozen so the
 printed form is immune to later directory edits.
 """
+import re
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -21,6 +22,22 @@ from app.models import (
     UnitSettings, Warehouse,
 )
 from app.uk_num2words import amount_to_words_uk, qty_to_words_uk
+
+
+# ── Chronological tie-breaking ───────────────────────────────────────────
+
+def doc_sort_key(doc_number: Optional[str]) -> Tuple[int, ...]:
+    """Chronological key derived from a document number, for ordering movements
+    that share the same `date`.
+
+    Assumption: a larger number = a later document. The number is split into its
+    integer groups so «596/250/2/1» < «596/250/2/2» < «596/250/2/10»
+    (numeric, not lexical). A missing/number-less value sorts earliest (empty
+    tuple), losing ties to numbered documents.
+    """
+    if not doc_number:
+        return ()
+    return tuple(int(g) for g in re.findall(r"\d+", doc_number))
 
 
 # ── Auto-numbering ───────────────────────────────────────────────────────

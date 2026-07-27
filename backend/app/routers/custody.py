@@ -18,6 +18,7 @@ from app.acl import (
     check_movement_create, check_warehouse_read, is_admin, scope_movements,
 )
 from app.auth import get_current_user
+from app.custody_snapshot import doc_sort_key
 from app.database import get_db
 from app.models import (
     Assignment, CustodyMovement, Instance, Nomenclature, Person, User, Warehouse,
@@ -426,7 +427,10 @@ def item_history(nomenclature_id: int, instance_id: Optional[int] = None,
                 "serial_no": serial, "source": "assignment", "source_id": a.id,
             })
 
-    events.sort(key=lambda e: (e["date"] is None, e["date"] or "", e["source_id"]), reverse=True)
+    # Тайбрейкер при однаковій даті — номер накладної (пізніша зверху), тоді id.
+    events.sort(key=lambda e: (e["date"] is None, e["date"] or "",
+                               doc_sort_key(e.get("doc_number")), e["source_id"]),
+                reverse=True)
     return {"nomenclature_id": nom.id, "name": nom.name,
             "is_serialized": nom.is_serialized, "events": events}
 

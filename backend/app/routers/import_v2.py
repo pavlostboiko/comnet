@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import require_admin
 from app.database import get_db
-from app.custody_snapshot import snap_nakladna
+from app.custody_snapshot import doc_sort_key, snap_nakladna
 from app.models import (
     Assignment, CustodyDocument, CustodyMovement, Instance, Nomenclature, Person,
     Service, Unit, User, Warehouse,
@@ -194,7 +194,9 @@ def import_movements_v2(
     """Файл Переміщень (той самий layout, що v1) → custody_movements.
     from_unit/to_unit резолвляться у склади: «склад»/назва служби → склад служби,
     інакше → склад підрозділу (find-or-create). Історичні дані НЕ валідуються
-    (вставляються як є); поточне розташування серійного = останній to-склад."""
+    (вставляються як є); поточне розташування серійного = to-склад руху, що
+    хронологічно ПІЗНІШИЙ (дата → номер накладної → id), незалежно від порядку
+    рядків у файлі."""
     try:
         wb = load_workbook(BytesIO(file.file.read()), data_only=True)
     except Exception as e:
@@ -209,6 +211,9 @@ def import_movements_v2(
               "services_created": 0, "units_created": 0, "instances_created": 0}
     # Групування рухів у накладні по (номер, звідки, куди). Заповнюється у циклі.
     doc_groups: dict = {}
+    # Рухи серійних екземплярів — для детермінованого розміщення в кінці імпорту
+    # (не «останній рядок перемагає», а хронологічно пізніший рух). Ключ: instance.
+    serial_movements: dict = {}
     errors = []
 
     def get_service(name):
@@ -354,7 +359,7 @@ def import_movements_v2(
             db.add(mv)
             counts["movements"] += 1
             if instance:
-                instance.current_warehouse_id = to_wh.id if to_wh else None
+                serial_movements.setdefault(instance, []).append(mv)
             if doc_number:
                 key = (doc_number, mtype,
                        from_wh.id if from_wh else None,
@@ -365,6 +370,15 @@ def import_movements_v2(
             errors.append(f"рядок {i} «{name}»: {e}")
 
     db.flush()   # присвоїти id рухам перед лінкуванням у документи
+
+    # Детерміноване розміщення серійних: для кожного екземпляра — призначення
+    # хронологічно ПІЗНІШОГО руху (дата → номер накладної → id), незалежно від
+    # порядку рядків у файлі. Раніше «останній рядок перемагав» → при рухах в
+    # одну дату екземпляр міг опинитися не на тому складі.
+    for instance, mvs in serial_movements.items():
+        latest = max(mvs, key=lambda m: (m.date, doc_sort_key(m.doc_number), m.id))
+        instance.current_warehouse_id = latest.to_warehouse_id
+
     _backfill_documents(db, user, doc_groups, counts)
     db.commit()
     return {**counts, "errors": errors[:100]}
