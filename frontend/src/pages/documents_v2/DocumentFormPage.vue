@@ -84,6 +84,7 @@
         <div class="tile-header">
           <span class="tile-title">Позиції</span>
           <span class="tile-sub">{{ doc.from_unit || '—' }} → {{ doc.to_unit || '—' }}</span>
+          <button v-if="!ro" class="btn-add-pos" @click="openAdd">+ додати позицію</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -111,6 +112,37 @@
         </div>
       </div>
     </div>
+
+    <!-- Додати позиції: рухи без документа того ж напрямку -->
+    <div v-if="addOpen" class="overlay" @click.self="addOpen = false">
+      <div class="modal">
+        <div class="modal-head">
+          Додати позиції · {{ doc.from_unit || '—' }} → {{ doc.to_unit || '—' }}
+        </div>
+        <div class="modal-body">
+          <div v-if="!addCandidates.length" class="empty">Немає рухів без документа цього напрямку</div>
+          <table v-else>
+            <thead><tr>
+              <th class="col-x"></th><th class="col-i">Дата</th><th>Номенклатура</th>
+              <th class="col-s">Картка/серійний</th><th class="col-n">К-сть</th>
+            </tr></thead>
+            <tbody>
+              <tr v-for="m in addCandidates" :key="m.id">
+                <td><input type="checkbox" :checked="addSel.has(m.id)" @change="toggleAdd(m.id, $event)" /></td>
+                <td class="td-mono td-dim">{{ m.date }}</td>
+                <td>{{ nomById[m.nomenclature_id]?.name || '—' }}</td>
+                <td class="td-mono td-dim">{{ m.card_number || (m.instance_id ? '№' + m.instance_id : '—') }}</td>
+                <td class="td-num">{{ fmtQty(m.quantity) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="modal-foot">
+          <button class="btn-sec" @click="addOpen = false">Скасувати</button>
+          <button class="btn-primary" :disabled="!addSel.size" @click="confirmAdd">Додати ({{ addSel.size }})</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -118,7 +150,8 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TopBar from '../../components/TopBar.vue'
-import { getDoc, updateDoc, signDoc, unsignDoc, deleteDoc, exportDocXlsx } from '../../api/custody.js'
+import { getDoc, updateDoc, signDoc, unsignDoc, deleteDoc, exportDocXlsx, getMovements } from '../../api/custody.js'
+import { getNomenclature } from '../../api/nomenclature.js'
 import { getServices, getPersons, getOpTypes } from '../../api/settings.js'
 
 const route = useRoute()
@@ -168,6 +201,42 @@ function applyDoc(d) {
 }
 
 function removeLine(id) { lines.value = lines.value.filter(l => l.id !== id) }
+
+// --- Додати позиції (рухи без документа того ж напрямку) ---
+const addOpen = ref(false)
+const allMovements = ref([])
+const nomById = ref({})
+const addSel = reactive(new Set())
+
+const addCandidates = computed(() => {
+  const have = new Set(lines.value.map(l => l.id))
+  return allMovements.value.filter(m =>
+    m.document_id == null &&
+    m.from_warehouse_id === doc.value.from_warehouse_id &&
+    m.to_warehouse_id === doc.value.to_warehouse_id &&
+    !have.has(m.id))
+})
+
+async function openAdd() {
+  const [m, n] = await Promise.all([getMovements(), getNomenclature()])
+  allMovements.value = m.data
+  nomById.value = Object.fromEntries(n.data.map(x => [x.id, x]))
+  addSel.clear()
+  addOpen.value = true
+}
+function toggleAdd(id, ev) { if (ev.target.checked) addSel.add(id); else addSel.delete(id) }
+function confirmAdd() {
+  for (const m of addCandidates.value) {
+    if (!addSel.has(m.id)) continue
+    const nom = nomById.value[m.nomenclature_id] || {}
+    lines.value.push({
+      id: m.id, nomenclature_name: nom.name, nomenclature_code: nom.code,
+      unit_of_measure: nom.unit_of_measure, category: nom.category, price: nom.price,
+      quantity: m.quantity, card_number: m.card_number, serial_no: null,
+    })
+  }
+  addOpen.value = false
+}
 
 function payload() {
   return {
@@ -272,4 +341,10 @@ th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:1
 .empty { text-align:center; padding:24px; color:var(--text-light); font-style:italic; }
 .chip { display:inline-block; padding:2px 8px; border-radius:3px; font-size:11px; font-weight:600; background:#e0e7ff; color:#3730a3; }
 .st-draft { background:#f1f5f9; color:#475569; } .st-signed { background:#dcfce7; color:#166534; }
+.btn-add-pos { margin-left:auto; border:1px solid var(--accent); background:var(--surface); color:var(--accent); border-radius:var(--radius-sm); padding:4px 12px; cursor:pointer; font-family:inherit; font-size:12.5px; }
+.overlay { position:fixed; inset:0; background:rgba(15,23,42,.45); display:flex; align-items:center; justify-content:center; z-index:50; }
+.modal { background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow); width:min(640px,92vw); max-height:80vh; display:flex; flex-direction:column; }
+.modal-head { padding:14px 20px; border-bottom:1px solid var(--border-light); font-weight:700; font-size:14px; }
+.modal-body { padding:8px 0; overflow-y:auto; }
+.modal-foot { padding:12px 20px; border-top:1px solid var(--border-light); display:flex; justify-content:flex-end; gap:8px; }
 </style>
