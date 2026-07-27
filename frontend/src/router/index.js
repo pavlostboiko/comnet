@@ -28,7 +28,7 @@ const routes = [
   },
   {
     path: '/reports',
-    component: () => import('../pages/PlaceholderPage.vue'),
+    component: () => import('../pages/reports/ReportsPage.vue'),
     meta: { requiresAuth: true, label: 'Звіти', adminOnly: true },
   },
   {

@@ -66,7 +66,17 @@ def list_assignments(
         q = q.filter(Assignment.person_id == person_id)
     if active:
         q = q.filter(Assignment.returned_date.is_(None))
-    return [_dict(a) for a in q.order_by(Assignment.issued_date.desc(), Assignment.id.desc()).all()]
+    out = []
+    for a in q.order_by(Assignment.issued_date.desc(), Assignment.id.desc()).all():
+        d = _dict(a)
+        nom = db.get(Nomenclature, a.nomenclature_id)
+        wh = db.get(Warehouse, a.warehouse_id)
+        d["nomenclature_name"] = nom.name if nom else None
+        d["unit_of_measure"] = nom.unit_of_measure if nom else None
+        d["serial_no"] = db.get(Instance, a.instance_id).serial_no if a.instance_id else None
+        d["warehouse_name"] = wh.name if wh else None
+        out.append(d)
+    return out
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -158,7 +168,9 @@ def group_holdings(group_id: int, db: Session = Depends(get_db), _: User = Depen
         .filter(Assignment.person_id.in_(member_ids), Assignment.returned_date.is_(None))
         .all()
     )
-    by_person: dict = {p.id: {"person_id": p.id,
+    def _pname(p):
+        return " ".join(x for x in [p.last_name, p.first_name] if x) or p.callsign or f"#{p.id}"
+    by_person: dict = {p.id: {"person_id": p.id, "person_name": _pname(p),
                               "is_commander": group.commander_id == p.id,
                               "items": []} for p in members}
     for a in rows:
@@ -167,6 +179,7 @@ def group_holdings(group_id: int, db: Session = Depends(get_db), _: User = Depen
             "nomenclature_id": a.nomenclature_id,
             "name": nom.name if nom else None,
             "instance_id": a.instance_id,
+            "serial_no": db.get(Instance, a.instance_id).serial_no if a.instance_id else None,
             "quantity": str(a.quantity),
             "is_official": a.is_official,
         })
