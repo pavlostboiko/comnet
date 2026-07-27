@@ -184,7 +184,26 @@ MV_COLS = {
     "entry_date": 0, "item_name": 1, "unit_of_measure": 3, "qty_in": 5,
     "qty_out": 6, "from_unit": 7, "to_unit": 8, "doc_date": 12, "doc_number": 13,
     "serial_number": 15, "price": 19, "service": 20, "card_number": 23,  # X = «Поле 12»
+    "doc_type": 24, "operation": 25,   # Y = Тип документа, Z = Запасне поле2
 }
+
+
+def _op_from_hint(z) -> Optional[str]:
+    """Тип операції з колонки Z (Запасне поле2): надходження → receipt,
+    внутрішнє переміщення → transfer. None → невідомо (лишити евристику)."""
+    s = (z or "").strip().lower()
+    if "надходж" in s:
+        return "receipt"
+    if "переміщ" in s or "перемищ" in s:
+        return "transfer"
+    return None
+
+
+def _form_from_hint(y) -> str:
+    """Форма документа з колонки Y (Тип документа): «Акт …» → акт,
+    інакше (в т.ч. «Накладна (вимога)») → накладна."""
+    s = (y or "").strip().lower()
+    return "акт" if s.startswith("акт") else "накладна"
 
 
 @router.post("/import/movements", status_code=status.HTTP_200_OK)
@@ -210,7 +229,10 @@ def import_movements_v2(
     noms = {(n.name.strip().lower(), n.service_id): n for n in db.query(Nomenclature).all()}
 
     counts = {"rows": 0, "movements": 0, "skipped": 0, "documents_created": 0,
-              "services_created": 0, "units_created": 0, "instances_created": 0}
+              "services_created": 0, "units_created": 0, "instances_created": 0,
+              # діагностика: скільки рядків класифіковано за колонкою Z, а скільки
+              # впало у стару евристику (from/to) — щоб побачити розбіжність колонок.
+              "classified_by_column": 0, "by_heuristic": 0}
     # Групування рухів у накладні по (номер, звідки, куди). Заповнюється у циклі.
     doc_groups: dict = {}
     # Рухи серійних екземплярів — для детермінованого розміщення в кінці імпорту
@@ -287,18 +309,37 @@ def import_movements_v2(
 
             qin = _parse_decimal(mc(cells, "qty_in")) or Decimal(0)
             qout = _parse_decimal(mc(cells, "qty_out")) or Decimal(0)
-            from_wh = resolve_wh(mc(cells, "from_unit"), service)
+            raw_from = mc(cells, "from_unit")
             to_wh = resolve_wh(mc(cells, "to_unit"), service)
+            form = _form_from_hint(mc(cells, "doc_type"))       # Y = Тип документа
+            op_hint = _op_from_hint(mc(cells, "operation"))     # Z = Запасне поле2
+            counterparty = None
 
-            if from_wh and to_wh:
-                mtype = "transfer"
-            elif to_wh:
-                mtype = "receipt"
-            elif from_wh:
-                mtype = "writeoff"
-            else:
+            if op_hint == "receipt":                            # надходження ззовні
+                mtype = "receipt"; from_wh = None
+                counterparty = _clean(raw_from)                 # «від кого»
+            elif op_hint == "transfer":                         # внутрішнє переміщення
+                mtype = "transfer"; from_wh = resolve_wh(raw_from, service)
+            else:                                               # Z порожня → евристика
+                from_wh = resolve_wh(raw_from, service)
+                if from_wh and to_wh:
+                    mtype = "transfer"
+                elif to_wh:
+                    mtype = "receipt"
+                elif from_wh:
+                    mtype = "writeoff"
+                else:
+                    counts["skipped"] += 1
+                    errors.append(f"рядок {i} «{name}»: немає складів (from/to)")
+                    continue
+
+            if mtype == "receipt" and not to_wh:
                 counts["skipped"] += 1
-                errors.append(f"рядок {i} «{name}»: немає складів (from/to)")
+                errors.append(f"рядок {i} «{name}»: надходження без складу-отримувача")
+                continue
+            if mtype == "transfer" and not (from_wh and to_wh):
+                counts["skipped"] += 1
+                errors.append(f"рядок {i} «{name}»: переміщення без складу (from/to)")
                 continue
 
             instance = None
@@ -360,13 +401,17 @@ def import_movements_v2(
             )
             db.add(mv)
             counts["movements"] += 1
+            counts["classified_by_column" if op_hint else "by_heuristic"] += 1
             if instance:
                 serial_movements.setdefault(instance, []).append(mv)
             if doc_number:
                 key = (doc_number, mtype,
                        from_wh.id if from_wh else None,
                        to_wh.id if to_wh else None)
-                doc_groups.setdefault(key, {"date": mdate, "movements": []})["movements"].append(mv)
+                grp = doc_groups.setdefault(key, {
+                    "date": mdate, "movements": [],
+                    "form": form, "counterparty": counterparty})
+                grp["movements"].append(mv)
         except Exception as e:
             counts["skipped"] += 1
             errors.append(f"рядок {i} «{name}»: {e}")
@@ -389,13 +434,15 @@ def import_movements_v2(
 def _backfill_documents(db: Session, user: User, doc_groups: dict, counts: dict) -> None:
     """Створити custody_documents з груп імпортованих рухів (по номеру накладної),
     щоб імпортовані накладні одразу були повноцінними документами (не «без документа»).
-    Операція receipt/transfer/writeoff → накладна; статус signed (історичні)."""
+    Операція (receipt/transfer) і форма (накладна/акт) — з колонок Z/Y; контрагент
+    для надходжень — із «Звідки»; статус signed (історичні)."""
     for (doc_number, mtype, from_id, to_id), g in doc_groups.items():
         operation = "receipt" if mtype == "receipt" else "transfer"
         doc = CustodyDocument(
-            operation=operation, form="накладна", doc_number=doc_number,
+            operation=operation, form=g.get("form") or "накладна", doc_number=doc_number,
             doc_date=g["date"].isoformat(), date_operation=g["date"].isoformat(),
             from_warehouse_id=from_id, to_warehouse_id=to_id,
+            counterparty=g.get("counterparty"),
             status="signed", signed_at=datetime.utcnow(), signed_by=user.id,
             extra_data={}, created_by=user.id,
         )
