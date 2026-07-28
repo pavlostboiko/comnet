@@ -8,7 +8,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.acl import check_nomenclature_cud
+from app.acl import check_nomenclature_cud, scope_nomenclature
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import Instance, Nomenclature, Service, User, Warehouse
@@ -28,8 +28,8 @@ def _get_or_404(db: Session, nid: int) -> Nomenclature:
 
 
 @router.get("", response_model=List[NomenclatureRead])
-def list_nomenclature(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    return db.query(Nomenclature).order_by(Nomenclature.name).all()
+def list_nomenclature(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return scope_nomenclature(db.query(Nomenclature), user).order_by(Nomenclature.name).all()
 
 
 @router.post("", response_model=NomenclatureRead, status_code=status.HTTP_201_CREATED)

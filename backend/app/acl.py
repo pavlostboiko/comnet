@@ -22,6 +22,13 @@ def _forbid():
 
 # ── Reads: scope queries ─────────────────────────────────────────────────────
 
+def scope_nomenclature(q, user):
+    """Список номенклатури: service — лише своя служба; admin/інші — усе."""
+    if user.role == "service" and user.service_id:
+        return q.filter(Nomenclature.service_id == user.service_id)
+    return q
+
+
 def scope_movements(q, user):
     if is_admin(user):
         return q

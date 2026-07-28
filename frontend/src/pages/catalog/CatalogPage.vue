@@ -5,7 +5,7 @@
       <div class="tile">
         <div class="tile-header">
           <span class="tile-title">Майно</span>
-          <select class="sel" v-model="serviceId">
+          <select v-if="isAdmin" class="sel" v-model="serviceId">
             <option :value="null">— усі служби —</option>
             <option v-for="s in services" :key="s.id" :value="s.id">{{ s.name }}</option>
           </select>
@@ -30,7 +30,7 @@
             <thead><tr>
               <th class="sortable" @click="toggleSort('name')">Найменування <span class="arr">{{ sortIcon('name') }}</span></th>
               <th class="sortable col-cat" @click="toggleSort('category')">Категорія <span class="arr">{{ sortIcon('category') }}</span></th>
-              <th class="col-svc" v-if="!serviceId">Служба</th>
+              <th class="col-svc" v-if="isAdmin && !serviceId">Служба</th>
               <th class="col-obl">Облік</th>
               <th class="col-type">Тип</th>
               <th class="col-uom">Од.</th>
@@ -43,7 +43,7 @@
               <tr v-for="n in sorted" :key="n.id" class="click-row" @click="openWhere(n)">
                 <td class="td-name">{{ n.name }}</td>
                 <td class="td-dim">{{ n.category || '—' }}</td>
-                <td class="td-dim" v-if="!serviceId">{{ serviceName(n.service_id) }}</td>
+                <td class="td-dim" v-if="isAdmin && !serviceId">{{ serviceName(n.service_id) }}</td>
                 <td><span class="chip" :class="n.is_official ? 'chip-gov' : 'chip-vol'">{{ n.is_official ? 'облік' : 'ндм' }}</span></td>
                 <td><span class="chip" :class="n.is_serialized ? 'chip-ser' : 'chip-non'">{{ n.is_serialized ? 'серійне' : 'несерійне' }}</span></td>
                 <td class="td-center">{{ n.unit_of_measure || '—' }}</td>
