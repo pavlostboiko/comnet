@@ -476,3 +476,18 @@ class ItemSplit(Base):
     @property
     def is_active(self) -> bool:
         return self.returned_at is None
+
+
+class AuditLog(Base):
+    """Журнал змін БД: хто/коли/дія/сутність + diff полів. Пишеться автоматично
+    хуком after_flush (див. app/audit.py). username — знімок (переживає видалення)."""
+    __tablename__ = "audit_log"
+
+    id = Column(Integer, primary_key=True)
+    ts = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    user_id = Column(Integer, nullable=True, index=True)
+    username = Column(String, nullable=True)
+    action = Column(String, nullable=False)          # create | update | delete
+    entity_type = Column(String, nullable=False, index=True)
+    entity_id = Column(Integer, nullable=True)
+    changes = Column(JSON, nullable=True)            # {поле: [було, стало]}

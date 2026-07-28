@@ -86,6 +86,11 @@ const routes = [
     component: () => import('../pages/import/ImportPage.vue'),
     meta: { requiresAuth: true, adminOnly: true, label: 'Імпорт' },
   },
+  {
+    path: '/audit',
+    component: () => import('../pages/audit/AuditPage.vue'),
+    meta: { requiresAuth: true, adminOnly: true, label: 'Журнал змін' },
+  },
 ]
 
 const router = createRouter({

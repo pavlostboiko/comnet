@@ -24,6 +24,8 @@ from app.routers import nomenclature as nomenclature_router
 from app.routers import splits as splits_router
 from app.routers import structure as structure_router
 from app.routers import users as users_router
+from app.routers import audit as audit_router
+import app.audit  # noqa: F401 — реєструє event-listeners аудиту
 
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -77,6 +79,7 @@ app.include_router(custody_router.router)
 app.include_router(custody_documents_router.router)
 app.include_router(assignments_router.router)
 app.include_router(import_v2_router.router)
+app.include_router(audit_router.router)
 
 
 @app.get("/api/health")

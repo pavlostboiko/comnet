@@ -6,6 +6,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
+from app.audit import set_current_user
 from app.config import settings
 from app.database import get_db
 from app.models import User
@@ -47,6 +48,7 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or inactive",
         )
+    set_current_user(db, user)  # для аудит-логу (хук читає з session.info)
     return user
 
 
