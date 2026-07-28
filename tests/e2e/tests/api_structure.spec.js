@@ -74,7 +74,7 @@ test.describe('v2 structure API', () => {
     expect(list.find(g => g.id === group.id)).toBeTruthy()
   })
 
-  test('МВО: only on a unit-warehouse; one active per warehouse; rotation', async () => {
+  test('МВО: service + unit warehouses; one active per warehouse; rotation', async () => {
     const tag = `m-${Date.now()}-${Math.floor(Math.random() * 9999)}`
     const unit = await postJson(api, '/api/structure/units', { name: `Рота ${tag}` })
     cleanup.push(`/api/structure/units/${unit.id}`)
@@ -89,11 +89,11 @@ test.describe('v2 structure API', () => {
     const p2 = await postJson(api, '/api/settings/persons', { first_name: 'МВО', last_name: `Два-${tag}` })
     cleanup.push(`/api/settings/persons/${p1.id}`, `/api/settings/persons/${p2.id}`)
 
-    // Cannot assign МВО to a service warehouse
-    const badResp = await api.post('/api/structure/mvo', {
-      data: { warehouse_id: svcWh.id, person_id: p1.id, from_date: '2026-01-01' },
+    // МВО may now be assigned to a service warehouse too
+    const svcMvo = await postJson(api, '/api/structure/mvo', {
+      warehouse_id: svcWh.id, person_id: p1.id, from_date: '2026-01-01',
     })
-    expect(badResp.status()).toBe(400)
+    expect(svcMvo.to_date).toBeNull()
 
     // Assign active МВО to the unit warehouse
     const m1 = await postJson(api, '/api/structure/mvo', {
