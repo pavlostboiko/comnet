@@ -59,7 +59,7 @@
                     <span v-else class="td-dim">—</span>
                   </td>
                   <td class="td-issue">
-                    <button v-if="r.kind === 'serial'" class="btn-hist" @click="openHistory(r)">Історія</button>
+                    <button class="btn-hist" @click="openHistory(r)">Історія</button>
                     <button v-if="canReturn(r)" class="btn-return" @click="doReturn(r.assignment)">Повернути</button>
                     <button v-else-if="canIssue(r)" class="btn-issue" @click="openIssue(r)">Видати</button>
                   </td>
