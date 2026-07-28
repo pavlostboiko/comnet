@@ -44,6 +44,7 @@ const props = defineProps({
   services: { type: Array, default: () => [] },
   categories: { type: Array, default: () => [] },
   defaultServiceId: { type: [Number, null], default: null },
+  defaultOfficial: { type: Boolean, default: true },   // тип для нової картки (прихід НДМ → false)
 })
 const emit = defineEmits(['close', 'saved'])
 
@@ -61,7 +62,7 @@ watch(() => props.open, (o) => {
     name: n.name, service_id: n.service_id, category: n.category || '', is_official: n.is_official,
     is_serialized: n.is_serialized, unit_of_measure: n.unit_of_measure || '', price: n.price, code: n.code || '',
   } : {
-    name: '', service_id: props.defaultServiceId, category: '', is_official: true,
+    name: '', service_id: props.defaultServiceId, category: '', is_official: props.defaultOfficial,
     is_serialized: false, unit_of_measure: '', price: null, code: '',
   })
 })
