@@ -278,7 +278,7 @@ def balances(warehouse_id: int, db: Session = Depends(get_db), user: User = Depe
 
 
 @router.get("/totals")
-def totals(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+def totals(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Сумарна кількість кожної номенклатури в системі (для списку «Майно»).
     Несерійне: сума ПОЗИТИВНИХ залишків по складах (як у балансах/«Де знаходиться»),
     щоб узгоджувалося з попапом навіть якщо надходження зайшло переміщенням.
@@ -305,6 +305,11 @@ def totals(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
                      .filter(Instance.current_warehouse_id.isnot(None))
                      .group_by(Instance.nomenclature_id).all()):
         out[nid] = out.get(nid, Decimal(0)) + Decimal(cnt or 0)
+    # service бачить лише свою службу (узгоджено зі списком «Майно»)
+    if user.role == "service" and user.service_id:
+        own = {nid for (nid,) in db.query(Nomenclature.id)
+               .filter(Nomenclature.service_id == user.service_id)}
+        out = {nid: v for nid, v in out.items() if nid in own}
     return {str(nid): str(v) for nid, v in out.items() if v != 0}
 
 
