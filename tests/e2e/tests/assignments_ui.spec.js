@@ -1,86 +1,49 @@
 const { test, expect } = require('@playwright/test')
-const { URL, uiLogin } = require('./helpers/login')
+const { URL, uiLogin, loginApi } = require('./helpers/login')
 
-// Full issuance loop through the UI: setup dictionaries → stock into a unit
-// warehouse → issue to a person → verify «Видано особам» and that the custody
-// balance is unchanged (issuance does not move custody).
-test('issue non-serial to a person; custody balance unchanged', async ({ page }) => {
-  test.slow()
-  await uiLogin(page)
+// Issue-to-person loop through the UI: seed a unit warehouse with 10 (via API),
+// then issue 3 to a person and verify «Видане»/«На складі» split — custody
+// balance (10) is unchanged, issuance only records who holds what.
+test('issue non-serial to a person; custody balance unchanged', async ({ page, request }) => {
   const ts = Date.now()
-  const svc = `AsgSvc ${ts}`
-  const unit = `AsgРота ${ts}`
-  const nom = `Бушлат ${ts}`
+  const svcName = `AsgSvc ${ts}`
+  const unitName = `AsgРота ${ts}`
+  const nomName = `Бушлат ${ts}`
   const soldier = `Боєць${ts}`
 
-  // ── Довідники ──
-  await page.goto(`${URL}/structure`)
-  // service
-  await page.locator('.tt-btn', { hasText: 'Служби' }).click()
-  await page.locator('.btn-add').click()
-  await page.locator('.modal .fi').first().fill(svc)
-  await page.locator('.btn-pri').click()
-  await expect(page.locator('td.td-name', { hasText: svc })).toBeVisible()
-  // unit
-  await page.locator('.tt-btn', { hasText: 'Підрозділи' }).click()
-  await page.locator('.btn-add').click()
-  await page.locator('.modal .fi').first().fill(unit)
-  await page.locator('.btn-pri').click()
-  await expect(page.locator('td.td-name', { hasText: unit })).toBeVisible()
-  // nomenclature (non-serial, service svc) on the Майно page
-  await page.goto(`${URL}/catalog`)
-  await page.locator('.btn-add', { hasText: '+ Додати' }).click()
-  await page.locator('.modal .fi').first().fill(nom)
-  await page.locator('.modal select').first().selectOption({ label: svc })
-  await page.locator('.btn-pri', { hasText: 'Зберегти' }).click()
-  await expect(page.locator('td.td-name', { hasText: nom })).toBeVisible()
-  // person in the unit — back to Довідники → Особи
-  await page.goto(`${URL}/structure`)
-  await page.locator('.tt-btn', { hasText: 'Особи' }).click()
-  await page.locator('.btn-add').click()
-  await page.locator('.modal .fi').first().fill(soldier)         // last_name
-  await page.locator('.modal select').first().selectOption({ label: unit })  // unit
-  await page.locator('.btn-pri').click()
-  await expect(page.locator('td.td-name', { hasText: soldier })).toBeVisible()
+  // Seed dictionaries + stock via API; the issuance is exercised in the UI
+  const api = await loginApi(request)
+  const svc = await api.post('/api/settings/services', { data: { name: svcName } }).then(r => r.json())
+  const unit = await api.post('/api/structure/units', { data: { name: unitName } }).then(r => r.json())
+  const nom = await api.post('/api/nomenclature', { data: {
+    name: nomName, service_id: svc.id, is_serialized: false, unit_of_measure: 'шт' } }).then(r => r.json())
+  await api.post('/api/settings/persons', { data: { last_name: soldier, unit_id: unit.id } })
+  const unitWh = (await api.get('/api/structure/warehouses').then(r => r.json())).find(w => w.unit_id === unit.id)
+  await api.post('/api/custody/movements', { data: {
+    type: 'receipt', to_warehouse_id: unitWh.id, nomenclature_id: nom.id, quantity: 10, date: '2026-07-01' } })
+  await api.dispose()
 
-  // ── Stock: receipt to service warehouse, then transfer to unit warehouse ──
+  await uiLogin(page)
   await page.goto(`${URL}/stock`)
-  await page.locator('.wh-btn', { hasText: `Склад ${svc}` }).click()
-  // receipt 10
-  await page.locator('.btn-add', { hasText: '+ Рух' }).click()
-  await page.locator('.modal select').nth(0).selectOption('receipt')
-  await page.locator('.modal select').nth(1).selectOption({ label: `${nom} (несерійне)` })
-  await page.locator('.modal input[type="number"]').fill('10')
-  await page.locator('.btn-pri', { hasText: 'Провести' }).click()
-  await expect(page.locator('.overlay.open')).toHaveCount(0)
-  // transfer 10 → unit warehouse
-  await page.locator('.btn-add', { hasText: '+ Рух' }).click()
-  await page.locator('.modal select').nth(0).selectOption('transfer')
-  await page.locator('.modal select').nth(1).selectOption({ label: `${nom} (несерійне)` })
-  await page.locator('.modal select').nth(2).selectOption({ label: `Склад ${unit}` })
-  await page.locator('.modal input[type="number"]').fill('10')
-  await page.locator('.btn-pri', { hasText: 'Провести' }).click()
-  await expect(page.locator('.overlay.open')).toHaveCount(0)
+  await page.locator('.wh-btn', { hasText: `Склад ${unitName}` }).click()
 
-  // ── Switch to the unit warehouse; balance should be 10 ──
-  await page.locator('.wh-btn', { hasText: `Склад ${unit}` }).click()
-  const balRow = page.locator('tbody tr', { hasText: nom }).first()
+  const balRow = page.locator('tbody tr', { hasText: nomName }).first()
   await expect(balRow.locator('.td-num').first()).toContainText('10')
 
-  // ── Issue 3 to the soldier ──
+  // Issue 3 to the soldier
   await balRow.locator('.btn-issue').click()
   await page.locator('.modal select').first().selectOption({ label: soldier })
   await page.locator('.modal input[type="number"]').fill('3')
   await page.locator('.btn-pri', { hasText: 'Видати' }).click()
   await expect(page.locator('.overlay.open')).toHaveCount(0)
 
-  // «Видане» filter shows the soldier with 3
+  // «Видане» shows the soldier with 3
   await page.locator('.f-chip', { hasText: 'Видане' }).click()
   const issuedRow = page.locator('tbody tr', { hasText: soldier }).first()
   await expect(issuedRow).toBeVisible()
   await expect(issuedRow).toContainText('3')
   // «На складі» shows the remaining 7 (custody 10 unchanged, split by location)
   await page.locator('.f-chip', { hasText: 'На складі' }).click()
-  const stockRow = page.locator('tbody tr', { hasText: nom }).first()
+  const stockRow = page.locator('tbody tr', { hasText: nomName }).first()
   await expect(stockRow.locator('.td-num').first()).toContainText('7')
 })

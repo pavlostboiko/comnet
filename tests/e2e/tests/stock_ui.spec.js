@@ -1,45 +1,37 @@
 const { test, expect } = require('@playwright/test')
-const { URL, uiLogin } = require('./helpers/login')
+const { URL, uiLogin, loginApi } = require('./helpers/login')
 
 test('Залишки page loads with warehouse selector', async ({ page }) => {
   await uiLogin(page)
   await page.goto(`${URL}/stock`)
   await expect(page.locator('.tile-title')).toContainText('Залишки')
   await expect(page.locator('.wh-tabs')).toBeVisible()
-  // «+ Рух» disabled until a warehouse is chosen
+  // «Додати переміщення» disabled until a warehouse is chosen
   await expect(page.locator('.btn-add')).toBeDisabled()
 })
 
-test('receipt increases the non-serial balance (full UI loop)', async ({ page }) => {
-  await uiLogin(page)
+test('receipt increases the non-serial balance (Прийняти майно UI)', async ({ page, request }) => {
   const ts = Date.now()
   const svcName = `Stock Svc ${ts}`
   const nomName = `Бушлат ${ts}`
 
-  // Create a service (auto-warehouse) via Довідники
-  await page.goto(`${URL}/structure`)
-  await page.locator('.tt-btn', { hasText: 'Служби' }).click()
-  await page.locator('.btn-add').click()
-  await page.locator('.modal .fi').first().fill(svcName)
-  await page.locator('.btn-pri').click()
-  await expect(page.locator('td.td-name', { hasText: svcName })).toBeVisible()
+  // Seed the dictionary bits via API; the receipt itself is exercised in the UI
+  const api = await loginApi(request)
+  const svc = await api.post('/api/settings/services', { data: { name: svcName } }).then(r => r.json())
+  await api.post('/api/nomenclature', { data: {
+    name: nomName, service_id: svc.id, is_serialized: false, unit_of_measure: 'шт' } })
+  await api.dispose()
 
-  // Create a non-serial nomenclature on the Майно page
-  await page.goto(`${URL}/catalog`)
-  await page.locator('.btn-add', { hasText: '+ Додати' }).click()
-  await page.locator('.modal .fi').first().fill(nomName)
-  await page.locator('.modal select').first().selectOption({ label: svcName })
-  await page.locator('.btn-pri', { hasText: 'Зберегти' }).click()
-  await expect(page.locator('td.td-name', { hasText: nomName })).toBeVisible()
-
-  // Go to Stock, pick the service warehouse, do a receipt of 7
+  await uiLogin(page)
   await page.goto(`${URL}/stock`)
   await page.locator('.wh-btn', { hasText: `Склад ${svcName}` }).click()
-  await page.locator('.btn-add', { hasText: '+ Рух' }).click()
-  await page.locator('.modal select').nth(0).selectOption('receipt')       // type
-  await page.locator('.modal select').nth(1).selectOption({ label: `${nomName} (несерійне)` })
-  await page.locator('.modal input[type="number"]').fill('7')
-  await page.locator('.btn-pri', { hasText: 'Провести' }).click()
+
+  // Receipt of 7 via «Прийняти майно»
+  await page.locator('button', { hasText: 'Прийняти майно' }).click()
+  await page.locator('.row-nom input').fill(nomName)
+  await page.locator('.ac-dropdown .ac-item').first().click()
+  await page.locator('.recv-row input[type="number"]').fill('7')
+  await page.locator('.modal-foot button', { hasText: 'Прийняти' }).click()
 
   // Balance row shows qty 7
   const row = page.locator('tbody tr', { hasText: nomName }).first()

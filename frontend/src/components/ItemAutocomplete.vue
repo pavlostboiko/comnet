@@ -4,7 +4,7 @@
       ref="inputRef"
       v-model="query"
       class="cell-input"
-      :placeholder="modelValue || 'Назва майна...'"
+      :placeholder="modelValue || placeholder"
       @focus="onFocus"
       @blur="onBlur"
       @input="open = true"
@@ -40,6 +40,7 @@ import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 const props = defineProps({
   modelValue: String,
   items: Array,
+  placeholder: { type: String, default: 'Назва майна...' },
 })
 const emit = defineEmits(['update:modelValue', 'select'])
 

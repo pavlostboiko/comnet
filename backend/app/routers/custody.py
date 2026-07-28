@@ -224,6 +224,13 @@ def create_document(payload: DocumentBatchCreate, db: Session = Depends(get_db),
         if nom.is_serialized:
             inst.current_warehouse_id = to.id
         db.flush()
+        # Опційно: одразу видати особі (та сама транзакція — атомарно з рухом).
+        # У накладну особа не пише — це окремий шар (assignments).
+        if it.assign_person_id:
+            from app.routers.assignments import issue_row  # lazy: уникнути циклічного імпорту
+            issue_row(db, user, to.id, it.assign_person_id, nom.id,
+                      it.instance_id if nom.is_serialized else None,
+                      None if nom.is_serialized else qty, date)
         created += 1
     db.commit()
     return {"created": created, "doc_number": payload.doc_number}
