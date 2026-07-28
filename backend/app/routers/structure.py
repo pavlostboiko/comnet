@@ -168,8 +168,14 @@ def create_mvo(payload: MvoCreate, db: Session = Depends(get_db), _: User = Depe
     wh = db.get(Warehouse, payload.warehouse_id)
     if not wh:
         raise HTTPException(400, "Склад не знайдено")
-    if wh.type != "unit":
-        raise HTTPException(400, "МВО призначається лише на склад підрозділу")
+    # МВО — на склад служби або ВНУТРІШНЬОГО підрозділу (зовнішні — джерело
+    # приймання, не облік).
+    if wh.type not in ("unit", "service"):
+        raise HTTPException(400, "МВО призначається на склад служби або підрозділу")
+    if wh.type == "unit":
+        u = db.get(Unit, wh.unit_id)
+        if u and u.is_external:
+            raise HTTPException(400, "МВО не призначається на зовнішній підрозділ")
     if not db.get(Person, payload.person_id):
         raise HTTPException(400, "Особу не знайдено")
     from_date = date.fromisoformat(payload.from_date)

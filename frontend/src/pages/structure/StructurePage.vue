@@ -88,7 +88,7 @@
         <!-- ═══ МВО ═══ -->
         <div v-if="tab === 'mvo'" class="table-wrap">
           <table>
-            <thead><tr><th>Особа</th><th>Склад підрозділу</th><th class="col-date">З</th><th class="col-date">По</th><th class="col-acts"></th></tr></thead>
+            <thead><tr><th>Особа</th><th>Склад</th><th class="col-date">З</th><th class="col-date">По</th><th class="col-acts"></th></tr></thead>
             <tbody>
               <tr v-if="!mvo.length"><td colspan="5" class="empty">Немає призначень</td></tr>
               <tr v-for="m in mvo" :key="m.id" :class="{ 'row-dim': m.to_date }">
@@ -173,10 +173,10 @@
             <label class="fl">Вартість</label><input class="fi" type="number" v-model="form.price" />
           </template>
           <template v-else-if="tab === 'mvo'">
-            <label class="fl">Склад підрозділу *</label>
+            <label class="fl">Склад *</label>
             <select class="fi" v-model="form.warehouse_id">
               <option :value="null" disabled>— оберіть —</option>
-              <option v-for="w in unitWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
+              <option v-for="w in mvoWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
             </select>
             <label class="fl">Особа *</label>
             <select class="fi" v-model="form.person_id">
@@ -261,6 +261,10 @@ const groups = ref([])
 const persons = ref([])
 
 const unitWarehouses = computed(() => warehouses.value.filter(w => w.type === 'unit'))
+// МВО можна призначати на склад служби + ВНУТРІШНЬОГО підрозділу (без зовнішніх).
+const externalUnitIds = computed(() => new Set(units.value.filter(u => u.is_external).map(u => u.id)))
+const mvoWarehouses = computed(() => warehouses.value.filter(w =>
+  w.type === 'service' || (w.type === 'unit' && !externalUnitIds.value.has(w.unit_id))))
 const serviceName = (id) => services.value.find(s => s.id === id)?.name || '—'
 const unitName = (id) => units.value.find(u => u.id === id)?.name || '—'
 const warehouseName = (id) => warehouses.value.find(w => w.id === id)?.name || '—'
