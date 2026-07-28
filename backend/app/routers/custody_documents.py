@@ -31,6 +31,7 @@ router = APIRouter(prefix="/api/custody/documents", tags=["custody-documents"])
 
 OPERATIONS = ("receipt", "transfer")
 FORMS = ("накладна", "акт")
+RECEIPT_NO_DOC = "без документа"   # неформальний прихід (НДМ): рухи без custody-документа
 
 # Обов'язкові поля для підпису (мінімум для коректного друку).
 REQUIRED_FIELDS = ["doc_number", "doc_date"]
@@ -228,8 +229,10 @@ def receive_document(payload: ReceiptCreate, db: Session = Depends(get_db),
     """Приймання майна ззовні одразу документом (акт/накладна) на склад.
 
     Створює рухи receipt (ззовні → склад) з document_id. Номенклатуру можна
-    створити на льоту. is_official завжди береться з картки, не з payload."""
-    if payload.form not in FORMS:
+    створити на льоту. is_official завжди береться з картки, не з payload.
+    Форма «без документа» (НДМ) → рухи без custody-документа."""
+    no_doc = payload.form == RECEIPT_NO_DOC
+    if not no_doc and payload.form not in FORMS:
         raise HTTPException(400, "Невідома форма")
     to = db.get(Warehouse, payload.to_warehouse_id)
     if not to:
@@ -241,16 +244,18 @@ def receive_document(payload: ReceiptCreate, db: Session = Depends(get_db),
     except ValueError:
         mdate = date_cls.today()
 
-    doc = CustodyDocument(
-        operation="receipt", form=payload.form, doc_number=payload.doc_number,
-        doc_date=payload.doc_date, date_operation=payload.doc_date,
-        to_warehouse_id=to.id, counterparty=payload.counterparty, basis=payload.basis,
-        service_id=payload.service_id, op_type_id=payload.op_type_id,
-        sender_id=payload.sender_id, receiver_id=payload.receiver_id, fin_id=payload.fin_id,
-        status="draft", extra_data={}, created_by=user.id,
-    )
-    db.add(doc)
-    db.flush()
+    doc = None
+    if not no_doc:
+        doc = CustodyDocument(
+            operation="receipt", form=payload.form, doc_number=payload.doc_number,
+            doc_date=payload.doc_date, date_operation=payload.doc_date,
+            to_warehouse_id=to.id, counterparty=payload.counterparty, basis=payload.basis,
+            service_id=payload.service_id, op_type_id=payload.op_type_id,
+            sender_id=payload.sender_id, receiver_id=payload.receiver_id, fin_id=payload.fin_id,
+            status="draft", extra_data={}, created_by=user.id,
+        )
+        db.add(doc)
+        db.flush()
 
     for it in payload.items:
         if it.new_nomenclature:
@@ -293,8 +298,12 @@ def receive_document(payload: ReceiptCreate, db: Session = Depends(get_db),
             from_warehouse_id=None, to_warehouse_id=to.id,
             instance_id=instance.id if instance else None,
             quantity=qty, is_official=is_official, card_number=it.card_number,
-            document_id=doc.id, created_by=user.id,
+            document_id=doc.id if doc else None, created_by=user.id,
         ))
+
+    if doc is None:                       # НДМ / без документа — лише рухи
+        db.commit()
+        return {"received": len(payload.items), "no_document": True}
 
     warnings = resolve_auto_number(doc, db)
     snap_nakladna(doc, db)

@@ -19,6 +19,14 @@
           <button v-if="search" class="search-clear" @click="search=''; searchRef?.focus()">×</button>
         </div>
 
+        <!-- Тип обліку: все / облік / ндм -->
+        <div class="sub-row">
+          <span class="sub-label">Тип</span>
+          <span class="sub-chip" :class="{ on: officialFilter === 'all' }" @click="officialFilter = 'all'">Все</span>
+          <span class="sub-chip" :class="{ on: officialFilter === 'official' }" @click="officialFilter = 'official'">Облік</span>
+          <span class="sub-chip" :class="{ on: officialFilter === 'ndm' }" @click="officialFilter = 'ndm'">НДМ</span>
+        </div>
+
         <!-- Категорії -->
         <div class="sub-row" v-if="categories.length">
           <span class="sub-label">Категорія</span>
@@ -139,6 +147,7 @@ const serviceId = ref(null)
 const search = ref('')
 const searchRef = ref(null)
 const category = ref(null)
+const officialFilter = ref('all')   // all | official | ndm
 
 const totals = ref({})
 const serviceName = (id) => services.value.find(s => s.id === id)?.name || '—'
@@ -155,6 +164,8 @@ function fmtQty(v) {
 const filtered = computed(() => {
   let list = nomenclature.value
   if (serviceId.value) list = list.filter(n => n.service_id === serviceId.value)
+  if (officialFilter.value === 'official') list = list.filter(n => n.is_official)
+  else if (officialFilter.value === 'ndm') list = list.filter(n => !n.is_official)
   if (category.value) list = list.filter(n => n.category === category.value)
   const q = search.value.trim().toLowerCase()
   if (q) list = list.filter(n =>

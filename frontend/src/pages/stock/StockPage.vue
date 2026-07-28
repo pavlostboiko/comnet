@@ -24,10 +24,14 @@
             <input ref="stockSearchRef" v-model="stockSearch" placeholder="Пошук за назвою, серійним…" @keydown.esc="stockSearch=''" />
             <button v-if="stockSearch" class="search-clear" @click="stockSearch=''; stockSearchRef?.focus()">×</button>
           </div>
-          <!-- Фільтри стану -->
-          <div v-if="isUnitWh" class="filter-row">
+          <!-- Фільтри стану + облік/ндм -->
+          <div v-if="warehouseId" class="filter-row">
             <button v-for="f in FILTERS" :key="f.key" class="f-chip" :class="{ on: stockFilter === f.key }" @click="stockFilter = f.key">
               {{ f.label }} <span class="f-count">{{ countOf(f.key) }}</span>
+            </button>
+            <span class="filter-sep"></span>
+            <button v-for="f in OFFICIAL_FILTERS" :key="f.key" class="f-chip" :class="{ on: officialFilter === f.key }" @click="officialFilter = f.key">
+              {{ f.label }}
             </button>
           </div>
 
@@ -56,8 +60,8 @@
                   </td>
                   <td class="td-issue">
                     <button v-if="r.kind === 'serial'" class="btn-hist" @click="openHistory(r)">Історія</button>
-                    <button v-if="isUnitWh && r.state === 'issued'" class="btn-return" @click="doReturn(r.assignment)">Повернути</button>
-                    <button v-else-if="isUnitWh && r.state === 'stock'" class="btn-issue" @click="openIssue(r)">Видати</button>
+                    <button v-if="canReturn(r)" class="btn-return" @click="doReturn(r.assignment)">Повернути</button>
+                    <button v-else-if="canIssue(r)" class="btn-issue" @click="openIssue(r)">Видати</button>
                   </td>
                 </tr>
               </tbody>
@@ -134,6 +138,7 @@
               <select class="fi" v-model="recv.form">
                 <option value="накладна">Накладна</option>
                 <option value="акт">Акт прийому-передачі</option>
+                <option value="без документа">Без документа (НДМ)</option>
               </select>
             </div>
             <div class="fg"><label class="fl">№ документа</label><input class="fi" v-model="recv.doc_number" placeholder="авто" /></div>
@@ -186,7 +191,7 @@
           <label class="fl">Кому</label>
           <select class="fi" v-model="issue.person_id">
             <option :value="null" disabled>— оберіть особу —</option>
-            <option v-for="p in unitPersons" :key="p.id" :value="p.id">{{ personLabel(p) }}</option>
+            <option v-for="p in issuePersons" :key="p.id" :value="p.id">{{ personLabel(p) }}</option>
           </select>
           <template v-if="!issue.instance_id">
             <label class="fl">Кількість</label>
@@ -259,7 +264,18 @@ const selectableWarehouses = computed(() => [...serviceWarehouses.value, ...unit
 const otherWarehouses = computed(() => selectableWarehouses.value.filter(w => w.id !== warehouseId.value))
 const selectedWarehouse = computed(() => warehouses.value.find(w => w.id === warehouseId.value) || null)
 const isUnitWh = computed(() => selectedWarehouse.value?.type === 'unit')
+const isServiceWh = computed(() => selectedWarehouse.value?.type === 'service')
 const unitPersons = computed(() => persons.value.filter(p => p.unit_id === selectedWarehouse.value?.unit_id))
+// Видача: зі складу підрозділу — особи підрозділу; зі складу служби (НДМ) — будь-яка особа.
+const issuePersons = computed(() => isServiceWh.value ? persons.value : unitPersons.value)
+// «Видати»: підрозділ — будь-що; служба — лише НДМ (не облікове) напряму.
+function canIssue(r) {
+  if (r.state !== 'stock') return false
+  return isUnitWh.value || (isServiceWh.value && !r.is_official)
+}
+function canReturn(r) {
+  return r.state === 'issued' && (isUnitWh.value || isServiceWh.value)
+}
 
 // «Додати переміщення»: якщо призначення = склад підрозділу, можна одразу видати особі
 const destWarehouse = computed(() => warehouses.value.find(w => w.id === doc.to_warehouse_id) || null)
@@ -317,6 +333,12 @@ const FILTERS = [
   { key: 'issued', label: 'Видане' },
 ]
 const stockFilter = ref('all')
+const OFFICIAL_FILTERS = [
+  { key: 'all', label: 'Все' },
+  { key: 'official', label: 'Облік' },
+  { key: 'ndm', label: 'НДМ' },
+]
+const officialFilter = ref('all')
 
 // Скільки несерійного (nom, is_official) зараз на руках (активні видачі).
 const activeIssued = (nomId, isOfficial) => assignments.value
@@ -364,6 +386,8 @@ const stockSearch = ref('')
 const stockSearchRef = ref(null)
 const filteredRows = computed(() => {
   let rows = stockFilter.value === 'all' ? stockRows.value : stockRows.value.filter(r => r.state === stockFilter.value)
+  if (officialFilter.value === 'official') rows = rows.filter(r => r.is_official)
+  else if (officialFilter.value === 'ndm') rows = rows.filter(r => !r.is_official)
   const q = stockSearch.value.trim().toLowerCase()
   if (q) rows = rows.filter(r =>
     (r.name || '').toLowerCase().includes(q) || (r.serial_no || '').toLowerCase().includes(q))
@@ -401,11 +425,8 @@ async function loadStock() {
   ])
   balances.value = b.data
   serial.value = s.data
-  if (isUnitWh.value) {
-    assignments.value = (await getAssignments(warehouseId.value)).data
-  } else {
-    assignments.value = []
-  }
+  // Видачі є і на складі підрозділу (облік), і на складі служби (НДМ напряму).
+  assignments.value = (await getAssignments(warehouseId.value)).data
 }
 function onKeyDown(e) {
   const tag = document.activeElement?.tagName
@@ -686,6 +707,7 @@ async function saveReceive() {
 .f-chip { border:1px solid var(--border); background:var(--bg); border-radius:var(--radius-pill); padding:5px 14px; cursor:pointer; font-family:inherit; font-size:13px; color:var(--text-mid); display:inline-flex; align-items:center; gap:6px; }
 .f-chip.on { background:var(--accent); color:#fff; border-color:var(--accent); }
 .f-count { font-size:11px; opacity:0.8; font-family:'DM Mono',monospace; }
+.filter-sep { width:1px; background:var(--border); margin:2px 4px; align-self:stretch; }
 .section-label { padding:14px 20px 6px; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-light); font-weight:600; }
 .table-wrap { overflow-x:auto; }
 table { width:100%; border-collapse:collapse; table-layout:fixed; }
