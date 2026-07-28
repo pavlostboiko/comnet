@@ -135,7 +135,7 @@
           <div class="doc-top">
             <div class="fg">
               <label class="fl">Форма</label>
-              <select class="fi" v-model="recv.form">
+              <select class="fi" v-model="recv.form" @change="onRecvFormChange">
                 <option value="накладна">Накладна</option>
                 <option value="акт">Акт прийому-передачі</option>
                 <option value="без документа">Без документа (НДМ)</option>
@@ -225,7 +225,8 @@
 
     <!-- Нова номенклатура (спільна форма з «Майно») -->
     <NomenclatureModal :open="newNomOpen" :services="services" :categories="recvCategories"
-      :default-service-id="recvDefaultService" @saved="onNewNomSaved" @close="newNomOpen=false" />
+      :default-service-id="recvDefaultService" :default-official="recvWantOfficial"
+      @saved="onNewNomSaved" @close="newNomOpen=false" />
   </div>
 </template>
 
@@ -604,12 +605,20 @@ function openReceive() {
   recvOpen.value = true
 }
 function addRecvRow() { recv.items.push(newRecvRow()) }
-// Приймання: у пошуку — вся номенклатура (завозимо нове, склад не фільтрує).
+// Приймання: випадайка за типом форми — «без документа» → лише НДМ,
+// «накладна/акт» → лише облікові (щоб не завезти майно не того типу).
+const recvWantOfficial = computed(() => recv.form !== 'без документа')
 const allNomOptions = computed(() =>
-  nomenclature.value.map(n => ({ id: n.id, name: n.name, number: n.code || '', is_serialized: n.is_serialized })))
+  nomenclature.value
+    .filter(n => n.is_official === recvWantOfficial.value)
+    .map(n => ({ id: n.id, name: n.name, number: n.code || '', is_serialized: n.is_serialized })))
 function onRecvNomSelect(r, i, item) {
   r.nomenclature_id = item.id
   r.serial_no = ''; r.card_number = ''; r.quantity = null
+}
+// Зміна форми міняє тип дозволеної номенклатури → скидаємо вибране в рядках.
+function onRecvFormChange() {
+  recv.items.forEach(r => { r.nomenclature_id = null; r.serial_no = ''; r.card_number = ''; r.quantity = null })
 }
 function openNewNom(i) { newNomRow.value = i; newNomOpen.value = true }
 function recvSerialized(r) { return !!nomById(r.nomenclature_id)?.is_serialized }

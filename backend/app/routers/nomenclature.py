@@ -11,7 +11,9 @@ from sqlalchemy.orm import Session
 from app.acl import check_nomenclature_cud, scope_nomenclature
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import Instance, Nomenclature, Service, User, Warehouse
+from app.models import (
+    Assignment, CustodyMovement, Instance, Nomenclature, Service, User, Warehouse,
+)
 from app.schemas import (
     InstanceCreate, InstanceRead, InstanceUpdate, NomenclatureCreate, NomenclatureRead,
     NomenclatureUpdate,
@@ -55,8 +57,24 @@ def update_nomenclature(nid: int, payload: NomenclatureUpdate, db: Session = Dep
     if data.get("is_serialized") is False and n.is_serialized:
         if db.query(Instance).filter(Instance.nomenclature_id == nid).first():
             raise HTTPException(400, "Є екземпляри — не можна зробити несерійним")
+
+    # Тип обліку (облік/ндм) — джерело правди на картці. Поки майно в обігу
+    # (є рухи/видачі) міняти НЕ можна (інакше розʼїдуться баланси). Поки обігу
+    # немає — можна, і каскадимо на екземпляри, щоб не було розсинхрону.
+    changing_official = "is_official" in data and data["is_official"] != n.is_official
+    if changing_official:
+        in_use = (db.query(CustodyMovement).filter(CustodyMovement.nomenclature_id == nid).first()
+                  or db.query(Assignment).filter(Assignment.nomenclature_id == nid).first())
+        if in_use:
+            raise HTTPException(
+                400, "Тип (облік/ндм) не можна змінити — по картці вже є рухи/видачі. "
+                     "Створіть нову картку.")
+
     for field, value in data.items():
         setattr(n, field, value)
+    if changing_official:
+        db.query(Instance).filter(Instance.nomenclature_id == nid) \
+            .update({"is_official": n.is_official}, synchronize_session=False)
     db.commit()
     db.refresh(n)
     return n
