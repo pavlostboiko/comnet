@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.acl import check_assignment_create, scope_assignments
+from app.acl import check_assignment_create, is_admin, scope_assignments
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import (
@@ -88,17 +88,27 @@ def issue_row(db: Session, user: User, warehouse_id: int, person_id: int,
     wh = db.get(Warehouse, warehouse_id)
     if not wh:
         raise HTTPException(400, "Склад не знайдено")
-    if wh.type != "unit":
-        raise HTTPException(400, "Видача лише зі складу підрозділу")
-    check_assignment_create(user, wh.id)  # ACL: mvo свого складу / admin
-    person = db.get(Person, person_id)
-    if not person:
-        raise HTTPException(400, "Особу не знайдено")
-    if person.unit_id is None or person.unit_id != wh.unit_id:
-        raise HTTPException(400, "Особа з іншого підрозділу")
     nom = db.get(Nomenclature, nomenclature_id)
     if not nom:
         raise HTTPException(400, "Номенклатуру не знайдено")
+
+    # НДМ (не облікове) видається напряму зі складу СЛУЖБИ будь-якій особі
+    # (без прив'язки до підрозділу). Облікове — лише зі складу підрозділу.
+    ndm_direct = (not nom.is_official) and wh.type == "service"
+    if not ndm_direct and wh.type != "unit":
+        raise HTTPException(400, "Видача лише зі складу підрозділу")
+
+    if ndm_direct:
+        if not (is_admin(user) or (user.role == "service" and user.service_id == wh.service_id)):
+            raise HTTPException(403, "Немає прав видавати з цього складу")
+    else:
+        check_assignment_create(user, wh.id)  # ACL: mvo свого складу / admin
+
+    person = db.get(Person, person_id)
+    if not person:
+        raise HTTPException(400, "Особу не знайдено")
+    if not ndm_direct and (person.unit_id is None or person.unit_id != wh.unit_id):
+        raise HTTPException(400, "Особа з іншого підрозділу")
 
     if nom.is_serialized:
         if not instance_id:
