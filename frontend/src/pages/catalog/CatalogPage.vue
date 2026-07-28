@@ -9,6 +9,11 @@
             <option :value="null">— усі служби —</option>
             <option v-for="s in services" :key="s.id" :value="s.id">{{ s.name }}</option>
           </select>
+          <!-- Тип обліку: все / облік / ндм (в один рядок із вибором служби) -->
+          <span class="sub-label">Тип</span>
+          <span class="sub-chip" :class="{ on: officialFilter === 'all' }" @click="officialFilter = 'all'">Все</span>
+          <span class="sub-chip" :class="{ on: officialFilter === 'official' }" @click="officialFilter = 'official'">Облік</span>
+          <span class="sub-chip" :class="{ on: officialFilter === 'ndm' }" @click="officialFilter = 'ndm'">НДМ</span>
           <button v-if="isAdmin" class="btn-add" @click="openAdd">+ Додати</button>
         </div>
 
@@ -17,14 +22,6 @@
           <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
           <input ref="searchRef" v-model="search" placeholder="Пошук за назвою, кодом…" @keydown.esc="search=''" />
           <button v-if="search" class="search-clear" @click="search=''; searchRef?.focus()">×</button>
-        </div>
-
-        <!-- Тип обліку: все / облік / ндм -->
-        <div class="sub-row">
-          <span class="sub-label">Тип</span>
-          <span class="sub-chip" :class="{ on: officialFilter === 'all' }" @click="officialFilter = 'all'">Все</span>
-          <span class="sub-chip" :class="{ on: officialFilter === 'official' }" @click="officialFilter = 'official'">Облік</span>
-          <span class="sub-chip" :class="{ on: officialFilter === 'ndm' }" @click="officialFilter = 'ndm'">НДМ</span>
         </div>
 
         <!-- Категорії -->
