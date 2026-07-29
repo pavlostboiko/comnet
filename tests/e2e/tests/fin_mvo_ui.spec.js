@@ -22,8 +22,9 @@ test('add a global fin МВО via Довідники → МВО', async ({ page,
   await page.locator('.modal select').first().selectOption({ label: 'Фінслужба (загальна)' })
   await expect(page.locator('.modal').getByText('Склад *')).toHaveCount(0)
 
-  // Особа + save
-  await page.locator('.modal select').nth(1).selectOption({ label: `ФінUI${S}` })
+  // Особа — пошуковий дропдаун (ItemAutocomplete)
+  await page.locator('.ac-field input').fill(`ФінUI${S}`)
+  await page.locator('.ac-dropdown .ac-item', { hasText: `ФінUI${S}` }).first().click()
   await page.locator('.btn-pri').click()
 
   // Row appears as «Фінслужба (загальна)»

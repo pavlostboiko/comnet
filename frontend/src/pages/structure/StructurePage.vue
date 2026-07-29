@@ -186,10 +186,11 @@
               </select>
             </template>
             <label class="fl">Особа *</label>
-            <select class="fi" v-model="form.person_id">
-              <option :value="null" disabled>— оберіть —</option>
-              <option v-for="p in persons" :key="p.id" :value="p.id">{{ personLabel(p) }}</option>
-            </select>
+            <div class="ac-field">
+              <ItemAutocomplete :items="personOptions" placeholder="пошук особи…"
+                :model-value="form.person_id ? personName(form.person_id) : ''"
+                @select="e => form.person_id = e.id" />
+            </div>
             <label class="fl">Діє з *</label><input class="fi" type="date" v-model="form.from_date" />
           </template>
           <template v-else-if="tab === 'groups'">
@@ -238,6 +239,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
+import ItemAutocomplete from '../../components/ItemAutocomplete.vue'
 import { getServices, createService, deleteService, getPersons, createPerson, updatePerson, deletePerson } from '../../api/settings.js'
 import {
   getUnits, createUnit, updateUnit, deleteUnit, getWarehouses, renameWarehouse,
@@ -283,6 +285,10 @@ const personName = (id) => {
   const p = persons.value.find(x => x.id === id)
   return p ? personLabel(p) : '—'
 }
+// Пошуковий дропдаун осіб (для МВО): відсортовані, з позивним/ІПН у мета.
+const personOptions = computed(() => [...persons.value]
+  .sort((a, b) => personLabel(a).localeCompare(personLabel(b), 'uk'))
+  .map(p => ({ id: p.id, name: personLabel(p), number: p.callsign || p.ipn || '' })))
 const groupName = (id) => groups.value.find(g => g.id === id)?.name || '—'
 
 async function loadAll() {
@@ -476,6 +482,8 @@ th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:1
 .modal-body { padding:16px 20px; display:flex; flex-direction:column; gap:4px; overflow-y:auto; }
 .fl { font-size:12px; color:var(--text-light); font-weight:600; margin-top:8px; }
 .fi { padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:inherit; font-size:14px; }
+.ac-field { border:1px solid var(--border); border-radius:var(--radius-sm); }
+.ac-field :deep(.cell-input) { width:100%; box-sizing:border-box; padding:7px 10px; font-size:14px; }
 .err { margin-top:10px; padding:8px 10px; background:#fee2e2; color:#991b1b; font-size:12.5px; border-radius:3px; }
 .modal-foot { padding:12px 20px; border-top:1px solid var(--border); display:flex; justify-content:flex-end; gap:8px; flex-shrink:0; }
 .btn-sec { padding:7px 14px; background:transparent; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:inherit; font-size:13px; cursor:pointer; }
