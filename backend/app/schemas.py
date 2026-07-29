@@ -89,7 +89,8 @@ class WarehouseUpdate(BaseModel):
 
 class MvoRead(BaseModel):
     id: int
-    warehouse_id: int
+    kind: str = "warehouse"
+    warehouse_id: Optional[int] = None
     person_id: int
     from_date: str
     to_date: Optional[str] = None
@@ -97,7 +98,8 @@ class MvoRead(BaseModel):
 
 
 class MvoCreate(BaseModel):
-    warehouse_id: int
+    kind: str = "warehouse"                 # warehouse | fin
+    warehouse_id: Optional[int] = None      # обов'язковий для kind=warehouse
     person_id: int
     from_date: str
     to_date: Optional[str] = None

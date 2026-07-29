@@ -65,7 +65,10 @@ class Mvo(Base):
     __tablename__ = "mvo"
 
     id = Column(Integer, primary_key=True)
-    warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False)
+    # kind='warehouse' → МВО складу (warehouse_id заповнено);
+    # kind='fin' → глобальна фінслужба (warehouse_id NULL, одна діюча на систему)
+    kind = Column(String, nullable=False, default="warehouse")
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=True)
     person_id = Column(Integer, ForeignKey("persons.id", ondelete="CASCADE"), nullable=False)
     from_date = Column(Date, nullable=False)
     to_date = Column(Date, nullable=True)

@@ -93,7 +93,7 @@
               <tr v-if="!mvo.length"><td colspan="5" class="empty">Немає призначень</td></tr>
               <tr v-for="m in mvo" :key="m.id" :class="{ 'row-dim': m.to_date }">
                 <td class="td-name">{{ personName(m.person_id) }}</td>
-                <td class="td-dim">{{ warehouseName(m.warehouse_id) }}</td>
+                <td class="td-dim">{{ m.kind === 'fin' ? 'Фінслужба (загальна)' : warehouseName(m.warehouse_id) }}</td>
                 <td class="td-mono">{{ m.from_date }}</td>
                 <td class="td-mono">{{ m.to_date || '—' }}</td>
                 <td class="td-acts">
@@ -173,11 +173,18 @@
             <label class="fl">Вартість</label><input class="fi" type="number" v-model="form.price" />
           </template>
           <template v-else-if="tab === 'mvo'">
-            <label class="fl">Склад *</label>
-            <select class="fi" v-model="form.warehouse_id">
-              <option :value="null" disabled>— оберіть —</option>
-              <option v-for="w in mvoWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
+            <label class="fl">Тип *</label>
+            <select class="fi" v-model="form.mvo_kind">
+              <option value="warehouse">Склад (служби/підрозділу)</option>
+              <option value="fin">Фінслужба (загальна)</option>
             </select>
+            <template v-if="form.mvo_kind === 'warehouse'">
+              <label class="fl">Склад *</label>
+              <select class="fi" v-model="form.warehouse_id">
+                <option :value="null" disabled>— оберіть —</option>
+                <option v-for="w in mvoWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
+              </select>
+            </template>
             <label class="fl">Особа *</label>
             <select class="fi" v-model="form.person_id">
               <option :value="null" disabled>— оберіть —</option>
@@ -306,7 +313,7 @@ function openAdd() {
   editUnitId.value = null
   Object.keys(form).forEach(k => delete form[k])
   if (tab.value === 'nomenclature') { form.service_id = null; form.is_serialized = false }
-  else if (tab.value === 'mvo') { form.warehouse_id = null; form.person_id = null; form.from_date = new Date().toISOString().slice(0, 10) }
+  else if (tab.value === 'mvo') { form.mvo_kind = 'warehouse'; form.warehouse_id = null; form.person_id = null; form.from_date = new Date().toISOString().slice(0, 10) }
   else if (tab.value === 'groups') { form.unit_id = null; form.commander_id = null }
   else if (tab.value === 'persons') { form.unit_id = null; form.group_id = null }
   else if (tab.value === 'units') { form.is_external = false }
@@ -353,8 +360,10 @@ async function save() {
       })
     }
     else if (tab.value === 'mvo') {
-      if (!form.warehouse_id || !form.person_id) { error.value = 'Оберіть склад і особу'; saving.value = false; return }
-      await createMvo({ warehouse_id: form.warehouse_id, person_id: form.person_id, from_date: form.from_date })
+      const isFin = form.mvo_kind === 'fin'
+      if (!form.person_id || (!isFin && !form.warehouse_id)) { error.value = 'Оберіть склад і особу'; saving.value = false; return }
+      await createMvo({ kind: form.mvo_kind || 'warehouse',
+        warehouse_id: isFin ? null : form.warehouse_id, person_id: form.person_id, from_date: form.from_date })
     }
     else if (tab.value === 'groups') {
       if (!form.unit_id) { error.value = 'Оберіть підрозділ'; saving.value = false; return }

@@ -150,6 +150,7 @@ def rename_warehouse(wid: int, payload: WarehouseUpdate, db: Session = Depends(g
 def _mvo_dict(m: Mvo) -> dict:
     return {
         "id": m.id,
+        "kind": m.kind,
         "warehouse_id": m.warehouse_id,
         "person_id": m.person_id,
         "from_date": m.from_date.isoformat() if m.from_date else None,
@@ -165,31 +166,41 @@ def list_mvo(db: Session = Depends(get_db), _: User = Depends(get_current_user))
 
 @router.post("/mvo", status_code=status.HTTP_201_CREATED)
 def create_mvo(payload: MvoCreate, db: Session = Depends(get_db), _: User = Depends(require_admin)):
-    wh = db.get(Warehouse, payload.warehouse_id)
-    if not wh:
-        raise HTTPException(400, "Склад не знайдено")
-    # МВО — на склад служби або ВНУТРІШНЬОГО підрозділу (зовнішні — джерело
-    # приймання, не облік).
-    if wh.type not in ("unit", "service"):
-        raise HTTPException(400, "МВО призначається на склад служби або підрозділу")
-    if wh.type == "unit":
-        u = db.get(Unit, wh.unit_id)
-        if u and u.is_external:
-            raise HTTPException(400, "МВО не призначається на зовнішній підрозділ")
+    kind = payload.kind or "warehouse"
+    if kind not in ("warehouse", "fin"):
+        raise HTTPException(400, "Невідомий тип МВО")
     if not db.get(Person, payload.person_id):
         raise HTTPException(400, "Особу не знайдено")
     from_date = date.fromisoformat(payload.from_date)
     to_date = date.fromisoformat(payload.to_date) if payload.to_date else None
     if to_date and to_date < from_date:
         raise HTTPException(400, "Некоректний період")
-    # Максимум один діючий (to_date IS NULL) на склад
+
+    wh_id = None
+    if kind == "warehouse":
+        wh = db.get(Warehouse, payload.warehouse_id)
+        if not wh:
+            raise HTTPException(400, "Склад не знайдено")
+        # МВО — на склад служби або ВНУТРІШНЬОГО підрозділу (зовнішні — джерело
+        # приймання, не облік).
+        if wh.type not in ("unit", "service"):
+            raise HTTPException(400, "МВО призначається на склад служби або підрозділу")
+        if wh.type == "unit":
+            u = db.get(Unit, wh.unit_id)
+            if u and u.is_external:
+                raise HTTPException(400, "МВО не призначається на зовнішній підрозділ")
+        wh_id = wh.id
+
+    # Максимум один діючий (to_date IS NULL): для складу — на склад; для фін — глобально
     if to_date is None:
-        active = db.query(Mvo).filter(
-            Mvo.warehouse_id == wh.id, Mvo.to_date.is_(None)
-        ).first()
-        if active:
-            raise HTTPException(409, "Уже є діючий МВО на цьому складі")
-    row = Mvo(warehouse_id=wh.id, person_id=payload.person_id, from_date=from_date, to_date=to_date)
+        q = db.query(Mvo).filter(Mvo.to_date.is_(None), Mvo.kind == kind)
+        if kind == "warehouse":
+            q = q.filter(Mvo.warehouse_id == wh_id)
+        if q.first():
+            raise HTTPException(409, "Уже є діючий МВО фінслужби" if kind == "fin"
+                                     else "Уже є діючий МВО на цьому складі")
+    row = Mvo(kind=kind, warehouse_id=wh_id, person_id=payload.person_id,
+              from_date=from_date, to_date=to_date)
     db.add(row)
     db.commit()
     db.refresh(row)
