@@ -22,10 +22,13 @@ from app.auth import require_admin
 from app.database import get_db
 from app.custody_snapshot import doc_sort_key, snap_nakladna
 from app.models import (
-    Assignment, CustodyDocument, CustodyMovement, Instance, Nomenclature, Person,
-    Service, Unit, User, Warehouse,
+    Assignment, CustodyDocument, CustodyMovement, Instance, Mvo, Nomenclature,
+    Person, Service, Unit, User, Warehouse,
 )
-from app.routers.admin import _clean, _normalize_serial, _parse_decimal, _parse_date
+from app.routers.admin import (
+    _build_person_lookup, _clean, _normalize_serial, _parse_decimal, _parse_date,
+    _resolve_person,
+)
 from app.routers.assignments import _active_issued
 from app.routers.custody import balance_of
 from app.routers.structure import ensure_warehouse_for_service, ensure_warehouse_for_unit
@@ -204,6 +207,7 @@ MV_COLS = {
     "qty_out": 6, "from_unit": 7, "to_unit": 8, "doc_date": 12, "doc_number": 13,
     "serial_number": 15, "price": 19, "service": 20, "card_number": 23,  # X = «Поле 12»
     "doc_type": 24, "operation": 25,   # Y = Тип документа, Z = Запасне поле2
+    "mvo_from": 9, "mvo_to": 10,       # J = МВО звідки, K = МВО куди
 }
 
 
@@ -223,6 +227,34 @@ def _form_from_hint(y) -> str:
     інакше (в т.ч. «Накладна (вимога)») → накладна."""
     s = (y or "").strip().lower()
     return "акт" if s.startswith("акт") else "накладна"
+
+
+def _build_mvo_journal(db: Session, mvo_obs: dict, counts: dict) -> None:
+    """З колонок J/K будуємо історичний журнал МВО складів. Для кожного складу:
+    сортуємо спостереження (дата, особа) за датою, зміна МВО закриває попередній
+    період (to_date = день перед наступним), остання — активна. Журнал складу
+    ПЕРЕбудовується з файлу (щоб реімпорт не плодив дублів; ручні записи інших
+    складів не чіпаються)."""
+    from datetime import timedelta
+    for wh_id, obs in mvo_obs.items():
+        if not obs:
+            continue
+        obs.sort(key=lambda x: x[0])
+        periods = []                       # [from_date, person_id] у точках зміни
+        for d, pid in obs:
+            if not periods or periods[-1][1] != pid:
+                periods.append([d, pid])
+        db.query(Mvo).filter(Mvo.kind == "warehouse", Mvo.warehouse_id == wh_id) \
+            .delete(synchronize_session=False)
+        for idx, (fd, pid) in enumerate(periods):
+            to_d = None
+            if idx + 1 < len(periods):
+                to_d = periods[idx + 1][0] - timedelta(days=1)
+                if to_d < fd:
+                    to_d = fd
+            db.add(Mvo(kind="warehouse", warehouse_id=wh_id, person_id=pid,
+                       from_date=fd, to_date=to_d))
+            counts["mvo_created"] += 1
 
 
 @router.post("/import/movements", status_code=status.HTTP_200_OK)
@@ -251,12 +283,16 @@ def import_movements_v2(
               "services_created": 0, "units_created": 0, "instances_created": 0,
               # діагностика: скільки рядків класифіковано за колонкою Z, а скільки
               # впало у стару евристику (from/to) — щоб побачити розбіжність колонок.
-              "classified_by_column": 0, "by_heuristic": 0}
+              "classified_by_column": 0, "by_heuristic": 0, "mvo_created": 0}
     # Групування рухів у накладні по (номер, звідки, куди). Заповнюється у циклі.
     doc_groups: dict = {}
     # Рухи серійних екземплярів — для детермінованого розміщення в кінці імпорту
     # (не «останній рядок перемагає», а хронологічно пізніший рух). Ключ: instance.
     serial_movements: dict = {}
+    # МВО з колонок J/K: warehouse_id → [(дата, person_id)]; журнал будуємо в кінці.
+    mvo_obs: dict = {}
+    person_lookup = _build_person_lookup(db.query(Person).all())
+    mvo_unmatched: set = set()
     errors = []
 
     def get_service(name):
@@ -423,6 +459,16 @@ def import_movements_v2(
             counts["classified_by_column" if op_hint else "by_heuristic"] += 1
             if instance:
                 serial_movements.setdefault(instance, []).append(mv)
+            # МВО складів із J/K (особи мають існувати; не знайдено → у звіт)
+            for wh, raw_mvo in ((from_wh, mc(cells, "mvo_from")), (to_wh, mc(cells, "mvo_to"))):
+                nm = _clean(raw_mvo)
+                if not wh or not nm:
+                    continue
+                pid = _resolve_person(nm, person_lookup)
+                if pid:
+                    mvo_obs.setdefault(wh.id, []).append((mdate, pid))
+                else:
+                    mvo_unmatched.add(nm)
             if doc_number:
                 key = (doc_number, mtype,
                        from_wh.id if from_wh else None,
@@ -444,6 +490,10 @@ def import_movements_v2(
     for instance, mvs in serial_movements.items():
         latest = max(mvs, key=lambda m: (m.date, doc_sort_key(m.doc_number), m.id))
         instance.current_warehouse_id = latest.to_warehouse_id
+
+    _build_mvo_journal(db, mvo_obs, counts)
+    for nm in sorted(mvo_unmatched):
+        errors.append(f"МВО «{nm}» не знайдено — заведіть особу до імпорту")
 
     _backfill_documents(db, user, doc_groups, counts)
     db.commit()
