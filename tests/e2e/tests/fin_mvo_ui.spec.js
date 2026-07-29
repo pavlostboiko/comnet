@@ -4,10 +4,12 @@
  */
 const { test, expect } = require('@playwright/test')
 const { URL, uiLogin, loginApi } = require('./helpers/login')
+const { closeActiveFin } = require('./helpers/mvo')
 
 test('add a global fin МВО via Довідники → МВО', async ({ page, request }) => {
   const api = await loginApi(request)
   const S = Date.now()
+  await closeActiveFin(api)   // global fin is a singleton — clear before creating
   await api.post('/api/settings/persons', { data: { last_name: `ФінUI${S}` } })
   await api.dispose()
 

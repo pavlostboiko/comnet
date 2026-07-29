@@ -167,9 +167,8 @@ class CustodyDocument(Base):
     service = Column(String, nullable=True)            # денормалізована назва служби
     service_id = Column(Integer, ForeignKey("services.id", ondelete="SET NULL"), nullable=True)
     op_type_id = Column(Integer, ForeignKey("op_types.id", ondelete="SET NULL"), nullable=True)
-    sender_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
-    receiver_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
-    fin_id = Column(Integer, ForeignKey("persons.id", ondelete="SET NULL"), nullable=True)
+    # Підписанти (Здав/Прийняв/Фін) НЕ зберігаються — резолвляться з журналу МВО
+    # за датою документа (див. custody_snapshot.mvo_person_at).
     status = Column(String, nullable=False, default="draft")
     signed_at = Column(DateTime, nullable=True)
     signed_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

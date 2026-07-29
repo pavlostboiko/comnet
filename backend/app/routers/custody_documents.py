@@ -86,9 +86,6 @@ def _doc_dict(db: Session, doc: CustodyDocument, with_lines: bool = True) -> dic
         "basis": doc.basis,
         "service_id": doc.service_id,
         "op_type_id": doc.op_type_id,
-        "sender_id": doc.sender_id,
-        "receiver_id": doc.receiver_id,
-        "fin_id": doc.fin_id,
         "status": doc.status,
         "signed_at": doc.signed_at.isoformat() if doc.signed_at else None,
         "extra_data": doc.extra_data or {},
@@ -195,8 +192,7 @@ def create_document(payload: CustodyDocIn, db: Session = Depends(get_db),
         date_operation=payload.date_operation or payload.doc_date,
         counterparty=payload.counterparty, basis=payload.basis,
         service_id=payload.service_id, op_type_id=payload.op_type_id,
-        sender_id=payload.sender_id, receiver_id=payload.receiver_id,
-        fin_id=payload.fin_id, status="draft", extra_data={}, created_by=user.id,
+        status="draft", extra_data={}, created_by=user.id,
     )
     db.add(doc)
     db.flush()
@@ -251,7 +247,6 @@ def receive_document(payload: ReceiptCreate, db: Session = Depends(get_db),
             doc_date=payload.doc_date, date_operation=payload.doc_date,
             to_warehouse_id=to.id, counterparty=payload.counterparty, basis=payload.basis,
             service_id=payload.service_id, op_type_id=payload.op_type_id,
-            sender_id=payload.sender_id, receiver_id=payload.receiver_id, fin_id=payload.fin_id,
             status="draft", extra_data={}, created_by=user.id,
         )
         db.add(doc)
@@ -334,9 +329,6 @@ def update_document(doc_id: int, payload: CustodyDocIn, db: Session = Depends(ge
     doc.basis = payload.basis
     doc.service_id = payload.service_id
     doc.op_type_id = payload.op_type_id
-    doc.sender_id = payload.sender_id
-    doc.receiver_id = payload.receiver_id
-    doc.fin_id = payload.fin_id
     movements = _load_movements(db, user, payload.movement_ids)
     _apply_group(db, user, doc, movements)
     db.flush()
