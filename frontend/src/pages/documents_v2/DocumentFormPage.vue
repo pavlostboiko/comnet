@@ -60,24 +60,17 @@
         <div class="tile-header"><span class="tile-title">Підписанти (МВО)</span></div>
         <div class="form-grid three">
           <label>Здав (відправник)
-            <select v-model="form.sender_id" :disabled="ro" class="fi">
-              <option :value="null">—</option>
-              <option v-for="p in persons" :key="p.id" :value="p.id">{{ personLabel(p) }}</option>
-            </select>
+            <div class="ro-val">{{ doc.extra_data?.snap_sender_name || '— з журналу за датою —' }}</div>
           </label>
           <label>Прийняв (отримувач)
-            <select v-model="form.receiver_id" :disabled="ro" class="fi">
-              <option :value="null">—</option>
-              <option v-for="p in persons" :key="p.id" :value="p.id">{{ personLabel(p) }}</option>
-            </select>
+            <div class="ro-val">{{ doc.extra_data?.snap_recv_name || '— з журналу за датою —' }}</div>
           </label>
           <label>Фінслужба
-            <select v-model="form.fin_id" :disabled="ro" class="fi">
-              <option :value="null">—</option>
-              <option v-for="p in persons" :key="p.id" :value="p.id">{{ personLabel(p) }}</option>
-            </select>
+            <div class="ro-val">{{ doc.extra_data?.snap_fin_name || '— з журналу за датою —' }}</div>
           </label>
         </div>
+        <p class="hint-mvo">Підписанти підставляються автоматично з журналу МВО
+          (Довідники → МВО) за датою документа при підписанні.</p>
       </div>
 
       <div class="tile">
@@ -152,21 +145,19 @@ import { useRoute, useRouter } from 'vue-router'
 import TopBar from '../../components/TopBar.vue'
 import { getDoc, updateDoc, signDoc, unsignDoc, deleteDoc, exportDocXlsx, getMovements } from '../../api/custody.js'
 import { getNomenclature } from '../../api/nomenclature.js'
-import { getServices, getPersons, getOpTypes } from '../../api/settings.js'
+import { getServices, getOpTypes } from '../../api/settings.js'
 
 const route = useRoute()
 const router = useRouter()
 const doc = ref(null)
 const lines = ref([])
 const services = ref([])
-const persons = ref([])
 const opTypes = ref([])
 const busy = ref(false)
 const signErrors = ref([])
 const form = reactive({
   form: 'накладна', doc_number: '', doc_date: '', date_operation: '',
   counterparty: '', basis: '', service_id: null, op_type_id: null,
-  sender_id: null, receiver_id: null, fin_id: null,
 })
 
 const ro = computed(() => doc.value?.status !== 'draft')
@@ -177,11 +168,6 @@ function fmtQty(v) {
   if (v == null || v === '') return '—'
   const n = Number(v)
   return Number.isInteger(n) ? String(n) : n.toLocaleString('uk-UA', { maximumFractionDigits: 4 })
-}
-function personLabel(p) {
-  const name = [p.last_name, p.first_name].filter(Boolean).join(' ')
-  const extra = [p.rank, p.position].filter(Boolean).join(', ')
-  return extra ? `${name} (${extra})` : name
 }
 
 function applyDoc(d) {
@@ -195,9 +181,6 @@ function applyDoc(d) {
   form.basis = d.basis || ''
   form.service_id = d.service_id
   form.op_type_id = d.op_type_id
-  form.sender_id = d.sender_id
-  form.receiver_id = d.receiver_id
-  form.fin_id = d.fin_id
 }
 
 function removeLine(id) { lines.value = lines.value.filter(l => l.id !== id) }
@@ -244,7 +227,6 @@ function payload() {
     doc_number: form.doc_number || null, doc_date: form.doc_date || null,
     date_operation: form.date_operation || null, counterparty: form.counterparty || null,
     basis: form.basis || null, service_id: form.service_id, op_type_id: form.op_type_id,
-    sender_id: form.sender_id, receiver_id: form.receiver_id, fin_id: form.fin_id,
     movement_ids: lines.value.map(l => l.id),
   }
 }
@@ -302,8 +284,8 @@ async function exportXlsx() {
 }
 
 onMounted(async () => {
-  const [d, s, p, o] = await Promise.all([getDoc(route.params.id), getServices(), getPersons(), getOpTypes()])
-  services.value = s.data; persons.value = p.data; opTypes.value = o.data
+  const [d, s, o] = await Promise.all([getDoc(route.params.id), getServices(), getOpTypes()])
+  services.value = s.data; opTypes.value = o.data
   applyDoc(d.data)
 })
 </script>
@@ -329,6 +311,8 @@ onMounted(async () => {
 label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--text-light); }
 .fi { border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 8px; font-family:inherit; font-size:13.5px; color:var(--text); background:var(--surface); }
 .fi:disabled { background:var(--bg); color:var(--text-mid); }
+.ro-val { border:1px solid var(--border-light); border-radius:var(--radius-sm); padding:6px 8px; font-size:13.5px; color:var(--text-mid); background:var(--bg); }
+.hint-mvo { padding:0 20px 14px; margin:0; font-size:12px; color:var(--text-light); }
 .table-wrap { overflow-x:auto; }
 table { width:100%; border-collapse:collapse; table-layout:fixed; }
 th, td { padding:8px 12px; text-align:left; font-size:13px; border-bottom:1px solid var(--border-light); }
