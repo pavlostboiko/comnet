@@ -4,11 +4,13 @@
  */
 const { test, expect } = require('@playwright/test')
 const { loginApi } = require('./helpers/login')
+const { closeActiveFin } = require('./helpers/mvo')
 
 test('fin МВО is global, single-active, visible to all', async ({ request }) => {
   const admin = await loginApi(request)
   const S = Date.now()
   try {
+    await closeActiveFin(admin)   // global fin is a singleton — start clean
     const p1 = await admin.post('/api/settings/persons', { data: { last_name: `Фін1-${S}` } }).then(r => r.json())
     const p2 = await admin.post('/api/settings/persons', { data: { last_name: `Фін2-${S}` } }).then(r => r.json())
 

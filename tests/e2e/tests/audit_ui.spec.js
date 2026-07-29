@@ -16,8 +16,9 @@ test('audit page lists records, filters and expands a diff', async ({ page, requ
   await page.goto(`${URL}/audit`)
   await expect(page.locator('.tile-title')).toContainText('Журнал змін')
 
-  // Filter to Служба
+  // Filter to Служба + Створено (deterministic even with many audit rows)
   await page.locator('.filters select').first().selectOption({ label: 'Служба' })
+  await page.locator('.filters select').nth(1).selectOption({ label: 'Створено' })
   const row = page.locator('tbody tr.row', { hasText: 'Служба' }).first()
   await expect(row).toBeVisible()
   await expect(row).toContainText('Створено')

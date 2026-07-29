@@ -213,9 +213,6 @@ class CustodyDocIn(BaseModel):
     basis: Optional[str] = None
     service_id: Optional[int] = None
     op_type_id: Optional[int] = None
-    sender_id: Optional[int] = None
-    receiver_id: Optional[int] = None
-    fin_id: Optional[int] = None
     movement_ids: List[int] = []                  # рухи, що входять у документ
 
 
@@ -249,9 +246,6 @@ class ReceiptCreate(BaseModel):
     basis: Optional[str] = None
     service_id: Optional[int] = None
     op_type_id: Optional[int] = None
-    sender_id: Optional[int] = None
-    receiver_id: Optional[int] = None
-    fin_id: Optional[int] = None
     items: List[ReceiptItemIn] = []
 
 
