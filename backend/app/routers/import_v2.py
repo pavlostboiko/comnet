@@ -112,6 +112,92 @@ def wipe_persons_v2(db: Session = Depends(get_db), _: User = Depends(require_adm
     return {"deleted_persons": deleted, "kept_linked_to_users": len(linked_ids)}
 
 
+PERSON_COLS = {
+    "ПІБ": "fullname", "П.І.Б": "fullname", "П.І.Б.": "fullname", "ПiБ": "fullname",
+    "ІПН": "ipn", "IПН": "ipn", "Ідентифікаційний код": "ipn",
+    "Позивний": "callsign",
+}
+
+
+@router.post("/import/persons", status_code=status.HTTP_200_OK)
+def import_persons_v2(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    """Імпорт осіб: колонки ПІБ (одна, розділення пробілом) / ІПН / Позивний.
+    Ключ — ІПН: є в базі → оновити (ПІБ, позивний, active); нема → створити;
+    ІПН у базі, якого нема у файлі → деактивувати (is_active=False). Рядок без
+    ІПН пропускаємо. `search_name` = повний ПІБ (для матчингу МВО/рухів по J/K)."""
+    try:
+        wb = load_workbook(BytesIO(file.file.read()), data_only=True)
+    except Exception as e:
+        raise HTTPException(400, f"Не вдалось прочитати XLSX: {e}")
+    ws = wb.active
+
+    header_row = None
+    for row in ws.iter_rows(max_row=20):
+        for cell in row:
+            if str(cell.value or "").strip() in ("ПІБ", "П.І.Б", "П.І.Б.", "ПiБ"):
+                header_row = cell.row
+                break
+        if header_row:
+            break
+    if not header_row:
+        raise HTTPException(400, "Не знайдено заголовок «ПІБ»")
+    col = {}
+    for cell in ws[header_row]:
+        key = PERSON_COLS.get(str(cell.value or "").strip())
+        if key:
+            col[key] = cell.column
+    if "ipn" not in col:
+        raise HTTPException(400, "Не знайдено колонку «ІПН»")
+
+    def cv(cells, key):
+        c = col.get(key)
+        return cells[c - 1].value if c and c - 1 < len(cells) else None
+
+    counts = {"rows": 0, "created": 0, "updated": 0, "deactivated": 0, "skipped": 0}
+    errors = []
+    existing = {p.ipn: p for p in db.query(Person).filter(Person.ipn.isnot(None)).all() if p.ipn}
+    seen = set()
+
+    for cells in ws.iter_rows(min_row=header_row + 1, values_only=False):
+        fullname = _clean(cv(cells, "fullname"))
+        if not fullname:
+            continue
+        counts["rows"] += 1
+        ipn = _clean(cv(cells, "ipn"))
+        if not ipn:
+            counts["skipped"] += 1
+            errors.append(f"«{fullname}»: без ІПН — пропущено")
+            continue
+        parts = fullname.split()
+        last = parts[0] if parts else None
+        first = parts[1] if len(parts) > 1 else None
+        patr = " ".join(parts[2:]) if len(parts) > 2 else None
+        callsign = _clean(cv(cells, "callsign"))
+        seen.add(ipn)
+        p = existing.get(ipn)
+        if p:
+            p.last_name, p.first_name, p.patronymic = last, first, patr
+            p.callsign, p.is_active, p.search_name = callsign, True, fullname.lower()
+            counts["updated"] += 1
+        else:
+            db.add(Person(last_name=last, first_name=first, patronymic=patr, ipn=ipn,
+                          callsign=callsign, is_active=True, search_name=fullname.lower()))
+            counts["created"] += 1
+
+    # Особи з ІПН, яких нема у файлі → деактивувати (без ІПН — не чіпаємо).
+    for p in existing.values():
+        if p.ipn not in seen and p.is_active:
+            p.is_active = False
+            counts["deactivated"] += 1
+
+    db.commit()
+    return {**counts, "errors": errors[:100]}
+
+
 @router.post("/import/items", status_code=status.HTTP_200_OK)
 def import_items_v2(
     file: UploadFile = File(...),
