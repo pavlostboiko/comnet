@@ -647,7 +647,7 @@ def import_assignments_v2(
         w.unit_id: w for w in db.query(Warehouse).filter(Warehouse.type == "unit").all()
     }
 
-    counts = {"rows": 0, "assignments": 0, "persons_created": 0, "skipped": 0}
+    counts = {"rows": 0, "assignments": 0, "persons_unit_set": 0, "skipped": 0}
     errors = []
 
     def col(row, key):
@@ -718,20 +718,26 @@ def import_assignments_v2(
                 counts["skipped"] += 1
                 errors.append(f"«{name}»: у підрозділу «{unit.name}» немає складу")
                 continue
-            matches = [p for p in persons
-                       if (p.last_name or "").strip().lower() == surname.lower() and p.unit_id == unit.id]
-            if len(matches) > 1:
+            # Шукаємо серед ІСНУЮЧИХ осіб (люди імпортуються окремо, не створюємо
+            # тут): спершу вже в цьому підрозділі, інакше — серед тих, у кого
+            # підрозділ ще не заданий (їм проставимо цей підрозділ).
+            sl = surname.lower()
+            in_unit = [p for p in persons if (p.last_name or "").strip().lower() == sl and p.unit_id == unit.id]
+            free = [p for p in persons if (p.last_name or "").strip().lower() == sl and p.unit_id is None]
+            candidates = in_unit or free
+            if len(candidates) > 1:
                 counts["skipped"] += 1
-                errors.append(f"«{name}»: неоднозначне прізвище «{surname}» у «{unit.name}»")
+                errors.append(f"«{name}»: неоднозначне прізвище «{surname}» "
+                              f"({'у ' + unit.name if in_unit else 'без підрозділу'})")
                 continue
-            if matches:
-                person = matches[0]
-            else:
-                # особи нема — створюємо (last_name + підрозділ; решту дозаповнити вручну)
-                person = Person(last_name=surname, unit_id=unit.id, is_active=True)
-                db.add(person); db.flush()
-                persons.append(person)          # щоб наступні рядки цієї особи не дублювали
-                counts["persons_created"] += 1
+            if not candidates:
+                counts["skipped"] += 1
+                errors.append(f"«{name}»: особу «{surname}» не знайдено — імпортуйте людей")
+                continue
+            person = candidates[0]
+            if person.unit_id is None:      # оновлюємо підрозділ, якщо не заданий
+                person.unit_id = unit.id
+                counts["persons_unit_set"] += 1
 
             if nom.is_serialized:
                 card = _clean(col(row, "card_number"))

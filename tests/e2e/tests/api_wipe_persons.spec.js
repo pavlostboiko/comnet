@@ -28,7 +28,9 @@ test('wipe-persons: guarded by assignments, keeps user-linked, deletes rest', as
 
   const api = await loginApi(request)
   try {
-    // Seed assignments via the 3-step import (creates «Петренко» + 2 issuances)
+    // Seed assignments via the 3-step import. «Петренко» must pre-exist now
+    // (assignments import finds people by surname, no longer creates them).
+    await api.post('/api/settings/persons', { data: { last_name: 'Петренко' } })
     await up(api, '/api/admin/v2/import/items', 'import_v2_asg_items.xlsx')
     await up(api, '/api/admin/v2/import/movements', 'import_v2_asg_mv.xlsx')
     await up(api, '/api/admin/v2/import/assignments', 'import_v2_asg_items.xlsx')
@@ -49,7 +51,9 @@ test('wipe-persons: guarded by assignments, keeps user-linked, deletes rest', as
     } }).then(r => expect(r.ok()).toBe(true))
     const drop = await api.post('/api/settings/persons', { data: { last_name: 'ВидалитиPlain' } }).then(r => r.json())
     const mvoP = await api.post('/api/settings/persons', { data: { last_name: 'МвоЗберегти' } }).then(r => r.json())
-    const mvoRow = await api.post('/api/structure/mvo', { data: { kind: 'fin', person_id: mvoP.id, from_date: '2026-01-01' } }).then(r => r.json())
+    const mvoU = await api.post('/api/structure/units', { data: { name: `MvoU-${Date.now()}` } }).then(r => r.json())
+    const mvoWh = (await api.get('/api/structure/warehouses').then(r => r.json())).find(w => w.unit_id === mvoU.id)
+    const mvoRow = await api.post('/api/structure/mvo', { data: { warehouse_id: mvoWh.id, person_id: mvoP.id, from_date: '2026-01-01' } }).then(r => r.json())
 
     // Wipe persons
     const resp = await api.post('/api/admin/v2/wipe-persons')

@@ -31,17 +31,23 @@ test('import assignments from Items «Де [Прізвище]» after items+move
     const whs = await api.get('/api/structure/warehouses').then(r => r.json())
     const rotaWh = whs.find(w => w.unit_id === rota.id)
 
-    // 3. issuance from the SAME items file — «Петренко» is NOT pre-created;
-    // the import must create the person (find-or-create) and issue to them.
+    // «Петренко» pre-exists WITHOUT a unit (people are imported separately now)
+    const petr = await api.post('/api/settings/persons', { data: { last_name: 'Петренко' } }).then(r => r.json())
+    expect(petr.unit_id ?? null).toBeNull()
+
+    // 3. issuance from the SAME items file — finds Петренко by surname and sets unit
     const res = await up(api, '/api/admin/v2/import/assignments', 'import_v2_asg_items.xlsx')
     expect(res.status()).toBe(200)
     const body = await res.json()
     expect(body.assignments).toBe(2)          // serial + non-serial
     expect(body.rows).toBe(2)
-    expect(body.persons_created).toBe(1)      // one «Петренко» created, reused for both rows
+    expect(body.persons_unit_set).toBe(1)     // Петренко got the unit set once
 
     const persons = await api.get('/api/settings/persons').then(r => r.json())
-    expect(persons.some(p => p.last_name === 'Петренко' && p.unit_id === rota.id)).toBe(true)
+    const p = persons.find(x => x.id === petr.id)
+    expect(p.unit_id).toBe(rota.id)           // existing person, unit filled in
+    // no duplicate Петренко created
+    expect(persons.filter(x => x.last_name === 'Петренко').length).toBe(1)
 
     const asg = await api.get(`/api/assignments?warehouse_id=${rotaWh.id}`).then(r => r.json())
     expect(asg).toHaveLength(2)
