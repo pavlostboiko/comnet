@@ -5,59 +5,16 @@ service, sender/receiver/fin persons, unit_settings) into the doc's
 `extra_data` JSON. The export reads ONLY these snap fields so a signed doc
 stays immune to later directory edits (TZ §1, §8.4).
 """
-from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
 from app.models import Document, OpType, Person, Service, UnitSettings
+from app.nakladna_common import (
+    SNAP_KEYS, calc_validity, parse_date, person_full_name,
+)
 from app.uk_num2words import amount_to_words_uk, qty_to_words_uk
-
-
-# Every snap-text key that lives in `documents.extra_data` JSON.
-SNAP_KEYS = [
-    "snap_unit_name", "snap_edrpou", "composed_location",
-    "snap_op_type_name", "snap_service_name",
-    "snap_service_chief_post", "snap_service_chief_name",
-    "snap_sender_subdiv", "snap_sender_post", "snap_sender_name",
-    "snap_recv_subdiv", "snap_recv_rank", "snap_recv_name", "snap_recv_post",
-    "snap_fin_post", "snap_fin_name",
-    "validity_date", "total_qty_words", "total_amount_words",
-]
-
-UK_MONTHS = ["січня", "лютого", "березня", "квітня", "травня", "червня",
-             "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"]
-
-
-# ── Date / name helpers ───────────────────────────────────────────────────
-
-def person_full_name(p: Person) -> str:
-    """«Ім'я ПРІЗВИЩЕ» — first_name + last_name.upper()"""
-    return " ".join(filter(None, [
-        (p.first_name or "").strip(),
-        (p.last_name or "").strip().upper(),
-    ]))
-
-
-def parse_date(s: Optional[str]):
-    if not s:
-        return None
-    for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y"):
-        try:
-            return datetime.strptime(s, fmt)
-        except ValueError:
-            continue
-    return None
-
-
-def calc_validity(doc_date: Optional[str]) -> str:
-    """`doc_date + 3 days` formatted as `"DD" місяця YYYY року`."""
-    dt = parse_date(doc_date)
-    if not dt:
-        return ""
-    valid = dt + timedelta(days=3)
-    return f'"{valid.day:02d}" {UK_MONTHS[valid.month - 1]} {valid.year} року'
 
 
 # ── Auto-numbering ───────────────────────────────────────────────────────
