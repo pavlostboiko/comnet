@@ -102,14 +102,20 @@ def wipe_persons_v2(db: Session = Depends(get_db), _: User = Depends(require_adm
     if db.query(Assignment).count() > 0:
         raise HTTPException(
             400, "Спершу очистіть інвентар — у осіб є видачі (assignments)")
-    linked_ids = [pid for (pid,) in
-                  db.query(User.person_id).filter(User.person_id.isnot(None)).all()]
+    # Зберігаємо осіб, прив'язаних до логіну (МВО-scope) І осіб у журналі МВО
+    # (інакше каскад знесе журнал і його довелось би вносити заново).
+    linked_ids = {pid for (pid,) in
+                  db.query(User.person_id).filter(User.person_id.isnot(None)).all()}
+    mvo_ids = {pid for (pid,) in
+               db.query(Mvo.person_id).filter(Mvo.person_id.isnot(None)).distinct()}
+    keep = linked_ids | mvo_ids
     q = db.query(Person)
-    if linked_ids:
-        q = q.filter(~Person.id.in_(linked_ids))
+    if keep:
+        q = q.filter(~Person.id.in_(keep))
     deleted = q.delete(synchronize_session=False)
     db.commit()
-    return {"deleted_persons": deleted, "kept_linked_to_users": len(linked_ids)}
+    return {"deleted_persons": deleted, "kept_linked_to_users": len(linked_ids),
+            "kept_mvo": len(mvo_ids)}
 
 
 PERSON_COLS = {

@@ -106,6 +106,8 @@ class MvoCreate(BaseModel):
 
 
 class MvoUpdate(BaseModel):
+    person_id: Optional[int] = None
+    from_date: Optional[str] = None
     to_date: Optional[str] = None
 
 
