@@ -1,15 +1,14 @@
 """Build the Додаток 25 XLSX for a v2 `custody_documents` document.
 
-Reuses the v1 renderer `document_export.build_xlsx` (which reads only snap fields
-+ a list of position dicts). Positions are assembled here from the document's
-linked `custody_movements` + their `nomenclature`.
+Reuses the shared renderer `nakladna_common.build_xlsx` (which reads only snap
+fields + a list of position dicts). Positions are assembled here from the
+document's linked `custody_movements` + their `nomenclature`.
 """
 from typing import List
 
 from sqlalchemy.orm import Session
 
-from app.document_export import build_xlsx
-from app.document_snapshot import SNAP_KEYS
+from app.nakladna_common import build_xlsx, SNAP_KEYS
 from app.models import CustodyDocument, Instance, Nomenclature
 
 __all__ = ["build_xlsx_v2", "has_snap", "document_lines"]

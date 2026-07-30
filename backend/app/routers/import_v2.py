@@ -25,7 +25,7 @@ from app.models import (
     Assignment, CustodyDocument, CustodyMovement, Instance, Mvo, Nomenclature,
     Person, Service, Unit, User, Warehouse,
 )
-from app.routers.admin import (
+from app.import_helpers import (
     _build_person_lookup, _clean, _normalize_serial, _parse_decimal, _parse_date,
     _resolve_person,
 )

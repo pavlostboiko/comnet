@@ -1,9 +1,9 @@
 """v2 snapshot + auto-numbering for `custody_documents` (Дод.25).
 
-Adapts the v1 `document_snapshot` logic to v2 entities: «звідки/куди» come from
+Adapts the shared snapshot logic to v2 entities: «звідки/куди» come from
 `warehouses` (or `counterparty` for external receipt), positions come from the
 linked `custody_movements` + `nomenclature`. Reuses the shared date/name helpers
-and snap-key set from `document_snapshot`.
+and snap-key set from `nakladna_common`.
 
 `snap_*` values are read at export time; a signed doc's snap is frozen so the
 printed form is immune to later directory edits.
@@ -14,7 +14,7 @@ from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-from app.document_snapshot import (
+from app.nakladna_common import (
     SNAP_KEYS, calc_validity, parse_date, person_full_name,
 )
 from app.models import (
