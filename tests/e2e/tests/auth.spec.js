@@ -11,6 +11,6 @@ test('login and logout', async ({ page }) => {
 })
 
 test('redirect to login when not authenticated', async ({ page }) => {
-  await page.goto(`${URL}/items`)
+  await page.goto(`${URL}/catalog`)
   await expect(page).toHaveURL(/\/login/)
 })

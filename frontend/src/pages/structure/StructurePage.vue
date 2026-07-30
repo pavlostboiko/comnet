@@ -9,7 +9,7 @@
             <button v-for="t in tabs" :key="t.key" class="tt-btn"
               :class="{ on: tab === t.key }" @click="tab = t.key">{{ t.label }}</button>
           </div>
-          <button class="btn-add" @click="openAdd">+ Додати</button>
+          <button v-if="tab !== 'requisites'" class="btn-add" @click="openAdd">+ Додати</button>
         </div>
 
         <!-- ═══ Служби ═══ -->
@@ -141,6 +141,44 @@
             </tbody>
           </table>
         </div>
+
+        <!-- ═══ Типи операцій ═══ -->
+        <div v-if="tab === 'optypes'" class="table-wrap">
+          <table>
+            <thead><tr><th>Назва</th><th class="col-code">Префікс №</th><th class="col-acts2"></th></tr></thead>
+            <tbody>
+              <tr v-if="!opTypes.length"><td colspan="3" class="empty">Немає типів операцій</td></tr>
+              <tr v-for="ot in opTypes" :key="ot.id">
+                <td class="td-name">{{ ot.name }}</td>
+                <td class="td-mono td-dim">{{ ot.number_prefix || '—' }}</td>
+                <td class="td-acts2">
+                  <button class="act-e" @click="openEditOpType(ot)" title="Редагувати">✎</button>
+                  <button class="act-del" @click="del('optype', ot)">✕</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ═══ Реквізити частини ═══ -->
+        <div v-if="tab === 'requisites'" class="req-wrap">
+          <div class="hint">Реквізити частини — друкуються в шапці накладної (Дод.25).</div>
+          <div class="req-form">
+            <label class="fl">Найменування <small>повне офіційне</small></label>
+            <input class="fi" v-model="unitSettings.name" placeholder="Назва підрозділу" />
+            <label class="fl">Скорочене найменування</label>
+            <input class="fi" v-model="unitSettings.short_name" placeholder="Скорочена назва" />
+            <label class="fl">Код ЄДРПОУ</label>
+            <input class="fi td-mono" v-model="unitSettings.edrpou" placeholder="12345678" />
+            <label class="fl">Місце дислокації</label>
+            <input class="fi" v-model="unitSettings.location" placeholder="м. Київ" />
+            <div v-if="reqError" class="err">{{ reqError }}</div>
+            <div class="req-foot">
+              <span v-if="reqSaved" class="req-ok">Збережено</span>
+              <button class="btn-pri" :disabled="saving" @click="saveRequisites">Зберегти</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -148,7 +186,7 @@
     <div class="overlay" :class="{ open: addOpen }" @click.self="addOpen = false">
       <div v-if="addOpen" class="modal">
         <div class="modal-head">
-          <span class="modal-title">{{ editPersonId ? 'Редагувати особу' : 'Додати: ' + currentTab.label }}</span>
+          <span class="modal-title">{{ modalTitle }}</span>
           <button class="modal-close" @click="addOpen = false">✕</button>
         </div>
         <div class="modal-body">
@@ -195,6 +233,11 @@
             </div>
             <label class="fl">Діє з *</label><input class="fi" type="date" v-model="form.from_date" />
             <label class="fl">Діє по</label><input class="fi" type="date" v-model="form.to_date" />
+          </template>
+          <template v-else-if="tab === 'optypes'">
+            <label class="fl">Назва *</label><input class="fi" v-model="form.name" />
+            <label class="fl">Префікс номера <small>напр. НК-2026-</small></label>
+            <input class="fi" v-model="form.number_prefix" placeholder="НК-2026-" />
           </template>
           <template v-else-if="tab === 'groups'">
             <label class="fl">Назва *</label><input class="fi" v-model="form.name" />
@@ -243,7 +286,12 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import ItemAutocomplete from '../../components/ItemAutocomplete.vue'
-import { getServices, createService, deleteService, getPersons, createPerson, updatePerson, deletePerson } from '../../api/settings.js'
+import {
+  getServices, createService, deleteService,
+  getPersons, createPerson, updatePerson, deletePerson,
+  getUnit as getUnitSettings, updateUnit as updateUnitSettings,
+  getOpTypes, createOpType, updateOpType, deleteOpType,
+} from '../../api/settings.js'
 import {
   getUnits, createUnit, updateUnit, deleteUnit, getWarehouses, renameWarehouse,
   getGroups, createGroup, deleteGroup,
@@ -260,6 +308,8 @@ const tabs = [
   { key: 'mvo', label: 'МВО' },
   { key: 'groups', label: 'Групи' },
   { key: 'persons', label: 'Особи' },
+  { key: 'optypes', label: 'Типи операцій' },
+  { key: 'requisites', label: 'Реквізити' },
 ]
 const tab = ref('services')
 const currentTab = computed(() => tabs.find(t => t.key === tab.value))
@@ -271,6 +321,8 @@ const warehouses = ref([])
 const mvo = ref([])
 const groups = ref([])
 const persons = ref([])
+const opTypes = ref([])
+const unitSettings = reactive({ name: '', short_name: '', edrpou: '', location: '' })
 
 const unitWarehouses = computed(() => warehouses.value.filter(w => w.type === 'unit'))
 // МВО можна призначати на склад служби + ВНУТРІШНЬОГО підрозділу (без зовнішніх).
@@ -295,9 +347,9 @@ const personOptions = computed(() => [...persons.value]
 const groupName = (id) => groups.value.find(g => g.id === id)?.name || '—'
 
 async function loadAll() {
-  const [s, u, n, w, m, g, p] = await Promise.all([
+  const [s, u, n, w, m, g, p, ot, us] = await Promise.all([
     getServices(), getUnits(), getNomenclature(), getWarehouses(),
-    getMvo(), getGroups(), getPersons(),
+    getMvo(), getGroups(), getPersons(), getOpTypes(), getUnitSettings(),
   ])
   services.value = s.data
   units.value = u.data
@@ -306,6 +358,11 @@ async function loadAll() {
   mvo.value = m.data
   groups.value = g.data
   persons.value = p.data
+  opTypes.value = ot.data
+  Object.assign(unitSettings, {
+    name: us.data.name || '', short_name: us.data.short_name || '',
+    edrpou: us.data.edrpou || '', location: us.data.location || '',
+  })
 }
 onMounted(loadAll)
 
@@ -317,22 +374,66 @@ const form = reactive({})
 const editPersonId = ref(null)
 const editUnitId = ref(null)
 const editMvoId = ref(null)
-function openAdd() {
-  error.value = ''
+const editOpTypeId = ref(null)
+const reqError = ref('')
+const reqSaved = ref(false)
+
+const modalTitle = computed(() => {
+  if (editPersonId.value) return 'Редагувати особу'
+  if (editUnitId.value) return 'Редагувати підрозділ'
+  if (editMvoId.value) return 'Редагувати МВО'
+  if (editOpTypeId.value) return 'Редагувати тип операції'
+  return 'Додати: ' + currentTab.value.label
+})
+
+function resetEditIds() {
   editPersonId.value = null
   editUnitId.value = null
   editMvoId.value = null
+  editOpTypeId.value = null
+}
+
+function openAdd() {
+  error.value = ''
+  resetEditIds()
   Object.keys(form).forEach(k => delete form[k])
   if (tab.value === 'nomenclature') { form.service_id = null; form.is_serialized = false }
   else if (tab.value === 'mvo') { form.mvo_kind = 'warehouse'; form.warehouse_id = null; form.person_id = null; form.from_date = new Date().toISOString().slice(0, 10) }
   else if (tab.value === 'groups') { form.unit_id = null; form.commander_id = null }
   else if (tab.value === 'persons') { form.unit_id = null; form.group_id = null }
   else if (tab.value === 'units') { form.is_external = false }
+  else if (tab.value === 'optypes') { form.name = ''; form.number_prefix = '' }
   addOpen.value = true
+}
+
+function openEditOpType(ot) {
+  error.value = ''
+  resetEditIds()
+  editOpTypeId.value = ot.id
+  Object.keys(form).forEach(k => delete form[k])
+  Object.assign(form, { name: ot.name, number_prefix: ot.number_prefix || '' })
+  addOpen.value = true
+}
+
+async function saveRequisites() {
+  saving.value = true
+  reqError.value = ''
+  reqSaved.value = false
+  try {
+    await updateUnitSettings({
+      name: unitSettings.name || null, short_name: unitSettings.short_name || null,
+      edrpou: unitSettings.edrpou || null, location: unitSettings.location || null,
+    })
+    reqSaved.value = true
+  } catch (e) {
+    reqError.value = e?.response?.data?.detail || 'Помилка збереження'
+  } finally {
+    saving.value = false
+  }
 }
 function openEditPerson(p) {
   error.value = ''
-  editUnitId.value = null; editMvoId.value = null
+  resetEditIds()
   editPersonId.value = p.id
   Object.keys(form).forEach(k => delete form[k])
   Object.assign(form, {
@@ -344,7 +445,8 @@ function openEditPerson(p) {
 }
 function openEditMvo(m) {
   error.value = ''
-  editPersonId.value = null; editUnitId.value = null; editMvoId.value = m.id
+  resetEditIds()
+  editMvoId.value = m.id
   Object.keys(form).forEach(k => delete form[k])
   Object.assign(form, {
     mvo_kind: m.kind || 'warehouse', warehouse_id: m.warehouse_id || null,
@@ -359,7 +461,8 @@ async function delMvo(m) {
 }
 function openEditUnit(u) {
   error.value = ''
-  editPersonId.value = null; editUnitId.value = u.id; editMvoId.value = null
+  resetEditIds()
+  editUnitId.value = u.id
   Object.keys(form).forEach(k => delete form[k])
   Object.assign(form, {
     name: u.name, code: u.code || '', name_locative: u.name_locative || '',
@@ -395,6 +498,12 @@ async function save() {
           warehouse_id: isFin ? null : form.warehouse_id, person_id: form.person_id, from_date: form.from_date })
       }
     }
+    else if (tab.value === 'optypes') {
+      if (!form.name) { error.value = 'Вкажіть назву'; saving.value = false; return }
+      const body = { name: form.name, number_prefix: form.number_prefix || null }
+      if (editOpTypeId.value) await updateOpType(editOpTypeId.value, body)
+      else await createOpType(body)
+    }
     else if (tab.value === 'groups') {
       if (!form.unit_id) { error.value = 'Оберіть підрозділ'; saving.value = false; return }
       await createGroup({ name: form.name, unit_id: form.unit_id, commander_id: form.commander_id || null })
@@ -428,6 +537,7 @@ async function del(kind, row) {
     else if (kind === 'nomenclature') await deleteNomenclature(row.id)
     else if (kind === 'group') await deleteGroup(row.id)
     else if (kind === 'person') await deletePerson(row.id)
+    else if (kind === 'optype') await deleteOpType(row.id)
     await loadAll()
   } catch (e) {
     alert(e?.response?.data?.detail || 'Не вдалось видалити')
@@ -473,6 +583,11 @@ async function rotate(m) {
 
 .table-wrap { overflow-x:auto; }
 .hint { padding:10px 20px; font-size:12.5px; color:var(--text-light); font-style:italic; }
+.req-wrap { padding-bottom:8px; }
+.req-form { display:flex; flex-direction:column; gap:4px; max-width:520px; padding:4px 20px 16px; }
+.req-form .fl small { font-weight:400; color:var(--text-light); margin-left:6px; }
+.req-foot { display:flex; align-items:center; justify-content:flex-end; gap:12px; margin-top:16px; }
+.req-ok { font-size:12.5px; color:#166534; font-weight:600; }
 table { width:100%; border-collapse:collapse; table-layout:fixed; }
 th, td { padding:9px 14px; text-align:left; font-size:13px; border-bottom:1px solid var(--border-light); }
 th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; }
