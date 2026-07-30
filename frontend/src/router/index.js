@@ -12,39 +12,9 @@ const routes = [
     component: () => import('../pages/auth/LoginPage.vue'),
   },
   {
-    path: '/items',
-    component: () => import('../pages/items/ItemsPage.vue'),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: '/movements',
-    component: () => import('../pages/movements/MovementsPage.vue'),
-    meta: { requiresAuth: true },
-  },
-  {
-    path: '/residues',
-    component: () => import('../pages/residues/ResiduesPage.vue'),
-    meta: { requiresAuth: true, label: 'Залишки' },
-  },
-  {
     path: '/reports',
     component: () => import('../pages/reports/ReportsPage.vue'),
     meta: { requiresAuth: true, label: 'Звіти', adminOnly: true },
-  },
-  {
-    path: '/documents',
-    component: () => import('../pages/documents/DocumentsPage.vue'),
-    meta: { requiresAuth: true, adminOnly: true },
-  },
-  {
-    path: '/documents/:id',
-    component: () => import('../pages/documents/DocumentFormPage.vue'),
-    meta: { requiresAuth: true, adminOnly: true },
-  },
-  {
-    path: '/settings',
-    component: () => import('../pages/settings/SettingsPage.vue'),
-    meta: { requiresAuth: true, adminOnly: true },
   },
   {
     path: '/structure',
