@@ -153,6 +153,8 @@ def _mvo_dict(m: Mvo) -> dict:
         "kind": m.kind,
         "warehouse_id": m.warehouse_id,
         "person_id": m.person_id,
+        "position": m.position,
+        "rank": m.rank,
         "from_date": m.from_date.isoformat() if m.from_date else None,
         "to_date": m.to_date.isoformat() if m.to_date else None,
     }
@@ -200,6 +202,7 @@ def create_mvo(payload: MvoCreate, db: Session = Depends(get_db), _: User = Depe
             raise HTTPException(409, "Уже є діючий МВО фінслужби" if kind == "fin"
                                      else "Уже є діючий МВО на цьому складі")
     row = Mvo(kind=kind, warehouse_id=wh_id, person_id=payload.person_id,
+              position=payload.position, rank=payload.rank,
               from_date=from_date, to_date=to_date)
     db.add(row)
     db.commit()
@@ -217,6 +220,10 @@ def update_mvo(mvo_id: int, payload: MvoUpdate, db: Session = Depends(get_db), _
         if not db.get(Person, payload.person_id):
             raise HTTPException(400, "Особу не знайдено")
         row.person_id = payload.person_id
+    if payload.position is not None:
+        row.position = payload.position or None
+    if payload.rank is not None:
+        row.rank = payload.rank or None
     if payload.from_date is not None:
         row.from_date = date.fromisoformat(payload.from_date)
     if payload.to_date is not None:

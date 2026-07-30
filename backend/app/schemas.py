@@ -92,6 +92,8 @@ class MvoRead(BaseModel):
     kind: str = "warehouse"
     warehouse_id: Optional[int] = None
     person_id: int
+    position: Optional[str] = None
+    rank: Optional[str] = None
     from_date: str
     to_date: Optional[str] = None
     model_config = {"from_attributes": True}
@@ -101,12 +103,16 @@ class MvoCreate(BaseModel):
     kind: str = "warehouse"                 # warehouse | fin
     warehouse_id: Optional[int] = None      # обов'язковий для kind=warehouse
     person_id: int
+    position: Optional[str] = None
+    rank: Optional[str] = None
     from_date: str
     to_date: Optional[str] = None
 
 
 class MvoUpdate(BaseModel):
     person_id: Optional[int] = None
+    position: Optional[str] = None
+    rank: Optional[str] = None
     from_date: Optional[str] = None
     to_date: Optional[str] = None
 
@@ -380,10 +386,6 @@ class OpTypeUpdate(BaseModel):
 
 class PersonRead(BaseModel):
     id: int
-    position: Optional[str] = None
-    position_genitive: Optional[str] = None
-    rank: Optional[str] = None
-    rank_genitive: Optional[str] = None
     last_name: Optional[str] = None
     last_name_genitive: Optional[str] = None
     first_name: Optional[str] = None
@@ -404,10 +406,6 @@ class PersonRead(BaseModel):
 
 
 class PersonCreate(BaseModel):
-    position: Optional[str] = None
-    position_genitive: Optional[str] = None
-    rank: Optional[str] = None
-    rank_genitive: Optional[str] = None
     last_name: Optional[str] = None
     last_name_genitive: Optional[str] = None
     first_name: Optional[str] = None
@@ -426,10 +424,6 @@ class PersonCreate(BaseModel):
 
 
 class PersonUpdate(BaseModel):
-    position: Optional[str] = None
-    position_genitive: Optional[str] = None
-    rank: Optional[str] = None
-    rank_genitive: Optional[str] = None
     last_name: Optional[str] = None
     last_name_genitive: Optional[str] = None
     first_name: Optional[str] = None

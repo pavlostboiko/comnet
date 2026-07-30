@@ -18,14 +18,15 @@ from app.nakladna_common import (
     SNAP_KEYS, calc_validity, parse_date, person_full_name,
 )
 from app.models import (
-    CustodyDocument, CustodyMovement, Mvo, Nomenclature, OpType, Person, Service,
+    CustodyDocument, CustodyMovement, Mvo, Nomenclature, OpType, Service,
     UnitSettings, Warehouse,
 )
 
 
-def mvo_person_at(db: Session, on_date, warehouse_id=None, fin: bool = False):
-    """Хто був МВО на дату `on_date`: для складу (warehouse_id) або глобальна
-    фінслужба (fin=True). Повертає Person або None. Історичний журнал → стабільно."""
+def mvo_at(db: Session, on_date, warehouse_id=None, fin: bool = False):
+    """Запис журналу МВО, діючий на дату `on_date`: для складу (warehouse_id) або
+    глобальна фінслужба (fin=True). Повертає Mvo (з `.person`, `.position`,
+    `.rank`) або None. Історичний журнал → стабільно."""
     if on_date is None:
         return None
     q = db.query(Mvo).filter(
@@ -38,8 +39,7 @@ def mvo_person_at(db: Session, on_date, warehouse_id=None, fin: bool = False):
         if warehouse_id is None:
             return None
         q = q.filter(Mvo.kind == "warehouse", Mvo.warehouse_id == warehouse_id)
-    m = q.order_by(Mvo.from_date.desc(), Mvo.id.desc()).first()
-    return db.get(Person, m.person_id) if m else None
+    return q.order_by(Mvo.from_date.desc(), Mvo.id.desc()).first()
 from app.uk_num2words import amount_to_words_uk, qty_to_words_uk
 
 
@@ -175,10 +175,10 @@ def snap_nakladna(doc: CustodyDocument, db: Session) -> None:
     # Прийняв = МВО to-складу, Фін = глобальна фінслужба). Приймання ззовні:
     # from-складу немає → Здав без особи (лишається контрагент у subdiv).
     doc_date = parse_date(doc.doc_date)
-    sender = mvo_person_at(db, doc_date, warehouse_id=doc.from_warehouse_id)
+    sender = mvo_at(db, doc_date, warehouse_id=doc.from_warehouse_id)
     if sender:
         extra["snap_sender_post"] = sender.position or ""
-        extra["snap_sender_name"] = person_full_name(sender)
+        extra["snap_sender_name"] = person_full_name(sender.person)
     else:
         extra["snap_sender_post"] = ""
         extra["snap_sender_name"] = ""
@@ -190,16 +190,16 @@ def snap_nakladna(doc: CustodyDocument, db: Session) -> None:
         to_label = wh.name if wh else ""
     doc.to_unit = to_label
     extra["snap_recv_subdiv"] = to_label
-    receiver = mvo_person_at(db, doc_date, warehouse_id=doc.to_warehouse_id)
+    receiver = mvo_at(db, doc_date, warehouse_id=doc.to_warehouse_id)
     if receiver:
         extra["snap_recv_rank"] = receiver.rank or ""
-        extra["snap_recv_name"] = person_full_name(receiver)
+        extra["snap_recv_name"] = person_full_name(receiver.person)
         extra["snap_recv_post"] = receiver.position or ""
 
-    fin = mvo_person_at(db, doc_date, fin=True)
+    fin = mvo_at(db, doc_date, fin=True)
     if fin:
         extra["snap_fin_post"] = fin.position or ""
-        extra["snap_fin_name"] = person_full_name(fin)
+        extra["snap_fin_name"] = person_full_name(fin.person)
 
     extra["validity_date"] = calc_validity(doc.doc_date)
 

@@ -88,11 +88,12 @@
         <!-- ═══ МВО ═══ -->
         <div v-if="tab === 'mvo'" class="table-wrap">
           <table>
-            <thead><tr><th>Особа</th><th>Склад</th><th class="col-date">З</th><th class="col-date">По</th><th class="col-acts"></th></tr></thead>
+            <thead><tr><th>Особа</th><th>Посада / звання</th><th>Склад</th><th class="col-date">З</th><th class="col-date">По</th><th class="col-acts"></th></tr></thead>
             <tbody>
-              <tr v-if="!mvo.length"><td colspan="5" class="empty">Немає призначень</td></tr>
+              <tr v-if="!mvo.length"><td colspan="6" class="empty">Немає призначень</td></tr>
               <tr v-for="m in mvo" :key="m.id" :class="{ 'row-dim': m.to_date }">
                 <td class="td-name">{{ personName(m.person_id) }}</td>
+                <td class="td-dim">{{ [m.rank, m.position].filter(Boolean).join(', ') || '—' }}</td>
                 <td class="td-dim">{{ m.kind === 'fin' ? 'Фінслужба (загальна)' : warehouseName(m.warehouse_id) }}</td>
                 <td class="td-mono">{{ m.from_date }}</td>
                 <td class="td-mono">{{ m.to_date || '—' }}</td>
@@ -231,6 +232,8 @@
                 :model-value="form.person_id ? personName(form.person_id) : ''"
                 @select="e => form.person_id = e.id" />
             </div>
+            <label class="fl">Посада</label><input class="fi" v-model="form.position" placeholder="для підпису накладних" />
+            <label class="fl">Звання</label><input class="fi" v-model="form.rank" />
             <label class="fl">Діє з *</label><input class="fi" type="date" v-model="form.from_date" />
             <label class="fl">Діє по</label><input class="fi" type="date" v-model="form.to_date" />
           </template>
@@ -258,8 +261,6 @@
             <label class="fl">По батькові</label><input class="fi" v-model="form.patronymic" />
             <label class="fl">ІПН</label><input class="fi" v-model="form.ipn" />
             <label class="fl">Позивний</label><input class="fi" v-model="form.callsign" />
-            <label class="fl">Посада</label><input class="fi" v-model="form.position" placeholder="для підпису накладних" />
-            <label class="fl">Звання</label><input class="fi" v-model="form.rank" />
             <label class="fl">Підрозділ</label>
             <select class="fi" v-model="form.unit_id">
               <option :value="null">— не вказано —</option>
@@ -398,7 +399,7 @@ function openAdd() {
   resetEditIds()
   Object.keys(form).forEach(k => delete form[k])
   if (tab.value === 'nomenclature') { form.service_id = null; form.is_serialized = false }
-  else if (tab.value === 'mvo') { form.mvo_kind = 'warehouse'; form.warehouse_id = null; form.person_id = null; form.from_date = new Date().toISOString().slice(0, 10) }
+  else if (tab.value === 'mvo') { form.mvo_kind = 'warehouse'; form.warehouse_id = null; form.person_id = null; form.position = ''; form.rank = ''; form.from_date = new Date().toISOString().slice(0, 10) }
   else if (tab.value === 'groups') { form.unit_id = null; form.commander_id = null }
   else if (tab.value === 'persons') { form.unit_id = null; form.group_id = null }
   else if (tab.value === 'units') { form.is_external = false }
@@ -438,7 +439,7 @@ function openEditPerson(p) {
   Object.keys(form).forEach(k => delete form[k])
   Object.assign(form, {
     last_name: p.last_name, first_name: p.first_name, patronymic: p.patronymic,
-    ipn: p.ipn, callsign: p.callsign, rank: p.rank, position: p.position,
+    ipn: p.ipn, callsign: p.callsign,
     unit_id: p.unit_id || null, group_id: p.group_id || null,
   })
   addOpen.value = true
@@ -450,7 +451,8 @@ function openEditMvo(m) {
   Object.keys(form).forEach(k => delete form[k])
   Object.assign(form, {
     mvo_kind: m.kind || 'warehouse', warehouse_id: m.warehouse_id || null,
-    person_id: m.person_id, from_date: m.from_date, to_date: m.to_date || '',
+    person_id: m.person_id, position: m.position || '', rank: m.rank || '',
+    from_date: m.from_date, to_date: m.to_date || '',
   })
   addOpen.value = true
 }
@@ -492,10 +494,13 @@ async function save() {
       const isFin = form.mvo_kind === 'fin'
       if (!form.person_id || (!isFin && !form.warehouse_id)) { error.value = 'Оберіть склад і особу'; saving.value = false; return }
       if (editMvoId.value) {
-        await updateMvo(editMvoId.value, { person_id: form.person_id, from_date: form.from_date, to_date: form.to_date || null })
+        await updateMvo(editMvoId.value, { person_id: form.person_id,
+          position: form.position || null, rank: form.rank || null,
+          from_date: form.from_date, to_date: form.to_date || null })
       } else {
         await createMvo({ kind: form.mvo_kind || 'warehouse',
-          warehouse_id: isFin ? null : form.warehouse_id, person_id: form.person_id, from_date: form.from_date })
+          warehouse_id: isFin ? null : form.warehouse_id, person_id: form.person_id,
+          position: form.position || null, rank: form.rank || null, from_date: form.from_date })
       }
     }
     else if (tab.value === 'optypes') {
@@ -512,8 +517,7 @@ async function save() {
       const body = {
         last_name: form.last_name || null, first_name: form.first_name || null,
         patronymic: form.patronymic || null, ipn: form.ipn || null,
-        callsign: form.callsign || null, rank: form.rank || null,
-        position: form.position || null,
+        callsign: form.callsign || null,
         unit_id: form.unit_id || null, group_id: form.group_id || null,
       }
       if (editPersonId.value) await updatePerson(editPersonId.value, body)

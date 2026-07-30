@@ -20,15 +20,16 @@ test('signed document snapshots signatories from the МВО journal by date', as
       return wh
     }
     const whA = await mkUnit('A'), whB = await mkUnit('B')
-    const mkPerson = (ln) => api.post('/api/settings/persons', { data: { last_name: ln, first_name: 'Ів', position: `посада ${ln}` } }).then(r => r.json())
+    const mkPerson = (ln) => api.post('/api/settings/persons', { data: { last_name: ln, first_name: 'Ів' } }).then(r => r.json())
     const pA = await mkPerson(`Здавач${S}`)
     const pB = await mkPerson(`Приймач${S}`)
     const pF = await mkPerson(`Фінансист${S}`)
 
-    // МВО journal: A→whA, B→whB, F→global fin, all active from before doc_date
-    await api.post('/api/structure/mvo', { data: { warehouse_id: whA.id, person_id: pA.id, from_date: '2026-01-01' } })
-    await api.post('/api/structure/mvo', { data: { warehouse_id: whB.id, person_id: pB.id, from_date: '2026-01-01' } })
-    await api.post('/api/structure/mvo', { data: { kind: 'fin', person_id: pF.id, from_date: '2026-01-01' } })
+    // МВО journal: A→whA, B→whB, F→global fin, all active from before doc_date.
+    // Посада/звання живуть на записі МВО (не на особі) → мають потрапити у snap.
+    await api.post('/api/structure/mvo', { data: { warehouse_id: whA.id, person_id: pA.id, position: `посада ${S}A`, from_date: '2026-01-01' } })
+    await api.post('/api/structure/mvo', { data: { warehouse_id: whB.id, person_id: pB.id, position: `посада ${S}B`, rank: `звання ${S}B`, from_date: '2026-01-01' } })
+    await api.post('/api/structure/mvo', { data: { kind: 'fin', person_id: pF.id, position: `посада ${S}F`, from_date: '2026-01-01' } })
 
     // Stock at A, transfer A→B (undocumented)
     await api.post('/api/custody/movements', { data: {
@@ -45,6 +46,11 @@ test('signed document snapshots signatories from the МВО journal by date', as
     expect(snap.snap_sender_name).toContain(`Здавач${S}`.toUpperCase())
     expect(snap.snap_recv_name).toContain(`Приймач${S}`.toUpperCase())
     expect(snap.snap_fin_name).toContain(`Фінансист${S}`.toUpperCase())
+    // Посада/звання snapped from the МВО journal entry (task 8)
+    expect(snap.snap_sender_post).toBe(`посада ${S}A`)
+    expect(snap.snap_recv_post).toBe(`посада ${S}B`)
+    expect(snap.snap_recv_rank).toBe(`звання ${S}B`)
+    expect(snap.snap_fin_post).toBe(`посада ${S}F`)
     // FK fields are gone
     expect(signed.sender_id).toBeUndefined()
   } finally {
