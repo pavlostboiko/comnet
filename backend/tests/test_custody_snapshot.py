@@ -4,7 +4,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("SECRET_KEY", "test-only")
 
 from app.custody_snapshot import _next_seq, doc_sort_key  # noqa: E402
-from app.document_snapshot import calc_validity  # noqa: E402
+from app.nakladna_common import calc_validity  # noqa: E402
 
 
 def test_next_seq_empty_starts_at_one():

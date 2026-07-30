@@ -9,19 +9,12 @@ from app.config import settings
 from app.database import SessionLocal
 from app.models import User
 from app.routers import auth as auth_router
-from app.routers import documents as documents_router
-from app.routers import items as items_router
-from app.routers import movements as movements_router
 from app.routers import settings as settings_router
-from app.routers import admin as admin_router
-from app.routers import recipients as recipients_router
-from app.routers import residues as residues_router
 from app.routers import assignments as assignments_router
 from app.routers import custody as custody_router
 from app.routers import custody_documents as custody_documents_router
 from app.routers import import_v2 as import_v2_router
 from app.routers import nomenclature as nomenclature_router
-from app.routers import splits as splits_router
 from app.routers import structure as structure_router
 from app.routers import users as users_router
 from app.routers import audit as audit_router
@@ -64,15 +57,8 @@ app.add_middleware(
 )
 
 app.include_router(auth_router.router)
-app.include_router(items_router.router)
-app.include_router(movements_router.router)
 app.include_router(settings_router.router)
-app.include_router(documents_router.router)
-app.include_router(recipients_router.router)
-app.include_router(residues_router.router)
-app.include_router(splits_router.router)
 app.include_router(users_router.router)
-app.include_router(admin_router.router)
 app.include_router(structure_router.router)
 app.include_router(nomenclature_router.router)
 app.include_router(custody_router.router)
