@@ -20,3 +20,4 @@ export const renameWarehouse = (id, name) => http.put(`/structure/warehouses/${i
 export const getMvo    = ()         => http.get('/structure/mvo')
 export const createMvo = (data)     => http.post('/structure/mvo', data)
 export const updateMvo = (id, data) => http.put(`/structure/mvo/${id}`, data)
+export const deleteMvo = (id)       => http.delete(`/structure/mvo/${id}`)

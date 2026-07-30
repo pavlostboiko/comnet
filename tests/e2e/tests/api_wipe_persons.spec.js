@@ -41,25 +41,32 @@ test('wipe-persons: guarded by assignments, keeps user-linked, deletes rest', as
     // Clear inventory → assignments gone
     expect((await api.post('/api/admin/v2/wipe')).ok()).toBe(true)
 
-    // A person linked to a user login (must survive) + a plain person (must go)
+    // A person linked to a user login (survives), a plain person (goes),
+    // and a person who is an МВО (survives so the journal doesn't cascade away).
     const keep = await api.post('/api/settings/persons', { data: { last_name: 'ЗберегтиLinked' } }).then(r => r.json())
     await api.post('/api/users', { data: {
       username: `keep-${Date.now()}`, password: 'test1234', role: 'mvo', person_id: keep.id,
     } }).then(r => expect(r.ok()).toBe(true))
     const drop = await api.post('/api/settings/persons', { data: { last_name: 'ВидалитиPlain' } }).then(r => r.json())
+    const mvoP = await api.post('/api/settings/persons', { data: { last_name: 'МвоЗберегти' } }).then(r => r.json())
+    const mvoRow = await api.post('/api/structure/mvo', { data: { kind: 'fin', person_id: mvoP.id, from_date: '2026-01-01' } }).then(r => r.json())
 
     // Wipe persons
     const resp = await api.post('/api/admin/v2/wipe-persons')
     expect(resp.ok()).toBe(true)
     const body = await resp.json()
     expect(body.deleted_persons).toBeGreaterThanOrEqual(1)
-    expect(body.kept_linked_to_users).toBeGreaterThanOrEqual(1)
+    expect(body.kept_mvo).toBeGreaterThanOrEqual(1)
 
-    // Linked person survives; plain one and the imported «Петренко» are gone
+    // Linked + МВО persons survive; plain one and imported «Петренко» are gone
     const persons = await api.get('/api/settings/persons').then(r => r.json())
     expect(persons.some(p => p.id === keep.id)).toBe(true)
+    expect(persons.some(p => p.id === mvoP.id)).toBe(true)     // МВО person kept
     expect(persons.some(p => p.id === drop.id)).toBe(false)
     expect(persons.some(p => p.last_name === 'Петренко')).toBe(false)
+    // МВО journal entry survives (person wasn't cascade-deleted)
+    const mvo = await api.get('/api/structure/mvo').then(r => r.json())
+    expect(mvo.some(m => m.id === mvoRow.id)).toBe(true)
   } finally {
     await api.dispose()
   }

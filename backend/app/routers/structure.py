@@ -209,15 +209,29 @@ def create_mvo(payload: MvoCreate, db: Session = Depends(get_db), _: User = Depe
 
 @router.put("/mvo/{mvo_id}")
 def update_mvo(mvo_id: int, payload: MvoUpdate, db: Session = Depends(get_db), _: User = Depends(require_admin)):
-    """Ротація: проставити to_date діючому запису (потім POST новий)."""
+    """Ротація (to_date) або повне редагування запису (особа + дати)."""
     row = db.get(Mvo, mvo_id)
     if not row:
         raise HTTPException(404, "Not found")
+    if payload.person_id is not None:
+        if not db.get(Person, payload.person_id):
+            raise HTTPException(400, "Особу не знайдено")
+        row.person_id = payload.person_id
+    if payload.from_date is not None:
+        row.from_date = date.fromisoformat(payload.from_date)
     if payload.to_date is not None:
-        to_date = date.fromisoformat(payload.to_date)
-        if to_date < row.from_date:
-            raise HTTPException(400, "Некоректний період")
-        row.to_date = to_date
+        row.to_date = date.fromisoformat(payload.to_date) if payload.to_date else None
+    if row.to_date and row.to_date < row.from_date:
+        raise HTTPException(400, "Некоректний період")
     db.commit()
     db.refresh(row)
     return _mvo_dict(row)
+
+
+@router.delete("/mvo/{mvo_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_mvo(mvo_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    row = db.get(Mvo, mvo_id)
+    if not row:
+        raise HTTPException(404, "Not found")
+    db.delete(row)
+    db.commit()

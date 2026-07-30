@@ -98,6 +98,8 @@
                 <td class="td-mono">{{ m.to_date || '—' }}</td>
                 <td class="td-acts">
                   <button v-if="!m.to_date" class="act-rot" @click="rotate(m)" title="Завершити (ротація)">↩</button>
+                  <button class="act-e" @click="openEditMvo(m)" title="Редагувати">✎</button>
+                  <button class="act-del" @click="delMvo(m)" title="Видалити">✕</button>
                 </td>
               </tr>
             </tbody>
@@ -192,6 +194,7 @@
                 @select="e => form.person_id = e.id" />
             </div>
             <label class="fl">Діє з *</label><input class="fi" type="date" v-model="form.from_date" />
+            <label class="fl">Діє по</label><input class="fi" type="date" v-model="form.to_date" />
           </template>
           <template v-else-if="tab === 'groups'">
             <label class="fl">Назва *</label><input class="fi" v-model="form.name" />
@@ -244,7 +247,7 @@ import { getServices, createService, deleteService, getPersons, createPerson, up
 import {
   getUnits, createUnit, updateUnit, deleteUnit, getWarehouses, renameWarehouse,
   getGroups, createGroup, deleteGroup,
-  getMvo, createMvo, updateMvo,
+  getMvo, createMvo, updateMvo, deleteMvo,
 } from '../../api/structure.js'
 import {
   getNomenclature, createNomenclature, deleteNomenclature,
@@ -313,10 +316,12 @@ const error = ref('')
 const form = reactive({})
 const editPersonId = ref(null)
 const editUnitId = ref(null)
+const editMvoId = ref(null)
 function openAdd() {
   error.value = ''
   editPersonId.value = null
   editUnitId.value = null
+  editMvoId.value = null
   Object.keys(form).forEach(k => delete form[k])
   if (tab.value === 'nomenclature') { form.service_id = null; form.is_serialized = false }
   else if (tab.value === 'mvo') { form.mvo_kind = 'warehouse'; form.warehouse_id = null; form.person_id = null; form.from_date = new Date().toISOString().slice(0, 10) }
@@ -327,7 +332,7 @@ function openAdd() {
 }
 function openEditPerson(p) {
   error.value = ''
-  editPersonId.value = null; editUnitId.value = null
+  editUnitId.value = null; editMvoId.value = null
   editPersonId.value = p.id
   Object.keys(form).forEach(k => delete form[k])
   Object.assign(form, {
@@ -337,9 +342,24 @@ function openEditPerson(p) {
   })
   addOpen.value = true
 }
+function openEditMvo(m) {
+  error.value = ''
+  editPersonId.value = null; editUnitId.value = null; editMvoId.value = m.id
+  Object.keys(form).forEach(k => delete form[k])
+  Object.assign(form, {
+    mvo_kind: m.kind || 'warehouse', warehouse_id: m.warehouse_id || null,
+    person_id: m.person_id, from_date: m.from_date, to_date: m.to_date || '',
+  })
+  addOpen.value = true
+}
+async function delMvo(m) {
+  if (!confirm('Видалити запис МВО?')) return
+  try { await deleteMvo(m.id); await loadAll() }
+  catch (e) { alert(e?.response?.data?.detail || 'Помилка') }
+}
 function openEditUnit(u) {
   error.value = ''
-  editPersonId.value = null; editUnitId.value = u.id
+  editPersonId.value = null; editUnitId.value = u.id; editMvoId.value = null
   Object.keys(form).forEach(k => delete form[k])
   Object.assign(form, {
     name: u.name, code: u.code || '', name_locative: u.name_locative || '',
@@ -368,8 +388,12 @@ async function save() {
     else if (tab.value === 'mvo') {
       const isFin = form.mvo_kind === 'fin'
       if (!form.person_id || (!isFin && !form.warehouse_id)) { error.value = 'Оберіть склад і особу'; saving.value = false; return }
-      await createMvo({ kind: form.mvo_kind || 'warehouse',
-        warehouse_id: isFin ? null : form.warehouse_id, person_id: form.person_id, from_date: form.from_date })
+      if (editMvoId.value) {
+        await updateMvo(editMvoId.value, { person_id: form.person_id, from_date: form.from_date, to_date: form.to_date || null })
+      } else {
+        await createMvo({ kind: form.mvo_kind || 'warehouse',
+          warehouse_id: isFin ? null : form.warehouse_id, person_id: form.person_id, from_date: form.from_date })
+      }
     }
     else if (tab.value === 'groups') {
       if (!form.unit_id) { error.value = 'Оберіть підрозділ'; saving.value = false; return }
