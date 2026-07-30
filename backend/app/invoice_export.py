@@ -1,6 +1,6 @@
 """Pure openpyxl helpers for invoice XLSX export.
 
-Extracted from `routers.documents` so they can be unit-tested in isolation
+Used by `nakladna_common.build_xlsx`; unit-tested in isolation
 (no FastAPI / DB dependencies in the import chain).
 """
 from copy import copy as _copy

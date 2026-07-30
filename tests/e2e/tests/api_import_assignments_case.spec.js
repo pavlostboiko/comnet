@@ -20,13 +20,15 @@ function up(api, url, fixture) {
 test('issuance import matches a CAPS surname in DB to a normal-case «Де» value', async ({ request }) => {
   const api = await loginApi(request)
   try {
-    await up(api, '/api/admin/v2/import/items', 'import_v2_asg_items.xlsx')
-    await up(api, '/api/admin/v2/import/movements', 'import_v2_asg_mv.xlsx')
+    // Isolated fixtures («…ASGC», surname «Авдєєнко») so this spec never races
+    // the shared-serial api_import_assignments spec on a common DB.
+    await up(api, '/api/admin/v2/import/items', 'import_v2_asgc_items.xlsx')
+    await up(api, '/api/admin/v2/import/movements', 'import_v2_asgc_mv.xlsx')
 
-    // DB surname stored in CAPS; «Де» in the file is «...Петренко» (capitalized)
-    const petr = await api.post('/api/settings/persons', { data: { last_name: 'ПЕТРЕНКО' } }).then(r => r.json())
+    // DB surname stored in CAPS; «Де» in the file is «...Авдєєнко» (capitalized)
+    const petr = await api.post('/api/settings/persons', { data: { last_name: 'АВДЄЄНКО' } }).then(r => r.json())
 
-    const res = await up(api, '/api/admin/v2/import/assignments', 'import_v2_asg_items.xlsx').then(r => r.json())
+    const res = await up(api, '/api/admin/v2/import/assignments', 'import_v2_asgc_items.xlsx').then(r => r.json())
     expect(res.assignments).toBe(2)           // matched despite case difference
     expect(res.persons_unit_set).toBe(1)
 
