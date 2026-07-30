@@ -283,7 +283,7 @@ const destWarehouse = computed(() => warehouses.value.find(w => w.id === doc.to_
 const isDestUnit = computed(() => destWarehouse.value?.type === 'unit')
 const destPersonOptions = computed(() => persons.value
   .filter(p => p.unit_id === destWarehouse.value?.unit_id)
-  .map(p => ({ id: p.id, name: personLabel(p), number: [p.rank, p.position].filter(Boolean).join(', ') })))
+  .map(p => ({ id: p.id, name: personLabel(p), number: p.callsign || p.ipn || '' })))
 
 function selectWarehouse(id) { warehouseId.value = id; loadStock() }
 

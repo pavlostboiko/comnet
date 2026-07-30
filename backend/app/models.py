@@ -70,6 +70,9 @@ class Mvo(Base):
     kind = Column(String, nullable=False, default="warehouse")
     warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=True)
     person_id = Column(Integer, ForeignKey("persons.id", ondelete="CASCADE"), nullable=False)
+    # Посада/звання підписанта на період цього призначення (для snap документів).
+    position = Column(String, nullable=True)
+    rank = Column(String, nullable=True)
     from_date = Column(Date, nullable=False)
     to_date = Column(Date, nullable=True)
 
@@ -168,7 +171,7 @@ class CustodyDocument(Base):
     service_id = Column(Integer, ForeignKey("services.id", ondelete="SET NULL"), nullable=True)
     op_type_id = Column(Integer, ForeignKey("op_types.id", ondelete="SET NULL"), nullable=True)
     # Підписанти (Здав/Прийняв/Фін) НЕ зберігаються — резолвляться з журналу МВО
-    # за датою документа (див. custody_snapshot.mvo_person_at).
+    # за датою документа (див. custody_snapshot.mvo_at).
     status = Column(String, nullable=False, default="draft")
     signed_at = Column(DateTime, nullable=True)
     signed_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -266,10 +269,7 @@ class Person(Base):
     __tablename__ = "persons"
 
     id = Column(Integer, primary_key=True)
-    position = Column(String, nullable=True)
-    position_genitive = Column(String, nullable=True)
-    rank = Column(String, nullable=True)
-    rank_genitive = Column(String, nullable=True)
+    # Посада/звання перенесено на записи журналу mvo (міграція 027).
     last_name = Column(String, nullable=True)
     last_name_genitive = Column(String, nullable=True)
     first_name = Column(String, nullable=True)
