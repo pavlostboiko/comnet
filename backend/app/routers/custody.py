@@ -457,7 +457,7 @@ def item_history(nomenclature_id: int, instance_id: Optional[int] = None,
             "to_warehouse": wh_name(m.to_warehouse_id),
             "qty": str(m.quantity), "serial_no": serial_of(m.instance_id),
             "card_number": m.card_number, "doc_number": m.doc_number,
-            "source": "movement", "source_id": m.id,
+            "source": "movement", "source_id": m.id, "created_at": m.created_at,
         })
     for a in aq.all():
         if only_warehouse is not None and a.warehouse_id != only_warehouse:
@@ -468,6 +468,7 @@ def item_history(nomenclature_id: int, instance_id: Optional[int] = None,
             "kind": "issued", "person": person_name(a.person_id),
             "warehouse": wh_name(a.warehouse_id), "qty": str(a.quantity),
             "serial_no": serial, "source": "assignment", "source_id": a.id,
+            "created_at": a.created_at,
         })
         if a.returned_date is not None:
             events.append({
@@ -475,11 +476,17 @@ def item_history(nomenclature_id: int, instance_id: Optional[int] = None,
                 "kind": "returned", "person": person_name(a.person_id),
                 "warehouse": wh_name(a.warehouse_id), "qty": str(a.quantity),
                 "serial_no": serial, "source": "assignment", "source_id": a.id,
+                "created_at": a.created_at,
             })
 
-    # Тайбрейкер при однаковій даті — номер накладної (пізніша зверху), тоді id.
+    # Порядок (новіші зверху): дата → номер накладної (пізніша зверху; важливо
+    # для імпортованих рухів однієї дати) → час запису `created_at` (розрізняє
+    # недокументовані події однієї дати, напр. переміщення vs видача в одній
+    # транзакції) → id. `created_at` — ПІСЛЯ doc_sort_key, бо в імпорті created_at
+    # ~однаковий і хронологію дає лише номер накладної (задача 10).
     events.sort(key=lambda e: (e["date"] is None, e["date"] or "",
-                               doc_sort_key(e.get("doc_number")), e["source_id"]),
+                               doc_sort_key(e.get("doc_number")),
+                               e["created_at"], e["source_id"]),
                 reverse=True)
     return {"nomenclature_id": nom.id, "name": nom.name,
             "is_serialized": nom.is_serialized, "events": events}

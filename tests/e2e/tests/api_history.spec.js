@@ -48,6 +48,42 @@ test('history merges movements and issue/return chronologically', async ({ reque
   }
 })
 
+test('same-date transfer-with-issue: issue sorts above the transfer', async ({ request }) => {
+  // Regression: a transfer and its issue happen on the SAME date, both without a
+  // doc_number → they tie on date + doc_sort_key. The tie must break on
+  // `created_at` (issue recorded after the transfer), NOT on cross-table id.
+  const api = await loginApi(request)
+  const cleanup = []
+  try {
+    const tag = `hsd-${Date.now()}-${Math.floor(Math.random() * 9999)}`
+    const svc = await postJson(api, '/api/settings/services', { name: `SDSvc ${tag}` })
+    const unit = await postJson(api, '/api/structure/units', { name: `SDРота ${tag}` })
+    cleanup.push(`/api/structure/units/${unit.id}`, `/api/settings/services/${svc.id}`)
+    const whs = await api.get('/api/structure/warehouses').then(r => r.json())
+    const svcWh = whs.find(w => w.service_id === svc.id)
+    const unitWh = whs.find(w => w.unit_id === unit.id)
+    const person = await postJson(api, '/api/settings/persons', { first_name: 'І', last_name: `Боєць${tag}`, unit_id: unit.id })
+    cleanup.push(`/api/settings/persons/${person.id}`)
+    const nom = await postJson(api, '/api/nomenclature', { name: `Річ ${tag}`, service_id: svc.id, unit_of_measure: 'шт', price: 50 })
+    cleanup.push(`/api/nomenclature/${nom.id}`)
+
+    // receipt (earlier) → svc; then transfer→unit WITH issue to person, same date, no doc
+    await postJson(api, '/api/custody/movements', { date: '2026-07-01', type: 'receipt', nomenclature_id: nom.id, to_warehouse_id: svcWh.id, quantity: 10 })
+    await postJson(api, '/api/custody/document', {
+      date: '2026-07-05', from_warehouse_id: svcWh.id, to_warehouse_id: unitWh.id,
+      items: [{ nomenclature_id: nom.id, quantity: 3, assign_person_id: person.id }],
+    })
+
+    const h = await api.get(`/api/custody/history?nomenclature_id=${nom.id}`).then(r => r.json())
+    const kinds = h.events.map(e => e.kind === 'movement' ? e.type : e.kind)
+    // newest first: issued (recorded after transfer, same date) · transfer · receipt
+    expect(kinds).toEqual(['issued', 'transfer', 'receipt'])
+  } finally {
+    await bestEffortDelete(api, cleanup)
+    await api.dispose()
+  }
+})
+
 test('history scoped to a single serial instance', async ({ request }) => {
   const api = await loginApi(request)
   const cleanup = []
