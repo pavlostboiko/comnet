@@ -229,11 +229,14 @@
 | **UI** | Майно · Залишки · Переміщення · Документи · **Звіти** · Довідники · Користувачі · Імпорт | ✅ |
 | **Звіти** | «Видане» по особі/групі | ✅ |
 | **Cutover (git)** | v2→main (`0fc3851`), README-деплой у репо | ✅ |
-| **Деплой на прод** | новий сервер (README.md) → ре-імпорт → дроп v1 після валідації | ⬜ **наступне** |
+| **Деплой на прод** | сервер `jawa` (README.md); ре-імпорт | ✅ |
+| **Дроп v1** | роутери/моделі/схеми/сторінки/api/тести + DROP 8 таблиць (міграція 026) | ✅ |
 
-Міграції v2: **012-025** (020 custody_documents, 021 units.is_external, 022 instances.note,
+Міграції v2: **012-026** (020 custody_documents, 021 units.is_external, 022 instances.note,
 **023 audit_log, 024 mvo.kind(warehouse|fin)+warehouse_id nullable, 025 drop custody_documents
-sender/receiver/fin_id**).
+sender/receiver/fin_id, 026 DROP v1 tables** — items/movements/documents/residues/splits/recipients;
+CASCADE, child-first; НЕЗВОРОТНО, pg_dump перед деплоєм; `op_type_details`/`unit_settings`/`op_types`
+збережено; спільні хелпери → `nakladna_common.py`/`import_helpers.py`; «Реквізити»+«Типи операцій» → Довідники).
 Ще зроблено після Ф5 (деталі — `STATE.md`, `tasks.md` «Готово» 10-27): примітка на екземплярі,
 підрозділи внутр./зовн., кнопки-склади+фільтри, історія (вкл. несерійне), спільна форма картки,
 autocomplete у модалках, ізольований тест-стек; **аудит-лог** (after_flush); **МВО** — глоб.фін-МВО,
