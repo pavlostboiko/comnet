@@ -5,7 +5,7 @@ test('Довідники page loads with all tabs', async ({ page }) => {
   await uiLogin(page)
   await page.goto(`${URL}/structure`)
   await expect(page.locator('.tile-title')).toContainText('Довідники')
-  for (const label of ['Служби', 'Підрозділи', 'Склади', 'МВО', 'Групи', 'Особи', 'Типи операцій', 'Реквізити']) {
+  for (const label of ['Служби', 'Підрозділи', 'Склади', 'Підписанти', 'Групи', 'Особи', 'Типи операцій', 'Реквізити']) {
     await expect(page.locator('.tt-btn', { hasText: label })).toBeVisible()
   }
 })

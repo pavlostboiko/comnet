@@ -91,6 +91,7 @@ class MvoRead(BaseModel):
     id: int
     kind: str = "warehouse"
     warehouse_id: Optional[int] = None
+    service_id: Optional[int] = None
     person_id: int
     position: Optional[str] = None
     rank: Optional[str] = None
@@ -100,8 +101,9 @@ class MvoRead(BaseModel):
 
 
 class MvoCreate(BaseModel):
-    kind: str = "warehouse"                 # warehouse | fin
+    kind: str = "warehouse"                 # warehouse | fin | service_chief
     warehouse_id: Optional[int] = None      # обов'язковий для kind=warehouse
+    service_id: Optional[int] = None        # обов'язковий для kind=service_chief
     person_id: int
     position: Optional[str] = None
     rank: Optional[str] = None

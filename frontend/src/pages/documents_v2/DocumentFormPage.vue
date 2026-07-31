@@ -60,7 +60,7 @@
       </div>
 
       <div class="tile">
-        <div class="tile-header"><span class="tile-title">Підписанти (МВО)</span></div>
+        <div class="tile-header"><span class="tile-title">Підписанти</span></div>
         <div class="form-grid three">
           <label>Здав (відправник)
             <div class="ro-val">{{ doc.extra_data?.snap_sender_name || '— з журналу за датою —' }}</div>
@@ -71,9 +71,12 @@
           <label>Фінслужба
             <div class="ro-val">{{ doc.extra_data?.snap_fin_name || '— з журналу за датою —' }}</div>
           </label>
+          <label>Начальник служби
+            <div class="ro-val">{{ doc.extra_data?.snap_service_chief_name || '— з журналу за датою —' }}</div>
+          </label>
         </div>
-        <p class="hint-mvo">Підписанти підставляються автоматично з журналу МВО
-          (Довідники → МВО) за датою документа при підписанні.</p>
+        <p class="hint-mvo">Підписанти підставляються автоматично з журналу
+          (Довідники → Підписанти) за датою документа при підписанні.</p>
       </div>
 
       <div class="tile">

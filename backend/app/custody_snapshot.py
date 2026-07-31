@@ -23,10 +23,11 @@ from app.models import (
 )
 
 
-def mvo_at(db: Session, on_date, warehouse_id=None, fin: bool = False):
-    """Запис журналу МВО, діючий на дату `on_date`: для складу (warehouse_id) або
-    глобальна фінслужба (fin=True). Повертає Mvo (з `.person`, `.position`,
-    `.rank`) або None. Історичний журнал → стабільно."""
+def mvo_at(db: Session, on_date, warehouse_id=None, fin: bool = False, service_id=None):
+    """Запис журналу підписантів, діючий на дату `on_date`: МВО складу
+    (warehouse_id), глобальна фінслужба (fin=True) або начальник служби
+    (service_id). Повертає Mvo (з `.person`, `.position`, `.rank`) або None.
+    Історичний журнал → стабільно."""
     if on_date is None:
         return None
     q = db.query(Mvo).filter(
@@ -35,6 +36,8 @@ def mvo_at(db: Session, on_date, warehouse_id=None, fin: bool = False):
     )
     if fin:
         q = q.filter(Mvo.kind == "fin")
+    elif service_id is not None:
+        q = q.filter(Mvo.kind == "service_chief", Mvo.service_id == service_id)
     else:
         if warehouse_id is None:
             return None
@@ -170,13 +173,22 @@ def snap_nakladna(doc: CustodyDocument, db: Session) -> None:
         if ot:
             extra["snap_op_type_name"] = ot.name or ""
 
+    doc_date = parse_date(doc.doc_date)
+
     if doc.service_id:
         sv = db.get(Service, doc.service_id)
         if sv:
             doc.service = sv.name or ""
             extra["snap_service_name"] = sv.name or ""
-            extra["snap_service_chief_post"] = sv.chief_position or ""
-            extra["snap_service_chief_name"] = sv.chief_name or ""
+            # Начальник служби — з журналу підписантів на дату документа; поки
+            # службу в журнал не завели, фолбек на вільний текст у її картці.
+            chief = mvo_at(db, doc_date, service_id=sv.id)
+            if chief:
+                extra["snap_service_chief_post"] = chief.position or ""
+                extra["snap_service_chief_name"] = person_full_name(chief.person)
+            else:
+                extra["snap_service_chief_post"] = sv.chief_position or ""
+                extra["snap_service_chief_name"] = sv.chief_name or ""
 
     # «Звідки»: склад-джерело, або контрагент для приймання ззовні.
     from_label = ""
@@ -190,7 +202,6 @@ def snap_nakladna(doc: CustodyDocument, db: Session) -> None:
     # Підписанти — з журналу МВО на дату документа (Здав = МВО from-складу,
     # Прийняв = МВО to-складу, Фін = глобальна фінслужба). Приймання ззовні:
     # from-складу немає → Здав без особи (лишається контрагент у subdiv).
-    doc_date = parse_date(doc.doc_date)
     sender = mvo_at(db, doc_date, warehouse_id=doc.from_warehouse_id)
     if sender:
         extra["snap_sender_post"] = sender.position or ""

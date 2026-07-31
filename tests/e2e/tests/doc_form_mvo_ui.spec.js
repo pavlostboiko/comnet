@@ -26,7 +26,7 @@ test('document form: signatories are read-only (from journal), no pickers', asyn
 
   const tile = page.locator('.tile', { has: page.locator('.tile-title:has-text("Підписанти")') })
   await expect(tile).toBeVisible()
-  await expect(tile.locator('.hint-mvo')).toContainText('журналу МВО')
-  await expect(tile.locator('.ro-val')).toHaveCount(3)     // read-only signatories
+  await expect(tile.locator('.hint-mvo')).toContainText('з журналу')
+  await expect(tile.locator('.ro-val')).toHaveCount(4)     // Здав/Прийняв/Фін/Начальник служби
   await expect(tile.locator('select')).toHaveCount(0)      // no person pickers
 })
