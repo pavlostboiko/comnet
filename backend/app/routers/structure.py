@@ -152,6 +152,7 @@ def _mvo_dict(m: Mvo) -> dict:
         "id": m.id,
         "kind": m.kind,
         "warehouse_id": m.warehouse_id,
+        "service_id": m.service_id,
         "person_id": m.person_id,
         "position": m.position,
         "rank": m.rank,
@@ -169,8 +170,8 @@ def list_mvo(db: Session = Depends(get_db), _: User = Depends(get_current_user))
 @router.post("/mvo", status_code=status.HTTP_201_CREATED)
 def create_mvo(payload: MvoCreate, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     kind = payload.kind or "warehouse"
-    if kind not in ("warehouse", "fin"):
-        raise HTTPException(400, "Невідомий тип МВО")
+    if kind not in ("warehouse", "fin", "service_chief"):
+        raise HTTPException(400, "Невідомий тип підписанта")
     if not db.get(Person, payload.person_id):
         raise HTTPException(400, "Особу не знайдено")
     from_date = date.fromisoformat(payload.from_date)
@@ -179,6 +180,11 @@ def create_mvo(payload: MvoCreate, db: Session = Depends(get_db), _: User = Depe
         raise HTTPException(400, "Некоректний період")
 
     wh_id = None
+    svc_id = None
+    if kind == "service_chief":
+        if not db.get(Service, payload.service_id):
+            raise HTTPException(400, "Службу не знайдено")
+        svc_id = payload.service_id
     if kind == "warehouse":
         wh = db.get(Warehouse, payload.warehouse_id)
         if not wh:
@@ -193,15 +199,19 @@ def create_mvo(payload: MvoCreate, db: Session = Depends(get_db), _: User = Depe
                 raise HTTPException(400, "МВО не призначається на зовнішній підрозділ")
         wh_id = wh.id
 
-    # Максимум один діючий (to_date IS NULL): для складу — на склад; для фін — глобально
+    # Максимум один діючий (to_date IS NULL): на склад / на службу / глобально (фін)
     if to_date is None:
         q = db.query(Mvo).filter(Mvo.to_date.is_(None), Mvo.kind == kind)
         if kind == "warehouse":
             q = q.filter(Mvo.warehouse_id == wh_id)
+        elif kind == "service_chief":
+            q = q.filter(Mvo.service_id == svc_id)
         if q.first():
-            raise HTTPException(409, "Уже є діючий МВО фінслужби" if kind == "fin"
-                                     else "Уже є діючий МВО на цьому складі")
-    row = Mvo(kind=kind, warehouse_id=wh_id, person_id=payload.person_id,
+            raise HTTPException(409, {
+                "fin": "Уже є діючий МВО фінслужби",
+                "service_chief": "Уже є діючий начальник цієї служби",
+            }.get(kind, "Уже є діючий МВО на цьому складі"))
+    row = Mvo(kind=kind, warehouse_id=wh_id, service_id=svc_id, person_id=payload.person_id,
               position=payload.position, rank=payload.rank,
               from_date=from_date, to_date=to_date)
     db.add(row)

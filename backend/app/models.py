@@ -60,15 +60,17 @@ class Warehouse(Base):
 
 
 class Mvo(Base):
-    """v2: журнал призначень МВО на склад підрозділу (історичний).
-    Діючий = to_date IS NULL; максимум один діючий на склад."""
+    """v2: журнал підписантів документів (історичний) — не лише МВО.
+    Діючий = to_date IS NULL; максимум один діючий на склад/службу/систему."""
     __tablename__ = "mvo"
 
     id = Column(Integer, primary_key=True)
     # kind='warehouse' → МВО складу (warehouse_id заповнено);
-    # kind='fin' → глобальна фінслужба (warehouse_id NULL, одна діюча на систему)
+    # kind='fin' → глобальна фінслужба (warehouse_id NULL, одна діюча на систему);
+    # kind='service_chief' → начальник служби (service_id заповнено, один на службу)
     kind = Column(String, nullable=False, default="warehouse")
     warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=True)
+    service_id = Column(Integer, ForeignKey("services.id", ondelete="CASCADE"), nullable=True)
     person_id = Column(Integer, ForeignKey("persons.id", ondelete="CASCADE"), nullable=False)
     # Посада/звання підписанта на період цього призначення (для snap документів).
     position = Column(String, nullable=True)

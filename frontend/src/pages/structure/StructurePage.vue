@@ -85,16 +85,16 @@
           </table>
         </div>
 
-        <!-- ═══ МВО ═══ -->
+        <!-- ═══ Підписанти (МВО складів, фінслужба, начальники служб) ═══ -->
         <div v-if="tab === 'mvo'" class="table-wrap">
           <table>
-            <thead><tr><th>Особа</th><th>Посада / звання</th><th>Склад</th><th class="col-date">З</th><th class="col-date">По</th><th class="col-acts"></th></tr></thead>
+            <thead><tr><th>Особа</th><th>Посада / звання</th><th>Підписує за</th><th class="col-date">З</th><th class="col-date">По</th><th class="col-acts"></th></tr></thead>
             <tbody>
               <tr v-if="!mvo.length"><td colspan="6" class="empty">Немає призначень</td></tr>
               <tr v-for="m in mvo" :key="m.id" :class="{ 'row-dim': m.to_date }">
                 <td class="td-name">{{ personName(m.person_id) }}</td>
                 <td class="td-dim">{{ [m.rank, m.position].filter(Boolean).join(', ') || '—' }}</td>
-                <td class="td-dim">{{ m.kind === 'fin' ? 'Фінслужба (загальна)' : warehouseName(m.warehouse_id) }}</td>
+                <td class="td-dim">{{ mvoScopeLabel(m) }}</td>
                 <td class="td-mono">{{ m.from_date }}</td>
                 <td class="td-mono">{{ m.to_date || '—' }}</td>
                 <td class="td-acts">
@@ -216,14 +216,22 @@
           <template v-else-if="tab === 'mvo'">
             <label class="fl">Тип *</label>
             <select class="fi" v-model="form.mvo_kind">
-              <option value="warehouse">Склад (служби/підрозділу)</option>
+              <option value="warehouse">МВО складу (служби/підрозділу)</option>
               <option value="fin">Фінслужба (загальна)</option>
+              <option value="service_chief">Начальник служби</option>
             </select>
             <template v-if="form.mvo_kind === 'warehouse'">
               <label class="fl">Склад *</label>
               <select class="fi" v-model="form.warehouse_id">
                 <option :value="null" disabled>— оберіть —</option>
                 <option v-for="w in mvoWarehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
+              </select>
+            </template>
+            <template v-if="form.mvo_kind === 'service_chief'">
+              <label class="fl">Служба *</label>
+              <select class="fi" v-model="form.service_id">
+                <option :value="null" disabled>— оберіть —</option>
+                <option v-for="s in services" :key="s.id" :value="s.id">{{ s.name }}</option>
               </select>
             </template>
             <label class="fl">Особа *</label>
@@ -306,7 +314,7 @@ const tabs = [
   { key: 'services', label: 'Служби' },
   { key: 'units', label: 'Підрозділи' },
   { key: 'warehouses', label: 'Склади' },
-  { key: 'mvo', label: 'МВО' },
+  { key: 'mvo', label: 'Підписанти' },
   { key: 'groups', label: 'Групи' },
   { key: 'persons', label: 'Особи' },
   { key: 'optypes', label: 'Типи операцій' },
@@ -346,6 +354,12 @@ const personOptions = computed(() => [...persons.value]
   .sort((a, b) => personLabel(a).localeCompare(personLabel(b), 'uk'))
   .map(p => ({ id: p.id, name: personLabel(p), number: p.callsign || p.ipn || '' })))
 const groupName = (id) => groups.value.find(g => g.id === id)?.name || '—'
+// За що підписує запис журналу: склад / загальна фінслужба / служба (начальник).
+function mvoScopeLabel(m) {
+  if (m.kind === 'fin') return 'Фінслужба (загальна)'
+  if (m.kind === 'service_chief') return `Начальник: ${serviceName(m.service_id)}`
+  return warehouseName(m.warehouse_id)
+}
 
 async function loadAll() {
   const [s, u, n, w, m, g, p, ot, us] = await Promise.all([
@@ -382,7 +396,7 @@ const reqSaved = ref(false)
 const modalTitle = computed(() => {
   if (editPersonId.value) return 'Редагувати особу'
   if (editUnitId.value) return 'Редагувати підрозділ'
-  if (editMvoId.value) return 'Редагувати МВО'
+  if (editMvoId.value) return 'Редагувати підписанта'
   if (editOpTypeId.value) return 'Редагувати тип операції'
   return 'Додати: ' + currentTab.value.label
 })
@@ -399,7 +413,7 @@ function openAdd() {
   resetEditIds()
   Object.keys(form).forEach(k => delete form[k])
   if (tab.value === 'nomenclature') { form.service_id = null; form.is_serialized = false }
-  else if (tab.value === 'mvo') { form.mvo_kind = 'warehouse'; form.warehouse_id = null; form.person_id = null; form.position = ''; form.rank = ''; form.from_date = new Date().toISOString().slice(0, 10) }
+  else if (tab.value === 'mvo') { form.mvo_kind = 'warehouse'; form.warehouse_id = null; form.service_id = null; form.person_id = null; form.position = ''; form.rank = ''; form.from_date = new Date().toISOString().slice(0, 10) }
   else if (tab.value === 'groups') { form.unit_id = null; form.commander_id = null }
   else if (tab.value === 'persons') { form.unit_id = null; form.group_id = null }
   else if (tab.value === 'units') { form.is_external = false }
@@ -451,13 +465,14 @@ function openEditMvo(m) {
   Object.keys(form).forEach(k => delete form[k])
   Object.assign(form, {
     mvo_kind: m.kind || 'warehouse', warehouse_id: m.warehouse_id || null,
+    service_id: m.service_id || null,
     person_id: m.person_id, position: m.position || '', rank: m.rank || '',
     from_date: m.from_date, to_date: m.to_date || '',
   })
   addOpen.value = true
 }
 async function delMvo(m) {
-  if (!confirm('Видалити запис МВО?')) return
+  if (!confirm('Видалити запис підписанта?')) return
   try { await deleteMvo(m.id); await loadAll() }
   catch (e) { alert(e?.response?.data?.detail || 'Помилка') }
 }
@@ -491,15 +506,21 @@ async function save() {
       })
     }
     else if (tab.value === 'mvo') {
-      const isFin = form.mvo_kind === 'fin'
-      if (!form.person_id || (!isFin && !form.warehouse_id)) { error.value = 'Оберіть склад і особу'; saving.value = false; return }
+      const kind = form.mvo_kind || 'warehouse'
+      const needs = { warehouse: form.warehouse_id, service_chief: form.service_id, fin: true }[kind]
+      if (!form.person_id || !needs) {
+        error.value = kind === 'service_chief' ? 'Оберіть службу і особу' : 'Оберіть склад і особу'
+        saving.value = false; return
+      }
       if (editMvoId.value) {
         await updateMvo(editMvoId.value, { person_id: form.person_id,
           position: form.position || null, rank: form.rank || null,
           from_date: form.from_date, to_date: form.to_date || null })
       } else {
-        await createMvo({ kind: form.mvo_kind || 'warehouse',
-          warehouse_id: isFin ? null : form.warehouse_id, person_id: form.person_id,
+        await createMvo({ kind,
+          warehouse_id: kind === 'warehouse' ? form.warehouse_id : null,
+          service_id: kind === 'service_chief' ? form.service_id : null,
+          person_id: form.person_id,
           position: form.position || null, rank: form.rank || null, from_date: form.from_date })
       }
     }
