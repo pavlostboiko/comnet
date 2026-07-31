@@ -43,6 +43,22 @@ def mvo_at(db: Session, on_date, warehouse_id=None, fin: bool = False):
 from app.uk_num2words import amount_to_words_uk, qty_to_words_uk
 
 
+def derive_service_id(doc: CustodyDocument, db: Session) -> None:
+    """«Служба забезпечення» документа = служба його майна, не вибір користувача.
+
+    Позиції однієї служби → проставляємо. Різні служби (склад підрозділу тримає
+    майно кількох служб) або порожньо → лишаємо поточне значення: єдиної служби
+    в такого документа немає, вигадувати її не можна.
+    """
+    ids = set()
+    for m in (doc.movements or []):
+        nom = m.nomenclature or db.get(Nomenclature, m.nomenclature_id)
+        if nom and nom.service_id:
+            ids.add(nom.service_id)
+    if len(ids) == 1:
+        doc.service_id = ids.pop()
+
+
 # ── Chronological tie-breaking ───────────────────────────────────────────
 
 def doc_sort_key(doc_number: Optional[str]) -> Tuple[int, ...]:

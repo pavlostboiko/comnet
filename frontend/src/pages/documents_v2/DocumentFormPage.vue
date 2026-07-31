@@ -41,11 +41,14 @@
           <label v-if="doc.operation === 'receipt'">Від кого (контрагент)
             <input v-model="form.counterparty" :disabled="ro" class="fi" /></label>
           <label>Підстава <input v-model="form.basis" :disabled="ro" class="fi" /></label>
+          <label>Передає
+            <div class="ro-val">{{ senderLabel }}</div>
+          </label>
+          <label>Приймає
+            <div class="ro-val">{{ receiverLabel }}</div>
+          </label>
           <label>Служба
-            <select v-model="form.service_id" :disabled="ro" class="fi">
-              <option :value="null">—</option>
-              <option v-for="s in services" :key="s.id" :value="s.id">{{ s.name }}</option>
-            </select>
+            <div class="ro-val">{{ serviceLabel }}</div>
           </label>
           <label>Тип операції
             <select v-model="form.op_type_id" :disabled="ro" class="fi">
@@ -157,10 +160,26 @@ const busy = ref(false)
 const signErrors = ref([])
 const form = reactive({
   form: 'накладна', doc_number: '', doc_date: '', date_operation: '',
-  counterparty: '', basis: '', service_id: null, op_type_id: null,
+  counterparty: '', basis: '', op_type_id: null,
 })
 
 const ro = computed(() => doc.value?.status !== 'draft')
+
+// «Передає»/«Приймає» — те саме, що друкується в Дод.25 (рядок 15).
+const senderLabel = computed(() => doc.value?.extra_data?.snap_sender_subdiv
+  || doc.value?.from_unit || doc.value?.counterparty || '—')
+const receiverLabel = computed(() => doc.value?.extra_data?.snap_recv_subdiv
+  || doc.value?.to_unit || '—')
+
+// Служба не вибирається — вона визначається майном документа (бек проставляє
+// її з номенклатури позицій). Кілька служб у документі → єдиної служби нема.
+const serviceLabel = computed(() => {
+  const name = doc.value?.extra_data?.snap_service_name
+    || services.value.find(s => s.id === doc.value?.service_id)?.name
+  if (name) return name
+  const distinct = new Set(lines.value.map(l => l.service_id).filter(Boolean))
+  return distinct.size > 1 ? 'різні служби — не друкується' : '—'
+})
 
 function opLabel(o) { return { receipt: 'надходження', transfer: 'переміщення' }[o] || o }
 function stLabel(s) { return { draft: 'чернетка', signed: 'підписано' }[s] || s }
@@ -179,7 +198,6 @@ function applyDoc(d) {
   form.date_operation = d.date_operation || ''
   form.counterparty = d.counterparty || ''
   form.basis = d.basis || ''
-  form.service_id = d.service_id
   form.op_type_id = d.op_type_id
 }
 
@@ -213,7 +231,7 @@ function confirmAdd() {
     if (!addSel.has(m.id)) continue
     const nom = nomById.value[m.nomenclature_id] || {}
     lines.value.push({
-      id: m.id, nomenclature_name: nom.name, nomenclature_code: nom.code,
+      id: m.id, nomenclature_name: nom.name, nomenclature_code: nom.code, service_id: nom.service_id,
       unit_of_measure: nom.unit_of_measure, category: nom.category, price: nom.price,
       quantity: m.quantity, card_number: m.card_number, serial_no: null,
     })
@@ -226,7 +244,7 @@ function payload() {
     operation: doc.value.operation, form: form.form,
     doc_number: form.doc_number || null, doc_date: form.doc_date || null,
     date_operation: form.date_operation || null, counterparty: form.counterparty || null,
-    basis: form.basis || null, service_id: form.service_id, op_type_id: form.op_type_id,
+    basis: form.basis || null, op_type_id: form.op_type_id,   // служба — з майна, бек проставляє сам
     movement_ids: lines.value.map(l => l.id),
   }
 }

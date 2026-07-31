@@ -20,7 +20,7 @@ from app.acl import (
 )
 from app.auth import get_current_user
 from app.custody_export import build_xlsx_v2, has_snap
-from app.custody_snapshot import resolve_auto_number, snap_nakladna
+from app.custody_snapshot import derive_service_id, resolve_auto_number, snap_nakladna
 from app.database import get_db
 from app.models import (
     CustodyDocument, CustodyMovement, Instance, Nomenclature, User, Warehouse,
@@ -56,6 +56,7 @@ def _line_dict(db: Session, m: CustodyMovement) -> dict:
         "id": m.id,
         "nomenclature_id": m.nomenclature_id,
         "nomenclature_name": nom.name if nom else None,
+        "service_id": nom.service_id if nom else None,
         "nomenclature_code": nom.code if nom else None,
         "unit_of_measure": nom.unit_of_measure if nom else None,
         "category": nom.category if nom else None,
@@ -198,6 +199,8 @@ def create_document(payload: CustodyDocIn, db: Session = Depends(get_db),
     db.flush()
     _apply_group(db, user, doc, movements)
     db.flush()
+    db.expire(doc, ["movements"])       # колекцію читали ДО лінкування → перезавантажити
+    derive_service_id(doc, db)          # служба — з майна документа, до snap
     warnings = resolve_auto_number(doc, db)
     snap_nakladna(doc, db)
     db.commit()
@@ -252,6 +255,7 @@ def receive_document(payload: ReceiptCreate, db: Session = Depends(get_db),
         db.add(doc)
         db.flush()
 
+    svc_ids = set()
     for it in payload.items:
         if it.new_nomenclature:
             nn = it.new_nomenclature
@@ -269,6 +273,8 @@ def receive_document(payload: ReceiptCreate, db: Session = Depends(get_db),
         else:
             raise HTTPException(400, "Позиція без номенклатури")
         _check_receipt(user, to.id, nom)
+        if nom.service_id:
+            svc_ids.add(nom.service_id)
 
         is_official = nom.is_official                        # тип обліку — з картки
         instance = None
@@ -300,6 +306,8 @@ def receive_document(payload: ReceiptCreate, db: Session = Depends(get_db),
         db.commit()
         return {"received": len(payload.items), "no_document": True}
 
+    if len(svc_ids) == 1:                 # служба — з майна, а не зі складу
+        doc.service_id = svc_ids.pop()
     warnings = resolve_auto_number(doc, db)
     snap_nakladna(doc, db)
     db.commit()
@@ -327,11 +335,12 @@ def update_document(doc_id: int, payload: CustodyDocIn, db: Session = Depends(ge
     doc.date_operation = payload.date_operation or payload.doc_date
     doc.counterparty = payload.counterparty
     doc.basis = payload.basis
-    doc.service_id = payload.service_id
     doc.op_type_id = payload.op_type_id
     movements = _load_movements(db, user, payload.movement_ids)
     _apply_group(db, user, doc, movements)
     db.flush()
+    db.expire(doc, ["movements"])       # колекцію читали ДО лінкування → перезавантажити
+    derive_service_id(doc, db)          # службу не редагують — вона з майна
     warnings = resolve_auto_number(doc, db)
     snap_nakladna(doc, db)
     db.commit()

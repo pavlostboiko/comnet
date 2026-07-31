@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import require_admin
 from app.database import get_db
-from app.custody_snapshot import doc_sort_key, snap_nakladna
+from app.custody_snapshot import derive_service_id, doc_sort_key, snap_nakladna
 from app.models import (
     Assignment, CustodyDocument, CustodyMovement, Instance, Mvo, Nomenclature,
     Person, Service, Unit, User, Warehouse,
@@ -611,6 +611,7 @@ def _backfill_documents(db: Session, user: User, doc_groups: dict, counts: dict)
         for mv in g["movements"]:
             mv.document_id = doc.id
         db.flush()
+        derive_service_id(doc, db)      # раніше імпортовані документи йшли без служби
         snap_nakladna(doc, db)
         counts["documents_created"] += 1
 
