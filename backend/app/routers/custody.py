@@ -51,6 +51,23 @@ def balance_of(db: Session, warehouse_id: int, nomenclature_id: int, is_official
     return Decimal(q_in or 0) - Decimal(q_out or 0)
 
 
+ISSUED_BLOCK = "Не можна відкликати: майно видане особі — спершу оформіть повернення"
+
+
+def issued_qty(db: Session, warehouse_id: int, nomenclature_id: int, is_official: bool) -> Decimal:
+    """Скільки несерійного зі складу вже на руках (активні видачі)."""
+    total = (
+        db.query(func.coalesce(func.sum(Assignment.quantity), 0))
+        .filter(Assignment.warehouse_id == warehouse_id,
+                Assignment.nomenclature_id == nomenclature_id,
+                Assignment.is_official.is_(is_official),
+                Assignment.instance_id.is_(None),
+                Assignment.returned_date.is_(None))
+        .scalar()
+    )
+    return Decimal(total or 0)
+
+
 def _mv_dict(m: CustodyMovement) -> dict:
     return {
         "id": m.id,
@@ -164,6 +181,11 @@ def delete_movement(mid: int, db: Session = Depends(get_db),
         key = lambda m: (m.date, doc_sort_key(m.doc_number), m.id)
         if max(all_mvs, key=key).id != mv.id:
             raise HTTPException(400, "Можна відкликати лише останній рух екземпляра")
+        # Видача не рухає баланс, тож сама по собі відкат не блокує — але майно
+        # на руках в особи, а рух повернув би його на попередній склад.
+        if db.query(Assignment).filter(Assignment.instance_id == mv.instance_id,
+                                       Assignment.returned_date.is_(None)).first():
+            raise HTTPException(400, ISSUED_BLOCK)
         db.delete(mv)
         remaining = [m for m in all_mvs if m.id != mv.id]
         inst.current_warehouse_id = (
@@ -173,6 +195,11 @@ def delete_movement(mid: int, db: Session = Depends(get_db),
             bal = balance_of(db, mv.to_warehouse_id, mv.nomenclature_id, mv.is_official)
             if bal - mv.quantity < 0:
                 raise HTTPException(400, "Не можна відкликати: майно вже розійшлося далі")
+            # Видане особам лишається на складі-отримувачі — відкат не має
+            # залазити в те, що вже на руках.
+            if bal - mv.quantity < issued_qty(db, mv.to_warehouse_id, mv.nomenclature_id,
+                                              mv.is_official):
+                raise HTTPException(400, ISSUED_BLOCK)
         db.delete(mv)
     db.commit()
     return {"deleted": mid}
