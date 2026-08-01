@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import require_admin
 from app.database import get_db
+from app.custody_placement import place_instance
 from app.custody_snapshot import derive_service_id, doc_sort_key, snap_nakladna
 from app.models import (
     Assignment, CustodyDocument, CustodyMovement, Instance, Mvo, Nomenclature,
@@ -581,7 +582,7 @@ def import_movements_v2(
     # одну дату екземпляр міг опинитися не на тому складі.
     for instance, mvs in serial_movements.items():
         latest = max(mvs, key=lambda m: (m.date, doc_sort_key(m.doc_number), m.id))
-        instance.current_warehouse_id = latest.to_warehouse_id
+        place_instance(instance, latest.to_warehouse_id)
 
     _build_mvo_journal(db, mvo_obs, counts)
     for nm in sorted(mvo_unmatched):

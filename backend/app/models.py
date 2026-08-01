@@ -59,6 +59,35 @@ class Warehouse(Base):
     unit = relationship("Unit")
 
 
+class StoragePoint(Base):
+    """v2: фізична точка зберігання всередині складу («Бокс 3», «Гараж»).
+
+    Довідкова вісь, НЕ облікова: баланси й документи далі рахуються по складу.
+    Назва унікальна в межах складу."""
+    __tablename__ = "storage_points"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String, nullable=False)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False)
+
+    warehouse = relationship("Warehouse")
+
+
+class NomenclaturePoint(Base):
+    """v2: точка зберігання несерійного — одна на (картка, склад).
+
+    Без розподілу кількості: «все, що з цієї картки лежить на цьому складі,
+    лежить тут». Розподіл к-сті по точках вимагав би окремого леджера."""
+    __tablename__ = "nomenclature_points"
+
+    id = Column(Integer, primary_key=True)
+    nomenclature_id = Column(Integer, ForeignKey("nomenclature.id", ondelete="CASCADE"), nullable=False)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False)
+    storage_point_id = Column(Integer, ForeignKey("storage_points.id", ondelete="CASCADE"), nullable=False)
+
+    storage_point = relationship("StoragePoint")
+
+
 class Mvo(Base):
     """v2: журнал підписантів документів (історичний) — не лише МВО.
     Діючий = to_date IS NULL; максимум один діючий на склад/службу/систему."""
@@ -113,9 +142,13 @@ class Instance(Base):
     current_warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="SET NULL"), nullable=True)
     is_official = Column(Boolean, nullable=False, default=True)  # державне / волонтерське
     note = Column(String, nullable=True)              # примітка на екземплярі
+    # Фізична точка всередині складу (довідкова, не облікова): скидається, коли
+    # екземпляр переїжджає на інший склад — точка належить старому складу.
+    storage_point_id = Column(Integer, ForeignKey("storage_points.id", ondelete="SET NULL"), nullable=True)
 
     nomenclature = relationship("Nomenclature")
     current_warehouse = relationship("Warehouse")
+    storage_point = relationship("StoragePoint")
 
 
 class CustodyMovement(Base):

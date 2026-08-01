@@ -33,6 +33,14 @@
             <button v-for="f in OFFICIAL_FILTERS" :key="f.key" class="f-chip" :class="{ on: officialFilter === f.key }" @click="officialFilter = f.key">
               {{ f.label }}
             </button>
+            <template v-if="points.length">
+              <span class="filter-sep"></span>
+              <select class="point-filter" v-model="pointFilter">
+                <option value="all">Усі точки</option>
+                <option v-for="p in points" :key="p.id" :value="String(p.id)">{{ p.name }}</option>
+                <option value="none">Без точки</option>
+              </select>
+            </template>
           </div>
 
           <!-- Об'єднана таблиця майна на складі -->
@@ -41,10 +49,10 @@
               <thead><tr>
                 <th>Найменування</th><th class="col-serial">Серійний №</th><th class="col-off">Тип</th>
                 <th class="col-num">К-сть</th><th class="col-uom">Од.</th><th class="col-num">Вартість</th>
-                <th>На кому</th><th class="col-note">Примітка</th><th class="col-issue"></th>
+                <th>На кому</th><th class="col-point">Точка</th><th class="col-note">Примітка</th><th class="col-issue"></th>
               </tr></thead>
               <tbody>
-                <tr v-if="!filteredRows.length"><td colspan="9" class="empty">Порожньо</td></tr>
+                <tr v-if="!filteredRows.length"><td colspan="10" class="empty">Порожньо</td></tr>
                 <tr v-for="r in filteredRows" :key="r.key">
                   <td class="td-name">{{ r.name }}</td>
                   <td class="td-mono td-dim">{{ r.serial_no || '—' }}</td>
@@ -53,6 +61,14 @@
                   <td class="td-center">{{ r.unit_of_measure || '—' }}</td>
                   <td class="td-num">{{ r.price != null ? Number(r.price).toFixed(2) : '—' }}</td>
                   <td class="td-dim">{{ r.holder || '—' }}</td>
+                  <td class="col-point">
+                    <select v-if="r.state === 'stock' && points.length" class="point-sel"
+                      :value="r.storage_point_id || ''" @change="savePoint(r, $event.target.value)">
+                      <option value="">—</option>
+                      <option v-for="p in points" :key="p.id" :value="p.id">{{ p.name }}</option>
+                    </select>
+                    <span v-else class="td-dim">{{ r.storage_point || '—' }}</span>
+                  </td>
                   <td class="col-note">
                     <input v-if="r.kind === 'serial'" class="note-inp" :value="r.note || ''"
                       placeholder="—" @change="saveNote(r, $event.target.value)" />
@@ -233,9 +249,9 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
-import { getWarehouses, getUnits } from '../../api/structure.js'
+import { getWarehouses, getUnits, getStoragePoints } from '../../api/structure.js'
 import { getNomenclature, updateInstance } from '../../api/nomenclature.js'
-import { getBalances, getSerialAt, createDocument, receiveDocument, itemHistory } from '../../api/custody.js'
+import { getBalances, getSerialAt, createDocument, receiveDocument, itemHistory, setStockPoint } from '../../api/custody.js'
 import { getPersons, getServices } from '../../api/settings.js'
 import HistoryTimeline from '../../components/HistoryTimeline.vue'
 import ItemAutocomplete from '../../components/ItemAutocomplete.vue'
@@ -298,6 +314,26 @@ async function saveNote(r, val) {
   }
 }
 
+// Точка: серійному — на екземплярі, несерійному — позначка на (картка, склад).
+async function savePoint(r, val) {
+  const id = val ? Number(val) : null
+  try {
+    if (r.kind === 'serial') {
+      await updateInstance(r.nomenclature_id, r.instance_id, { storage_point_id: id })
+      const s = serial.value.find(x => x.instance_id === r.instance_id)
+      if (s) { s.storage_point_id = id; s.storage_point = pointName(id) }
+    } else {
+      await setStockPoint({ nomenclature_id: r.nomenclature_id, warehouse_id: warehouseId.value,
+                            storage_point_id: id })
+      for (const b of balances.value) {
+        if (b.nomenclature_id === r.nomenclature_id) { b.storage_point_id = id; b.storage_point = pointName(id) }
+      }
+    }
+  } catch (e) {
+    alert(e?.response?.data?.detail || 'Не вдалось зберегти точку')
+  }
+}
+
 function personLabel(p) {
   const full = [p.last_name, p.first_name].filter(Boolean).join(' ')
   return full || p.callsign || `#${p.id}`
@@ -340,6 +376,10 @@ const OFFICIAL_FILTERS = [
   { key: 'ndm', label: 'НДМ' },
 ]
 const officialFilter = ref('all')
+// Точки зберігання поточного складу (довідкова вісь — облік не чіпає).
+const points = ref([])
+const pointFilter = ref('all')            // all | none | «id точки»
+const pointName = (id) => points.value.find(p => p.id === id)?.name || null
 
 // Скільки несерійного (nom, is_official) зараз на руках (активні видачі).
 const activeIssued = (nomId, isOfficial) => assignments.value
@@ -358,6 +398,7 @@ const stockRows = computed(() => {
       name: b.name, serial_no: null, is_official: b.is_official, qty: free,
       unit_of_measure: b.unit_of_measure, price: b.price, holder: null,
       nomenclature_id: b.nomenclature_id, assignment: null,
+      storage_point_id: b.storage_point_id || null, storage_point: b.storage_point || null,
     })
   }
   for (const a of assignments.value.filter(a => !a.instance_id)) {
@@ -378,6 +419,7 @@ const stockRows = computed(() => {
       unit_of_measure: s.unit_of_measure, price: s.price,
       holder: a ? personName(a.person_id) : null, note: s.note,
       instance_id: s.instance_id, nomenclature_id: s.nomenclature_id, assignment: a,
+      storage_point_id: s.storage_point_id || null, storage_point: s.storage_point || null,
     })
   }
   rows.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'uk') || (a.serial_no || '').localeCompare(b.serial_no || ''))
@@ -389,6 +431,8 @@ const filteredRows = computed(() => {
   let rows = stockFilter.value === 'all' ? stockRows.value : stockRows.value.filter(r => r.state === stockFilter.value)
   if (officialFilter.value === 'official') rows = rows.filter(r => r.is_official)
   else if (officialFilter.value === 'ndm') rows = rows.filter(r => !r.is_official)
+  if (pointFilter.value === 'none') rows = rows.filter(r => !r.storage_point_id)
+  else if (pointFilter.value !== 'all') rows = rows.filter(r => String(r.storage_point_id) === pointFilter.value)
   const q = stockSearch.value.trim().toLowerCase()
   if (q) rows = rows.filter(r =>
     (r.name || '').toLowerCase().includes(q) || (r.serial_no || '').toLowerCase().includes(q))
@@ -421,11 +465,15 @@ async function loadRefs() {
 }
 async function loadStock() {
   if (!warehouseId.value) return
-  const [b, s] = await Promise.all([
+  const [b, s, p] = await Promise.all([
     getBalances(warehouseId.value), getSerialAt(warehouseId.value),
+    getStoragePoints(warehouseId.value),
   ])
   balances.value = b.data
   serial.value = s.data
+  points.value = p.data
+  if (pointFilter.value !== 'all' && pointFilter.value !== 'none'
+      && !points.value.some(x => String(x.id) === pointFilter.value)) pointFilter.value = 'all'
   // Видачі є і на складі підрозділу (облік), і на складі служби (НДМ напряму).
   assignments.value = (await getAssignments(warehouseId.value)).data
 }
@@ -724,6 +772,10 @@ th, td { padding:9px 14px; text-align:left; font-size:13px; border-bottom:1px so
 th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; }
 .col-off { width:130px; } .col-num { width:110px; text-align:right; } .col-uom { width:70px; } .col-date { width:110px; } .col-issue { width:180px; text-align:right; white-space:nowrap; }
 .col-note { width:160px; }
+.col-point { width:140px; }
+.point-sel { width:100%; box-sizing:border-box; border:1px solid transparent; background:transparent; border-radius:var(--radius-sm); padding:4px 6px; font-family:inherit; font-size:13px; color:var(--text); }
+.point-sel:hover { border-color:var(--border-light); } .point-sel:focus { border-color:var(--border); background:var(--surface); outline:none; }
+.point-filter { border:1px solid var(--border); background:var(--surface); border-radius:var(--radius-sm); padding:4px 8px; font-family:inherit; font-size:12.5px; color:var(--text-mid); }
 .note-inp { width:100%; box-sizing:border-box; border:1px solid transparent; background:transparent; border-radius:var(--radius-sm); padding:4px 6px; font-family:inherit; font-size:13px; color:var(--text); }
 .note-inp:hover { border-color:var(--border-light); } .note-inp:focus { border-color:var(--border); background:var(--surface); outline:none; }
 .td-issue { text-align:center; }

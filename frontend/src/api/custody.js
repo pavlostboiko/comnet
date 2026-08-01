@@ -9,6 +9,7 @@ export const getSerialAt     = (whId)  => http.get(`/custody/serial?warehouse_id
 export const whereIs         = (nomId) => http.get(`/custody/where?nomenclature_id=${nomId}`)
 export const itemHistory     = (nomId, instanceId) => http.get('/custody/history', { params: { nomenclature_id: nomId, instance_id: instanceId || undefined } })
 export const getTotals       = ()      => http.get('/custody/totals')
+export const setStockPoint   = (data)  => http.put('/custody/stock-point', data)
 
 // v2 documents (накладна/акт над рухами)
 export const getDocs      = (params) => http.get('/custody/documents', { params })

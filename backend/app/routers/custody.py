@@ -18,12 +18,14 @@ from app.acl import (
     check_movement_create, check_warehouse_read, is_admin, scope_movements,
 )
 from app.auth import get_current_user
+from app.custody_placement import place_instance
 from app.custody_snapshot import doc_sort_key
 from app.database import get_db
 from app.models import (
-    Assignment, CustodyMovement, Instance, Nomenclature, Person, User, Warehouse,
+    Assignment, CustodyMovement, Instance, Nomenclature, NomenclaturePoint, Person,
+    StoragePoint, User, Warehouse,
 )
-from app.schemas import CustodyMovementCreate, DocumentBatchCreate
+from app.schemas import CustodyMovementCreate, DocumentBatchCreate, StockPointSet
 
 router = APIRouter(prefix="/api/custody", tags=["custody"])
 
@@ -52,6 +54,12 @@ def balance_of(db: Session, warehouse_id: int, nomenclature_id: int, is_official
 
 
 ISSUED_BLOCK = "Не можна відкликати: майно видане особі — спершу оформіть повернення"
+
+
+def _point_names(db: Session, warehouse_id: int) -> dict:
+    """{id точки: назва} для складу — щоб не смикати БД на кожен рядок."""
+    return {p.id: p.name for p in db.query(StoragePoint).filter(
+        StoragePoint.warehouse_id == warehouse_id).all()}
 
 
 def issued_qty(db: Session, warehouse_id: int, nomenclature_id: int, is_official: bool) -> Decimal:
@@ -151,7 +159,7 @@ def create_movement(payload: CustodyMovementCreate, db: Session = Depends(get_db
     db.add(mv)
     # Денормалізація: оновлюємо поточне розташування екземпляра
     if nom.is_serialized:
-        inst.current_warehouse_id = to  # None для writeoff
+        place_instance(inst, to)        # None для writeoff; зміна складу скидає точку
     db.commit()
     db.refresh(mv)
     return _mv_dict(mv)
@@ -188,8 +196,7 @@ def delete_movement(mid: int, db: Session = Depends(get_db),
             raise HTTPException(400, ISSUED_BLOCK)
         db.delete(mv)
         remaining = [m for m in all_mvs if m.id != mv.id]
-        inst.current_warehouse_id = (
-            max(remaining, key=key).to_warehouse_id if remaining else None)
+        place_instance(inst, max(remaining, key=key).to_warehouse_id if remaining else None)
     else:
         if mv.to_warehouse_id is not None:
             bal = balance_of(db, mv.to_warehouse_id, mv.nomenclature_id, mv.is_official)
@@ -249,7 +256,7 @@ def create_document(payload: DocumentBatchCreate, db: Session = Depends(get_db),
         )
         db.add(mv)
         if nom.is_serialized:
-            inst.current_warehouse_id = to.id
+            place_instance(inst, to.id)
         db.flush()
         # Опційно: одразу видати особі (та сама транзакція — атомарно з рухом).
         # У накладну особа не пише — це окремий шар (assignments).
@@ -286,6 +293,10 @@ def balances(warehouse_id: int, db: Session = Depends(get_db), user: User = Depe
     for nid, off, qty in rows_out:
         net[(nid, off)] = net.get((nid, off), Decimal(0)) - Decimal(qty or 0)
 
+    point_names = _point_names(db, warehouse_id)
+    # Точка несерійного — одна на (картка, склад), незалежно від держ/волонт.
+    nom_points = {p.nomenclature_id: p.storage_point_id for p in db.query(NomenclaturePoint)
+                  .filter(NomenclaturePoint.warehouse_id == warehouse_id).all()}
     out = []
     for (nid, off), qty in net.items():
         if qty > 0:
@@ -299,9 +310,42 @@ def balances(warehouse_id: int, db: Session = Depends(get_db), user: User = Depe
                 "qty": str(qty),
                 "unit_of_measure": nom.unit_of_measure if nom else None,
                 "price": str(nom.price) if nom and nom.price is not None else None,
+                "storage_point_id": nom_points.get(nid),
+                "storage_point": point_names.get(nom_points.get(nid)),
             })
     out.sort(key=lambda x: (x["name"] or "", not x["is_official"]))
     return out
+
+
+@router.put("/stock-point")
+def set_stock_point(payload: StockPointSet, db: Session = Depends(get_db),
+                    user: User = Depends(get_current_user)):
+    """Точка зберігання НЕсерійного: одна на (картка, склад); `null` — прибрати.
+    Кількість по точках не ділиться — це позначка «де воно лежить»."""
+    check_warehouse_read(user, payload.warehouse_id)
+    nom = db.get(Nomenclature, payload.nomenclature_id)
+    if not nom:
+        raise HTTPException(400, "Номенклатуру не знайдено")
+    if nom.is_serialized:
+        raise HTTPException(400, "Для серійного точка ставиться на екземплярі")
+    row = db.query(NomenclaturePoint).filter(
+        NomenclaturePoint.nomenclature_id == nom.id,
+        NomenclaturePoint.warehouse_id == payload.warehouse_id).first()
+    if payload.storage_point_id is None:
+        if row:
+            db.delete(row)
+            db.commit()
+        return {"storage_point_id": None}
+    point = db.get(StoragePoint, payload.storage_point_id)
+    if not point or point.warehouse_id != payload.warehouse_id:
+        raise HTTPException(400, "Точка не з цього складу")
+    if row:
+        row.storage_point_id = point.id
+    else:
+        db.add(NomenclaturePoint(nomenclature_id=nom.id, warehouse_id=payload.warehouse_id,
+                                 storage_point_id=point.id))
+    db.commit()
+    return {"storage_point_id": point.id}
 
 
 @router.get("/totals")
@@ -394,6 +438,8 @@ def where_is(nomenclature_id: int, db: Session = Depends(get_db), user: User = D
                 "instance_id": it.id, "serial_no": it.serial_no, "card_number": it.card_number,
                 "warehouse_id": it.current_warehouse_id, "warehouse_name": wh_name(it.current_warehouse_id),
                 "is_official": it.is_official, "holder": holder, "note": it.note,
+                "storage_point": (db.get(StoragePoint, it.storage_point_id).name
+                                  if it.storage_point_id else None),
             })
         result["serial"].sort(key=lambda x: (x["warehouse_name"] or "", x["serial_no"] or ""))
     else:
@@ -525,6 +571,7 @@ def serial_at_warehouse(warehouse_id: int, db: Session = Depends(get_db), user: 
     check_warehouse_read(user, warehouse_id)
     svc_scope = user.service_id if (not is_admin(user) and user.role == "service") else None
     rows = db.query(Instance).filter(Instance.current_warehouse_id == warehouse_id).all()
+    point_names = _point_names(db, warehouse_id)
     out = []
     for it in rows:
         nom = db.get(Nomenclature, it.nomenclature_id)
@@ -539,6 +586,8 @@ def serial_at_warehouse(warehouse_id: int, db: Session = Depends(get_db), user: 
             "unit_of_measure": nom.unit_of_measure if nom else None,
             "price": str(nom.price) if nom and nom.price is not None else None,
             "note": it.note,
+            "storage_point_id": it.storage_point_id,
+            "storage_point": point_names.get(it.storage_point_id),
         })
     out.sort(key=lambda x: (x["name"] or "", x["serial_no"]))
     return out

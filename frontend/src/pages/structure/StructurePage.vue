@@ -85,6 +85,26 @@
           </table>
         </div>
 
+        <!-- ═══ Точки зберігання ═══ -->
+        <div v-if="tab === 'points'" class="table-wrap">
+          <div class="hint">Точка — де майно лежить фізично всередині складу. На облік і накладні не впливає:
+            документи й далі йдуть зі складу. При переміщенні на інший склад точка скидається.</div>
+          <table>
+            <thead><tr><th>Назва</th><th>Склад</th><th class="col-acts"></th></tr></thead>
+            <tbody>
+              <tr v-if="!storagePoints.length"><td colspan="3" class="empty">Немає точок</td></tr>
+              <tr v-for="p in storagePoints" :key="p.id">
+                <td class="td-name">{{ p.name }}</td>
+                <td class="td-dim">{{ warehouseName(p.warehouse_id) }}</td>
+                <td class="td-acts">
+                  <button class="act-e" @click="renamePoint(p)" title="Перейменувати">✎</button>
+                  <button class="act-del" @click="delPoint(p)" title="Видалити">✕</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
         <!-- ═══ Підписанти (МВО складів, фінслужба, начальники служб) ═══ -->
         <div v-if="tab === 'mvo'" class="table-wrap">
           <table>
@@ -245,6 +265,15 @@
             <label class="fl">Діє з *</label><input class="fi" type="date" v-model="form.from_date" />
             <label class="fl">Діє по</label><input class="fi" type="date" v-model="form.to_date" />
           </template>
+          <template v-else-if="tab === 'points'">
+            <label class="fl">Назва *</label>
+            <input class="fi" v-model="form.name" placeholder="напр. Бокс 3" />
+            <label class="fl">Склад *</label>
+            <select class="fi" v-model="form.warehouse_id">
+              <option :value="null" disabled>— оберіть —</option>
+              <option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
+            </select>
+          </template>
           <template v-else-if="tab === 'optypes'">
             <label class="fl">Назва *</label><input class="fi" v-model="form.name" />
             <label class="fl">Префікс номера <small>напр. НК-2026-</small></label>
@@ -305,6 +334,7 @@ import {
   getUnits, createUnit, updateUnit, deleteUnit, getWarehouses, renameWarehouse,
   getGroups, createGroup, deleteGroup,
   getMvo, createMvo, updateMvo, deleteMvo,
+  getStoragePoints, createStoragePoint, renameStoragePoint, deleteStoragePoint,
 } from '../../api/structure.js'
 import {
   getNomenclature, createNomenclature, deleteNomenclature,
@@ -314,6 +344,7 @@ const tabs = [
   { key: 'services', label: 'Служби' },
   { key: 'units', label: 'Підрозділи' },
   { key: 'warehouses', label: 'Склади' },
+  { key: 'points', label: 'Точки зберігання' },
   { key: 'mvo', label: 'Підписанти' },
   { key: 'groups', label: 'Групи' },
   { key: 'persons', label: 'Особи' },
@@ -328,6 +359,7 @@ const units = ref([])
 const nomenclature = ref([])
 const warehouses = ref([])
 const mvo = ref([])
+const storagePoints = ref([])
 const groups = ref([])
 const persons = ref([])
 const opTypes = ref([])
@@ -362,15 +394,17 @@ function mvoScopeLabel(m) {
 }
 
 async function loadAll() {
-  const [s, u, n, w, m, g, p, ot, us] = await Promise.all([
+  const [s, u, n, w, m, g, p, ot, us, sp] = await Promise.all([
     getServices(), getUnits(), getNomenclature(), getWarehouses(),
     getMvo(), getGroups(), getPersons(), getOpTypes(), getUnitSettings(),
+    getStoragePoints(),
   ])
   services.value = s.data
   units.value = u.data
   nomenclature.value = n.data
   warehouses.value = w.data
   mvo.value = m.data
+  storagePoints.value = sp.data
   groups.value = g.data
   persons.value = p.data
   opTypes.value = ot.data
@@ -418,6 +452,7 @@ function openAdd() {
   else if (tab.value === 'persons') { form.unit_id = null; form.group_id = null }
   else if (tab.value === 'units') { form.is_external = false }
   else if (tab.value === 'optypes') { form.name = ''; form.number_prefix = '' }
+  else if (tab.value === 'points') { form.name = ''; form.warehouse_id = null }
   addOpen.value = true
 }
 
@@ -471,6 +506,17 @@ function openEditMvo(m) {
   })
   addOpen.value = true
 }
+async function renamePoint(p) {
+  const name = prompt('Нова назва точки:', p.name)
+  if (name === null || !name.trim() || name.trim() === p.name) return
+  try { await renameStoragePoint(p.id, name.trim()); await loadAll() }
+  catch (e) { alert(e?.response?.data?.detail || 'Помилка') }
+}
+async function delPoint(p) {
+  if (!confirm(`Видалити точку «${p.name}»? Майно лишиться на складі, позначки точки зникнуть.`)) return
+  try { await deleteStoragePoint(p.id); await loadAll() }
+  catch (e) { alert(e?.response?.data?.detail || 'Помилка') }
+}
 async function delMvo(m) {
   if (!confirm('Видалити запис підписанта?')) return
   try { await deleteMvo(m.id); await loadAll() }
@@ -523,6 +569,10 @@ async function save() {
           person_id: form.person_id,
           position: form.position || null, rank: form.rank || null, from_date: form.from_date })
       }
+    }
+    else if (tab.value === 'points') {
+      if (!form.name || !form.warehouse_id) { error.value = 'Вкажіть назву і склад'; saving.value = false; return }
+      await createStoragePoint({ name: form.name, warehouse_id: form.warehouse_id })
     }
     else if (tab.value === 'optypes') {
       if (!form.name) { error.value = 'Вкажіть назву'; saving.value = false; return }
