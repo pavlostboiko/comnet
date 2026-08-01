@@ -15,7 +15,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.acl import (
-    check_movement_create, check_warehouse_read, is_admin, scope_movements,
+    check_movement_create, check_nomenclature_cud, check_warehouse_read, is_admin,
+    scope_movements,
 )
 from app.auth import get_current_user
 from app.custody_placement import place_instance
@@ -326,6 +327,7 @@ def set_stock_point(payload: StockPointSet, db: Session = Depends(get_db),
     nom = db.get(Nomenclature, payload.nomenclature_id)
     if not nom:
         raise HTTPException(400, "Номенклатуру не знайдено")
+    check_nomenclature_cud(user, nom.service_id)   # як для точки на екземплярі
     if nom.is_serialized:
         raise HTTPException(400, "Для серійного точка ставиться на екземплярі")
     row = db.query(NomenclaturePoint).filter(

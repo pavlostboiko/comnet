@@ -89,6 +89,18 @@ test('storage points: assign to serial + non-serial, reset on transfer, guards',
     bal = await api.get(`/api/custody/balances?warehouse_id=${svcWh.id}`).then(r => r.json())
     expect(bal.find(b => b.nomenclature_id === nom.id).storage_point_id).toBeNull()
 
+    // service-юзер не ставить точку чужій службі (як і для точки на екземплярі)
+    const otherSvc = await postJson(api, '/api/settings/services', { name: `SPSvcB ${tag}` })
+    cleanup.push(`/api/settings/services/${otherSvc.id}`)
+    const uname = `spuser-${tag}`
+    await postJson(api, '/api/users', { username: uname, password: 'test1234',
+                                        role: 'service', service_id: otherSvc.id })
+    const svcApi = await loginApi(request, { user: uname, pass: 'test1234' })
+    const foreign = await svcApi.put('/api/custody/stock-point', { data: {
+      nomenclature_id: nom.id, warehouse_id: svcWh.id, storage_point_id: box2.id } })
+    expect(foreign.status()).toBe(403)
+    await svcApi.dispose()
+
     // Видалення точки не чіпає майно
     await api.put('/api/custody/stock-point', { data: {
       nomenclature_id: nom.id, warehouse_id: svcWh.id, storage_point_id: box2.id } })
