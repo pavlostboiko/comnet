@@ -15,13 +15,15 @@ from sqlalchemy.orm import Session
 
 from app.models import (
     Assignment, AuditLog, CustodyDocument, CustodyMovement, Group, Instance,
-    Mvo, Nomenclature, Person, Service, Unit, User, Warehouse,
+    Mvo, Nomenclature, NomenclaturePoint, Person, Service, StoragePoint, Unit,
+    User, Warehouse,
 )
 
 # Сутності, зміни яких логуємо (майно + довідники + користувачі).
 TRACKED = {
     Nomenclature, Instance, CustodyMovement, Assignment, CustodyDocument,
     Service, Unit, Group, Warehouse, Person, Mvo, User,
+    StoragePoint, NomenclaturePoint,
 }
 
 # Поля, що не зберігаємо в diff (чутливі/шумні).

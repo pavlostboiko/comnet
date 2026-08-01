@@ -73,6 +73,7 @@ const ENT = {
   Assignment: 'Видача', CustodyDocument: 'Документ', Service: 'Служба',
   Unit: 'Підрозділ', Group: 'Група', Warehouse: 'Склад', Person: 'Особа',
   Mvo: 'Підписант', User: 'Користувач',
+  StoragePoint: 'Точка зберігання', NomenclaturePoint: 'Точка (несерійне)',
 }
 const ACT = { create: 'Створено', update: 'Змінено', delete: 'Видалено' }
 const entLabel = (t) => ENT[t] || t
