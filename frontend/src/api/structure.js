@@ -16,6 +16,12 @@ export const deleteGroup = (id)       => http.delete(`/structure/groups/${id}`)
 export const getWarehouses   = ()         => http.get('/structure/warehouses')
 export const renameWarehouse = (id, name) => http.put(`/structure/warehouses/${id}`, { name })
 
+// Точки зберігання (фізичне розміщення всередині складу)
+export const getStoragePoints   = (whId) => http.get('/structure/storage-points', { params: { warehouse_id: whId || undefined } })
+export const createStoragePoint = (data) => http.post('/structure/storage-points', data)
+export const renameStoragePoint = (id, name) => http.put(`/structure/storage-points/${id}`, { name })
+export const deleteStoragePoint = (id)   => http.delete(`/structure/storage-points/${id}`)
+
 // МВО
 export const getMvo    = ()         => http.get('/structure/mvo')
 export const createMvo = (data)     => http.post('/structure/mvo', data)

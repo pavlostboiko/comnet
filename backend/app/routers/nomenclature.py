@@ -12,7 +12,8 @@ from app.acl import check_nomenclature_cud, scope_nomenclature
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import (
-    Assignment, CustodyMovement, Instance, Nomenclature, Service, User, Warehouse,
+    Assignment, CustodyMovement, Instance, Nomenclature, Service, StoragePoint,
+    User, Warehouse,
 )
 from app.schemas import (
     InstanceCreate, InstanceRead, InstanceUpdate, NomenclatureCreate, NomenclatureRead,
@@ -131,7 +132,14 @@ def update_instance(nid: int, iid: int, payload: InstanceUpdate, db: Session = D
     inst = db.get(Instance, iid)
     if not inst or inst.nomenclature_id != nid:
         raise HTTPException(404, "Екземпляр не знайдено")
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    fields = payload.model_dump(exclude_unset=True)
+    if fields.get("storage_point_id") is not None:
+        point = db.get(StoragePoint, fields["storage_point_id"])
+        # Точка належить складу — чужу поставити не можна (інакше «лежить» не там,
+        # де обліковується).
+        if not point or point.warehouse_id != inst.current_warehouse_id:
+            raise HTTPException(400, "Точка не з поточного складу екземпляра")
+    for field, value in fields.items():
         setattr(inst, field, value)
     db.commit()
     db.refresh(inst)

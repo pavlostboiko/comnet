@@ -2,8 +2,8 @@
 
 **Стартова точка нової сесії.** Огляд: де ми, що зроблено, що далі.
 
-**Оновлено:** 2026-07-31 · **HEAD:** `main` (запушено).
-Ядро v2 у `main`, **v1 повністю знесено** (міграції 012-**028**). **Кожна зміна — через гілку → `merge --no-ff` у `main` → push.**
+**Оновлено:** 2026-08-01 · **HEAD:** `main` (запушено).
+Ядро v2 у `main`, **v1 повністю знесено** (міграції 012-**029**). **Кожна зміна — через гілку → `merge --no-ff` у `main` → push.**
 
 > ⚠️ **Деплой після дропу v1:** спершу **`pg_dump`** (міграція 026 DROP-ає таблиці v1 НЕЗВОРОТНО),
 > потім `git pull` → `docker compose up -d --build`. Дані `unit_settings`/`op_types` (реквізити/типи
@@ -38,7 +38,7 @@ document_items, movements, documents, items, asset_documents, recipients`). Жо
 рендеру/снапу/парсингу винесено в `nakladna_common.py` + `import_helpers.py`. **«Реквізити» та
 «Типи операцій» тепер вкладки в Довідниках** (`structure`), бек `/api/settings/unit`+`/op-types`.
 
-## v2-схема (міграції 012-028)
+## v2-схема (міграції 012-029)
 Ключові таблиці: `services, units(+is_external), groups, warehouses(service|unit), mvo, nomenclature(is_official,is_serialized,price), instances(serial_no,card_number,current_warehouse,is_official,note), custody_movements(type,qty,is_official,card_number,doc_number,document_id), assignments(warehouse,person,nom/instance,qty,issued/returned+returned_by), users(role,scope), persons(unit_id,callsign,group_id,ipn,position/rank), audit_log, custody_documents`.
 
 **Нові міграції цієї сесії:**
@@ -47,6 +47,7 @@ document_items, movements, documents, items, asset_documents, recipients`). Жо
 - **025** drop `custody_documents.sender_id/receiver_id/fin_id` — підписанти тепер із журналу МВО.
 - **027** `mvo.position/rank` (посада/звання на періоді призначення), дроп `persons.position/rank`.
 - **028** `mvo.service_id` — начальник служби як третій вид підписанта.
+- **029** `storage_points` + `instances.storage_point_id` + `nomenclature_points` — точки зберігання.
 
 ## Підписанти (журнал `mvo` — важливо, багато змінилось)
 - Журнал `mvo`: `kind='warehouse'` (на склад служби/внутр.підрозділу; **не** зовнішній), `kind='fin'` (**глобальна фінслужба**, 1 діюча, без складу, видима всім) або `kind='service_chief'` (**начальник служби**, 1 діючий на службу; фолбек — вільний текст `services.chief_*`, доки службу не завели в журнал). Записи мають `from_date/to_date` (історичні).
@@ -54,6 +55,14 @@ document_items, movements, documents, items, asset_documents, recipients`). Жо
 - Керування: Довідники → **Підписанти** (форма «Тип»: МВО складу / Фінслужба / Начальник служби, пошуковий пікер особи, **посада/звання на записі МВО**, повне **редагування** особи/посади/звання/дат + **видалення**).
 - **Посада/звання — на записі МВО, не на Особі** (міграція 027): snap документа бере посаду/звання з діючого запису МВО на `doc_date` (`mvo_at`), тобто на період того призначення. З картки Особи ці поля прибрано.
 - «Очистити людей» **зберігає** осіб-МВО (∪ user-linked), щоб журнал не осипався.
+
+## Точки зберігання (фізичне розміщення)
+Довідкова вісь, НЕ облікова: майно обліково на ОДНОМУ складі (з нього ж у документи), а точка
+каже, де воно лежить фізично. `storage_points` (назва+склад) → серійне: `instances.storage_point_id`;
+несерійне: `nomenclature_points` — одна точка на (картка, склад), без розподілу кількості.
+**Переїзд на інший склад скидає точку** — усі присвоєння складу екземпляру йдуть через
+`place_instance()` (`custody_placement.py`), щоб жоден шлях цього не забув. Керування:
+Довідники → «Точки зберігання»; проставляння — колонка «Точка» на «Залишках» (+фільтр).
 
 ## Backend роутери
 `structure` (units/groups/warehouses/mvo +edit/delete +kind), `nomenclature` (+instances, note; is_official-lock+cascade; scope для service), `custody` (movements/balances/serial/where/totals/history + document batch + **DELETE movement=відкликати**), `custody_documents` (CRUD+sign/unsign+XLSX Дод.25+/receive +form «без документа»/НДМ), `assignments` (issue/return; **issue_row** shared; НДМ-видача зі служби будь-кому), `import_v2` (persons/items/movements/assignments/wipe/wipe-persons), **`audit`** (`GET /api/audit` +/meta).
@@ -64,7 +73,7 @@ document_items, movements, documents, items, asset_documents, recipients`). Жо
 - **Майно** (`catalog`): фільтр служби+**облік/ндм** у шапці (для service-юзера дропдаун служб схований, бачить лише свою).
 - **Залишки** (`stock`): кнопки-склади; фільтри стану + **облік/ндм**; «Прийняти майно» (форма накладна/акт/**без документа(НДМ)**, випадайка фільтрується за формою), «Додати переміщення» (пікер майна + **опц. видача особі** на рядок). **«+ Рух» прибрано.** «Історія» на всіх рядках (і несерійне). НДМ видається зі службового складу будь-кому.
 - **Документи**: підписанти read-only (Здав/Прийняв/Фін/**Начальник служби** — з журналу); **Служба не вибирається** — виводиться з майна позицій (різні служби → порожньо); у «Реквізитах» — **Передає/Приймає**; чернетка — «+ додати позицію»; «Без документа» — «Відкликати рух».
-- **Довідники** (`structure`): вкладки Служби/Підрозділи/Склади/**Підписанти**/Групи/Особи + **Типи операцій** і **Реквізити** (перенесені зі старого /settings; бек `/api/settings`). Підписанти: Тип (МВО складу/Фінслужба загальна/Начальник служби), пошуковий пікер, ✎/✕.
+- **Довідники** (`structure`): вкладки Служби/Підрозділи/Склади/**Точки зберігання**/**Підписанти**/Групи/Особи + **Типи операцій** і **Реквізити** (перенесені зі старого /settings; бек `/api/settings`). Підписанти: Тип (МВО складу/Фінслужба загальна/Начальник служби), пошуковий пікер, ✎/✕.
 - **Імпорт**: **Люди** / 1.Каталог / 2.Переміщення / 3.Видачі + «Очистити інвентар» / «Очистити людей».
 - **Журнал змін** (`audit/AuditPage`): фільтри сутність/дія/дата + diff.
 Компоненти: `HistoryTimeline`, `NomenclatureModal` (+defaultOfficial), `ItemAutocomplete` (+placeholder).

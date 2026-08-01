@@ -5,16 +5,17 @@ and per unit (see ensure_warehouse_for_*), and it's stable — bound to the
 service/unit, never to a person. МВО rotation touches only `mvo`.
 """
 from datetime import date
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user, require_admin
 from app.database import get_db
-from app.models import Group, Mvo, Person, Service, Unit, User, Warehouse
+from app.models import Group, Mvo, Person, Service, StoragePoint, Unit, User, Warehouse
 from app.schemas import (
     GroupCreate, GroupRead, GroupUpdate, MvoCreate, MvoRead, MvoUpdate,
+    StoragePointCreate, StoragePointRead, StoragePointUpdate,
     UnitCreate, UnitRead, UnitUpdate, WarehouseRead, WarehouseUpdate,
 )
 
@@ -143,6 +144,68 @@ def rename_warehouse(wid: int, payload: WarehouseUpdate, db: Session = Depends(g
     db.commit()
     db.refresh(wh)
     return wh
+
+
+# ── Точки зберігання (фізичне розміщення всередині складу) ───────────────────
+
+@router.get("/storage-points", response_model=List[StoragePointRead])
+def list_storage_points(warehouse_id: Optional[int] = None, db: Session = Depends(get_db),
+                        _: User = Depends(get_current_user)):
+    q = db.query(StoragePoint)
+    if warehouse_id is not None:
+        q = q.filter(StoragePoint.warehouse_id == warehouse_id)
+    return q.order_by(StoragePoint.warehouse_id, StoragePoint.name).all()
+
+
+@router.post("/storage-points", response_model=StoragePointRead,
+             status_code=status.HTTP_201_CREATED)
+def create_storage_point(payload: StoragePointCreate, db: Session = Depends(get_db),
+                         _: User = Depends(require_admin)):
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(400, "Назва не може бути порожньою")
+    if not db.get(Warehouse, payload.warehouse_id):
+        raise HTTPException(400, "Склад не знайдено")
+    if db.query(StoragePoint).filter(StoragePoint.warehouse_id == payload.warehouse_id,
+                                     StoragePoint.name == name).first():
+        raise HTTPException(409, "Така точка на цьому складі вже є")
+    row = StoragePoint(name=name, warehouse_id=payload.warehouse_id)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.put("/storage-points/{pid}", response_model=StoragePointRead)
+def rename_storage_point(pid: int, payload: StoragePointUpdate, db: Session = Depends(get_db),
+                         _: User = Depends(require_admin)):
+    """Тільки перейменування — переносити точку на інший склад немає сенсу."""
+    row = db.get(StoragePoint, pid)
+    if not row:
+        raise HTTPException(404, "Точку не знайдено")
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(400, "Назва не може бути порожньою")
+    dup = db.query(StoragePoint).filter(StoragePoint.warehouse_id == row.warehouse_id,
+                                        StoragePoint.name == name,
+                                        StoragePoint.id != pid).first()
+    if dup:
+        raise HTTPException(409, "Така точка на цьому складі вже є")
+    row.name = name
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.delete("/storage-points/{pid}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_storage_point(pid: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """Видалення точки не чіпає майно: в екземплярів вона обнуляється (SET NULL),
+    позначки несерійного зникають разом із нею (CASCADE)."""
+    row = db.get(StoragePoint, pid)
+    if not row:
+        raise HTTPException(404, "Точку не знайдено")
+    db.delete(row)
+    db.commit()
 
 
 # ── МВО (temporal assignment journal) ────────────────────────────────────────

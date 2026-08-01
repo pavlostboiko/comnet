@@ -87,6 +87,29 @@ class WarehouseUpdate(BaseModel):
     name: str
 
 
+class StoragePointRead(BaseModel):
+    id: int
+    name: str
+    warehouse_id: int
+    model_config = {"from_attributes": True}
+
+
+class StoragePointCreate(BaseModel):
+    name: str
+    warehouse_id: int
+
+
+class StoragePointUpdate(BaseModel):
+    name: str
+
+
+class StockPointSet(BaseModel):
+    """Точка для НЕсерійного: одна на (картка, склад); None — прибрати."""
+    nomenclature_id: int
+    warehouse_id: int
+    storage_point_id: Optional[int] = None
+
+
 class MvoRead(BaseModel):
     id: int
     kind: str = "warehouse"
@@ -164,6 +187,7 @@ class InstanceRead(BaseModel):
     current_warehouse_id: Optional[int] = None
     is_official: bool
     note: Optional[str] = None
+    storage_point_id: Optional[int] = None
     model_config = {"from_attributes": True}
 
 
@@ -176,6 +200,7 @@ class InstanceCreate(BaseModel):
 
 class InstanceUpdate(BaseModel):
     note: Optional[str] = None
+    storage_point_id: Optional[int] = None      # точка в межах поточного складу
 
 
 # --- v2 custody movements ---
