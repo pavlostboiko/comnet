@@ -4,6 +4,13 @@ const { URL, API, uiLogin, getToken } = require('./helpers/login')
 
 // A serial item at a unit warehouse: issue to a person, then the row itself
 // offers «Повернути» (no need to hunt the «Видано особам» section).
+
+// Пікер особи в модалці «Видати» — пошуковий (ItemAutocomplete), не <select>.
+async function pickPerson(page, text) {
+  await page.locator('.modal .ac-field input').fill(text)
+  await page.locator('.ac-dropdown .ac-item', { hasText: text }).first().click()
+}
+
 test('serial issue then row-level return on Залишки', async ({ page, request }) => {
   const token = await getToken(request)
   const api = await pwRequest.newContext({ baseURL: API, extraHTTPHeaders: { Authorization: `Bearer ${token}` } })
@@ -29,7 +36,7 @@ test('serial issue then row-level return on Залишки', async ({ page, requ
   const row = page.locator('tbody tr', { hasText: `SN-${ts}` }).first()
   await expect(row.locator('.btn-issue')).toBeVisible()          // free → «Видати»
   await row.locator('.btn-issue').click()
-  await page.locator('.modal select').first().selectOption({ label: `Боєць${ts} С` })
+  await pickPerson(page, `Боєць${ts}`)
   await page.locator('.btn-pri', { hasText: 'Видати' }).click()
   await expect(page.locator('.overlay.open')).toHaveCount(0)
 

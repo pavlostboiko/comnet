@@ -205,10 +205,12 @@
         </div>
         <div class="modal-body">
           <label class="fl">Кому</label>
-          <select class="fi" v-model="issue.person_id">
-            <option :value="null" disabled>— оберіть особу —</option>
-            <option v-for="p in issuePersons" :key="p.id" :value="p.id">{{ personLabel(p) }}</option>
-          </select>
+          <div class="ac-field">
+            <ItemAutocomplete :items="issuePersonOptions" placeholder="пошук особи…"
+              :model-value="issue.person_id ? personName(issue.person_id) : ''"
+              @select="e => issue.person_id = e.id"
+              @update:model-value="v => { if (!v) issue.person_id = null }" />
+          </div>
           <template v-if="!issue.instance_id">
             <label class="fl">Кількість</label>
             <input class="fi" type="number" min="0.0001" step="0.0001" v-model="issue.quantity" />
@@ -255,7 +257,7 @@ import { getBalances, getSerialAt, createDocument, receiveDocument, itemHistory,
 import { getPersons, getServices } from '../../api/settings.js'
 import HistoryTimeline from '../../components/HistoryTimeline.vue'
 import ItemAutocomplete from '../../components/ItemAutocomplete.vue'
-import { personLabel, personOptions, sortedPersons } from '../../utils/person.js'
+import { personLabel, personOptions } from '../../utils/person.js'
 import NomenclatureModal from '../../components/NomenclatureModal.vue'
 import { getAssignments, createAssignment, returnAssignment } from '../../api/assignments.js'
 import { useAuthStore } from '../../stores/auth.js'
@@ -285,7 +287,7 @@ const isUnitWh = computed(() => selectedWarehouse.value?.type === 'unit')
 const isServiceWh = computed(() => selectedWarehouse.value?.type === 'service')
 const unitPersons = computed(() => persons.value.filter(p => p.unit_id === selectedWarehouse.value?.unit_id))
 // Видача: зі складу підрозділу — особи підрозділу; зі складу служби (НДМ) — будь-яка особа.
-const issuePersons = computed(() => sortedPersons(isServiceWh.value ? persons.value : unitPersons.value))
+const issuePersonOptions = computed(() => personOptions(isServiceWh.value ? persons.value : unitPersons.value))
 // «Видати»: підрозділ — будь-що; служба — лише НДМ (не облікове) напряму.
 function canIssue(r) {
   if (r.state !== 'stock') return false
@@ -792,6 +794,8 @@ th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:1
 .modal-title { flex:1; font-weight:700; font-size:14px; }
 .modal-close { border:none; background:transparent; font-size:16px; color:var(--text-light); cursor:pointer; }
 .modal-body { padding:16px 20px; display:flex; flex-direction:column; gap:4px; }
+.ac-field { border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); }
+.ac-field :deep(.cell-input) { width:100%; box-sizing:border-box; padding:7px 10px; font-size:14px; }
 .fl { font-size:12px; color:var(--text-light); font-weight:600; margin-top:8px; }
 .fi { padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:inherit; font-size:14px; }
 .err { margin-top:10px; padding:8px 10px; background:#fee2e2; color:#991b1b; font-size:12.5px; border-radius:3px; }

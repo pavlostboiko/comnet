@@ -5,6 +5,13 @@
 const { test, expect } = require('@playwright/test')
 const { URL, uiLogin, loginApi } = require('./helpers/login')
 
+
+// Пікер особи в модалці «Видати» — пошуковий (ItemAutocomplete), не <select>.
+async function pickPerson(page, text) {
+  await page.locator('.modal .ac-field input').fill(text)
+  await page.locator('.ac-dropdown .ac-item', { hasText: text }).first().click()
+}
+
 test('НДМ on service warehouse: filter + direct issue', async ({ page, request }) => {
   const api = await loginApi(request)
   const S = Date.now()
@@ -31,7 +38,7 @@ test('НДМ on service warehouse: filter + direct issue', async ({ page, reques
 
   // Issue directly to the person (of another unit)
   await row.locator('.btn-issue').click()
-  await page.locator('.modal select').first().selectOption({ label: soldier })
+  await pickPerson(page, soldier)
   await page.locator('.modal input[type="number"]').fill('3')
   await page.locator('.btn-pri', { hasText: 'Видати' }).click()
   await expect(page.locator('.overlay.open')).toHaveCount(0)

@@ -58,10 +58,12 @@
             <label class="fl">Склад (авто)</label>
             <input class="fi" :value="warehouseName(form.warehouse_id)" disabled />
             <label class="fl">Особа</label>
-            <select class="fi" v-model="form.person_id">
-              <option :value="null">— не вказано —</option>
-              <option v-for="p in unitPersons" :key="p.id" :value="p.id">{{ personLabel(p) }}</option>
-            </select>
+            <div class="ac-field">
+              <ItemAutocomplete :items="unitPersonOptions" placeholder="пошук особи (опц.)…"
+                :model-value="form.person_id ? personName(form.person_id) : ''"
+                @select="e => form.person_id = e.id"
+                @update:model-value="v => { if (!v) form.person_id = null }" />
+            </div>
           </template>
 
           <div v-if="error" class="err">{{ error }}</div>
@@ -78,7 +80,8 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
-import { personLabel, sortedPersons } from '../../utils/person.js'
+import ItemAutocomplete from '../../components/ItemAutocomplete.vue'
+import { personLabel, personOptions } from '../../utils/person.js'
 import { getUsers, createUser, deleteUser } from '../../api/users.js'
 import { getServices, getPersons } from '../../api/settings.js'
 import { getUnits, getWarehouses } from '../../api/structure.js'
@@ -93,7 +96,8 @@ const roleLabel = (r) => ({ admin: 'Адміністратор', operator: 'Оп
 const serviceName = (id) => services.value.find(s => s.id === id)?.name || '—'
 const unitName = (id) => units.value.find(u => u.id === id)?.name || '—'
 const warehouseName = (id) => warehouses.value.find(w => w.id === id)?.name || '—'
-const unitPersons = computed(() => sortedPersons(persons.value.filter(p => p.unit_id === form.unit_id)))
+const unitPersonOptions = computed(() => personOptions(persons.value.filter(p => p.unit_id === form.unit_id)))
+const personName = (id) => personLabel(persons.value.find(p => p.id === id))
 
 function scopeText(u) {
   if (u.role === 'service') return `Служба: ${serviceName(u.service_id)}`
@@ -188,6 +192,8 @@ th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:1
 .modal-title { flex:1; font-weight:700; font-size:14px; }
 .modal-close { border:none; background:transparent; font-size:16px; color:var(--text-light); cursor:pointer; }
 .modal-body { padding:16px 20px; display:flex; flex-direction:column; gap:4px; }
+.ac-field { border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); }
+.ac-field :deep(.cell-input) { width:100%; box-sizing:border-box; padding:7px 10px; font-size:14px; }
 .fl { font-size:12px; color:var(--text-light); font-weight:600; margin-top:8px; }
 .fi { padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:inherit; font-size:14px; }
 .fi:disabled { background:var(--bg); color:var(--text-light); }

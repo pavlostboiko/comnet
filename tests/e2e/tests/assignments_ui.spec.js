@@ -4,6 +4,13 @@ const { URL, uiLogin, loginApi } = require('./helpers/login')
 // Issue-to-person loop through the UI: seed a unit warehouse with 10 (via API),
 // then issue 3 to a person and verify «Видане»/«На складі» split — custody
 // balance (10) is unchanged, issuance only records who holds what.
+
+// Пікер особи в модалці «Видати» — пошуковий (ItemAutocomplete), не <select>.
+async function pickPerson(page, text) {
+  await page.locator('.modal .ac-field input').fill(text)
+  await page.locator('.ac-dropdown .ac-item', { hasText: text }).first().click()
+}
+
 test('issue non-serial to a person; custody balance unchanged', async ({ page, request }) => {
   const ts = Date.now()
   const svcName = `AsgSvc ${ts}`
@@ -32,7 +39,7 @@ test('issue non-serial to a person; custody balance unchanged', async ({ page, r
 
   // Issue 3 to the soldier
   await balRow.locator('.btn-issue').click()
-  await page.locator('.modal select').first().selectOption({ label: soldier })
+  await pickPerson(page, soldier)
   await page.locator('.modal input[type="number"]').fill('3')
   await page.locator('.btn-pri', { hasText: 'Видати' }).click()
   await expect(page.locator('.overlay.open')).toHaveCount(0)
