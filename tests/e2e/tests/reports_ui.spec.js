@@ -35,3 +35,33 @@ test('Reports «Видане на особу» shows a person’s holdings', asy
   await api.delete(`/api/settings/services/${svc.id}`).catch(() => {})
   await api.dispose()
 })
+
+// «Видане на групу»: командир одразу в групі; група без бійців — явна підказка.
+test('Reports «Видане на групу»: commander is listed, empty group explains itself', async ({ page, request }) => {
+  const token = await getToken(request)
+  const api = await pwRequest.newContext({ baseURL: API, extraHTTPHeaders: { Authorization: `Bearer ${token}` } })
+  const j = (p, b) => api.post(p, { data: b }).then(r => r.json())
+  const ts = Date.now()
+  const unit = await j('/api/structure/units', { name: `GrРота ${ts}` })
+  const boss = await j('/api/settings/persons', { last_name: `Комгр${ts}`, first_name: 'Петро', unit_id: unit.id })
+  const grp = await j('/api/structure/groups', { name: `Гр-к ${ts}`, unit_id: unit.id, commander_id: boss.id })
+  const empty = await j('/api/structure/groups', { name: `Гр-порожня ${ts}`, unit_id: unit.id })
+
+  await uiLogin(page)
+  await page.goto(`${URL}/reports`)
+  await page.locator('.tabs button', { hasText: 'Видане на групу' }).click()
+
+  await page.locator('.sel-row select.fi').selectOption({ label: `Гр-к ${ts}` })
+  const member = page.locator('.g-member', { hasText: `Комгр${ts}` })
+  await expect(member).toBeVisible()
+  await expect(member.locator('.chip-cmd')).toHaveText('командир')
+
+  await page.locator('.sel-row select.fi').selectOption({ label: `Гр-порожня ${ts}` })
+  await expect(page.locator('.g-none')).toContainText('немає бійців')
+
+  await api.delete(`/api/structure/groups/${grp.id}`).catch(() => {})
+  await api.delete(`/api/structure/groups/${empty.id}`).catch(() => {})
+  await api.delete(`/api/settings/persons/${boss.id}`).catch(() => {})
+  await api.delete(`/api/structure/units/${unit.id}`).catch(() => {})
+  await api.dispose()
+})
