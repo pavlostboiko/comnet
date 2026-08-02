@@ -87,8 +87,6 @@
 
         <!-- ═══ Точки зберігання ═══ -->
         <div v-if="tab === 'points'" class="table-wrap">
-          <div class="hint">Точка — де майно лежить фізично всередині складу. На облік і накладні не впливає:
-            документи й далі йдуть зі складу. При переміщенні на інший склад точка скидається.</div>
           <table>
             <thead><tr><th>Назва</th><th>Склад</th><th class="col-acts"></th></tr></thead>
             <tbody>
@@ -146,11 +144,12 @@
         <!-- ═══ Особи ═══ -->
         <div v-if="tab === 'persons'" class="table-wrap">
           <table>
-            <thead><tr><th>ПІБ / позивний</th><th class="col-code">ІПН</th><th>Підрозділ</th><th>Група</th><th class="col-acts2"></th></tr></thead>
+            <thead><tr><th>ПІБ</th><th class="col-call">Позивний</th><th class="col-code">ІПН</th><th>Підрозділ</th><th>Група</th><th class="col-acts2"></th></tr></thead>
             <tbody>
-              <tr v-if="!persons.length"><td colspan="5" class="empty">Немає осіб</td></tr>
+              <tr v-if="!persons.length"><td colspan="6" class="empty">Немає осіб</td></tr>
               <tr v-for="p in persons" :key="p.id">
                 <td class="td-name">{{ personLabel(p) }}</td>
+                <td class="td-dim">{{ p.callsign || '—' }}</td>
                 <td class="td-mono td-dim">{{ p.ipn || '—' }}</td>
                 <td class="td-dim">{{ p.unit_id ? unitName(p.unit_id) : '—' }}</td>
                 <td class="td-dim">{{ p.group_id ? groupName(p.group_id) : '—' }}</td>
@@ -666,7 +665,7 @@ async function rotate(m) {
 table { width:100%; border-collapse:collapse; table-layout:fixed; }
 th, td { padding:9px 14px; text-align:left; font-size:13px; border-bottom:1px solid var(--border-light); }
 th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; }
-.col-code { width:100px; } .col-ser { width:120px; } .col-uom { width:70px; } .col-price { width:120px; text-align:right; } .col-acts { width:50px; } .col-date { width:120px; }
+.col-code { width:100px; } .col-call { width:140px; } .col-ser { width:120px; } .col-uom { width:70px; } .col-price { width:120px; text-align:right; } .col-acts { width:50px; } .col-date { width:120px; }
 .td-name { font-weight:600; color:var(--text); }
 .td-dim { color:var(--text-light); }
 .td-center { text-align:center; }

@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test')
-const { URL, uiLogin } = require('./helpers/login')
+const { URL, uiLogin, loginApi } = require('./helpers/login')
 
 test('Довідники page loads with all tabs', async ({ page }) => {
   await uiLogin(page)
@@ -76,4 +76,20 @@ test('creating a group via the Групи tab', async ({ page }) => {
   await page.locator('.modal select').first().selectOption({ label: unitName })
   await page.locator('.btn-pri').click()
   await expect(page.locator('td.td-name', { hasText: groupName })).toBeVisible()
+})
+
+// Позивний видно в списку Особи окремою колонкою (у ПІБ він показувався лише
+// тоді, коли прізвища/імені немає взагалі).
+test('persons tab shows the callsign of a named person', async ({ page, request }) => {
+  const api = await loginApi(request)
+  const S = Date.now()
+  await api.post('/api/settings/persons', {
+    data: { last_name: `Позивний${S}`, first_name: 'Іван', callsign: `Сокіл${S}` } })
+  await api.dispose()
+
+  await uiLogin(page)
+  await page.goto(`${URL}/structure`)
+  await page.locator('.tt-btn', { hasText: 'Особи' }).click()
+  const row = page.locator('tbody tr', { hasText: `Позивний${S}` }).first()
+  await expect(row).toContainText(`Сокіл${S}`)
 })
