@@ -10,7 +10,7 @@ test('Reports «Видане на особу» shows a person’s holdings', asy
   const ts = Date.now()
   const svc = await j('/api/settings/services', { name: `RpSvc ${ts}` })
   const unit = await j('/api/structure/units', { name: `RpРота ${ts}` })
-  const person = await j('/api/settings/persons', { last_name: `Боєць${ts}`, unit_id: unit.id })
+  const person = await j('/api/settings/persons', { last_name: `Боєць${ts}`, first_name: 'Іван', callsign: `Сокіл${ts}`, unit_id: unit.id })
   const whs = await api.get('/api/structure/warehouses').then(r => r.json())
   const svcWh = whs.find(w => w.service_id === svc.id)
   const unitWh = whs.find(w => w.unit_id === unit.id)
@@ -22,7 +22,12 @@ test('Reports «Видане на особу» shows a person’s holdings', asy
   await uiLogin(page)
   await page.goto(`${URL}/reports`)
   await expect(page.locator('.tile-title')).toContainText('Звіти')
-  await page.locator('.sel-row select.fi').selectOption({ label: `Боєць${ts}` })
+  // Пошуковий пікер замість <select>; підпис — «Прізвище Ім'я (Позивний)»
+  await expect(page.locator('.sel-row select')).toHaveCount(0)
+  await page.locator('.sel-row .ac-field input').fill(`Сокіл${ts}`)
+  const opt = page.locator('.ac-dropdown .ac-item', { hasText: `Боєць${ts} Іван (Сокіл${ts})` }).first()
+  await expect(opt).toBeVisible()
+  await opt.click()
   await expect(page.locator('tbody tr', { hasText: `Річ ${ts}` })).toBeVisible()
 
   await api.delete(`/api/settings/persons/${person.id}`).catch(() => {})

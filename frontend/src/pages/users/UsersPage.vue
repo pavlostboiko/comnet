@@ -78,6 +78,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
+import { personLabel, sortedPersons } from '../../utils/person.js'
 import { getUsers, createUser, deleteUser } from '../../api/users.js'
 import { getServices, getPersons } from '../../api/settings.js'
 import { getUnits, getWarehouses } from '../../api/structure.js'
@@ -92,11 +93,7 @@ const roleLabel = (r) => ({ admin: 'Адміністратор', operator: 'Оп
 const serviceName = (id) => services.value.find(s => s.id === id)?.name || '—'
 const unitName = (id) => units.value.find(u => u.id === id)?.name || '—'
 const warehouseName = (id) => warehouses.value.find(w => w.id === id)?.name || '—'
-function personLabel(p) {
-  const full = [p.last_name, p.first_name].filter(Boolean).join(' ')
-  return full || p.callsign || `#${p.id}`
-}
-const unitPersons = computed(() => persons.value.filter(p => p.unit_id === form.unit_id))
+const unitPersons = computed(() => sortedPersons(persons.value.filter(p => p.unit_id === form.unit_id)))
 
 function scopeText(u) {
   if (u.role === 'service') return `Служба: ${serviceName(u.service_id)}`

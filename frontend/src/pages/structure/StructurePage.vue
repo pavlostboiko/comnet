@@ -148,7 +148,7 @@
             <tbody>
               <tr v-if="!persons.length"><td colspan="6" class="empty">Немає осіб</td></tr>
               <tr v-for="p in persons" :key="p.id">
-                <td class="td-name">{{ personLabel(p) }}</td>
+                <td class="td-name">{{ personFullName(p) }}</td>
                 <td class="td-dim">{{ p.callsign || '—' }}</td>
                 <td class="td-mono td-dim">{{ p.ipn || '—' }}</td>
                 <td class="td-dim">{{ p.unit_id ? unitName(p.unit_id) : '—' }}</td>
@@ -255,7 +255,7 @@
             </template>
             <label class="fl">Особа *</label>
             <div class="ac-field">
-              <ItemAutocomplete :items="personOptions" placeholder="пошук особи…"
+              <ItemAutocomplete :items="personOpts" placeholder="пошук особи…"
                 :model-value="form.person_id ? personName(form.person_id) : ''"
                 @select="e => form.person_id = e.id" />
             </div>
@@ -288,7 +288,7 @@
             <label class="fl">Командир</label>
             <select class="fi" v-model="form.commander_id">
               <option :value="null">— не вказано —</option>
-              <option v-for="p in persons" :key="p.id" :value="p.id">{{ personLabel(p) }}</option>
+              <option v-for="p in personsSorted" :key="p.id" :value="p.id">{{ personLabel(p) }}</option>
             </select>
           </template>
           <template v-else-if="tab === 'persons'">
@@ -323,6 +323,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import ItemAutocomplete from '../../components/ItemAutocomplete.vue'
+import { personFullName, personLabel, personOptions, sortedPersons } from '../../utils/person.js'
 import {
   getServices, createService, deleteService,
   getPersons, createPerson, updatePerson, deletePerson,
@@ -372,18 +373,9 @@ const mvoWarehouses = computed(() => warehouses.value.filter(w =>
 const serviceName = (id) => services.value.find(s => s.id === id)?.name || '—'
 const unitName = (id) => units.value.find(u => u.id === id)?.name || '—'
 const warehouseName = (id) => warehouses.value.find(w => w.id === id)?.name || '—'
-function personLabel(p) {
-  const full = [p.last_name, p.first_name].filter(Boolean).join(' ')
-  return full || p.callsign || `#${p.id}`
-}
-const personName = (id) => {
-  const p = persons.value.find(x => x.id === id)
-  return p ? personLabel(p) : '—'
-}
-// Пошуковий дропдаун осіб (для МВО): відсортовані, з позивним/ІПН у мета.
-const personOptions = computed(() => [...persons.value]
-  .sort((a, b) => personLabel(a).localeCompare(personLabel(b), 'uk'))
-  .map(p => ({ id: p.id, name: personLabel(p), number: p.callsign || p.ipn || '' })))
+const personName = (id) => personLabel(persons.value.find(x => x.id === id))
+const personOpts = computed(() => personOptions(persons.value))
+const personsSorted = computed(() => sortedPersons(persons.value))
 const groupName = (id) => groups.value.find(g => g.id === id)?.name || '—'
 // За що підписує запис журналу: склад / загальна фінслужба / служба (начальник).
 function mvoScopeLabel(m) {

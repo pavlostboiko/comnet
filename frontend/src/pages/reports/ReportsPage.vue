@@ -15,10 +15,11 @@
         <div v-if="tab === 'person'">
           <div class="sel-row">
             <label class="fl">Особа</label>
-            <select class="fi" v-model="personId" @change="loadPerson">
-              <option :value="null" disabled>— оберіть особу —</option>
-              <option v-for="p in persons" :key="p.id" :value="p.id">{{ personLabel(p) }}</option>
-            </select>
+            <div class="ac-field">
+              <ItemAutocomplete :items="personOpts" placeholder="пошук особи…"
+                :model-value="personId ? personName(personId) : ''"
+                @select="onPickPerson" />
+            </div>
           </div>
           <div class="table-wrap" v-if="personId">
             <table>
@@ -79,8 +80,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
+import ItemAutocomplete from '../../components/ItemAutocomplete.vue'
+import { personLabel, personOptions } from '../../utils/person.js'
 import { getPersons } from '../../api/settings.js'
 import { getGroups } from '../../api/structure.js'
 import { personHoldings, groupHoldings } from '../../api/assignments.js'
@@ -93,9 +96,11 @@ const groupId = ref(null)
 const personRows = ref([])
 const group = ref(null)
 
-function personLabel(p) {
-  const full = [p.last_name, p.first_name].filter(Boolean).join(' ')
-  return full || p.callsign || `#${p.id}`
+const personOpts = computed(() => personOptions(persons.value))
+const personName = (id) => personLabel(persons.value.find(p => p.id === id))
+function onPickPerson(item) {
+  personId.value = item.id
+  loadPerson()
 }
 function fmtQty(v) {
   if (v == null || v === '') return '—'
@@ -128,6 +133,8 @@ onMounted(async () => {
 .tabs { display:flex; gap:6px; }
 .tabs button { border:1px solid var(--border); background:var(--bg); border-radius:var(--radius-sm); padding:5px 12px; cursor:pointer; font-family:inherit; font-size:13px; color:var(--text-mid); }
 .tabs button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+.ac-field { border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); min-width:280px; }
+.ac-field :deep(.cell-input) { width:100%; box-sizing:border-box; padding:7px 10px; font-size:14px; }
 .sel-row { padding:14px 20px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--border-light); }
 .fl { font-size:12px; color:var(--text-light); font-weight:600; }
 .fi { padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); font-family:inherit; font-size:13.5px; min-width:280px; }
