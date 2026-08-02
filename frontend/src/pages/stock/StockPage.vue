@@ -255,6 +255,7 @@ import { getBalances, getSerialAt, createDocument, receiveDocument, itemHistory,
 import { getPersons, getServices } from '../../api/settings.js'
 import HistoryTimeline from '../../components/HistoryTimeline.vue'
 import ItemAutocomplete from '../../components/ItemAutocomplete.vue'
+import { personLabel, personOptions, sortedPersons } from '../../utils/person.js'
 import NomenclatureModal from '../../components/NomenclatureModal.vue'
 import { getAssignments, createAssignment, returnAssignment } from '../../api/assignments.js'
 import { useAuthStore } from '../../stores/auth.js'
@@ -284,7 +285,7 @@ const isUnitWh = computed(() => selectedWarehouse.value?.type === 'unit')
 const isServiceWh = computed(() => selectedWarehouse.value?.type === 'service')
 const unitPersons = computed(() => persons.value.filter(p => p.unit_id === selectedWarehouse.value?.unit_id))
 // Видача: зі складу підрозділу — особи підрозділу; зі складу служби (НДМ) — будь-яка особа.
-const issuePersons = computed(() => isServiceWh.value ? persons.value : unitPersons.value)
+const issuePersons = computed(() => sortedPersons(isServiceWh.value ? persons.value : unitPersons.value))
 // «Видати»: підрозділ — будь-що; служба — лише НДМ (не облікове) напряму.
 function canIssue(r) {
   if (r.state !== 'stock') return false
@@ -297,9 +298,8 @@ function canReturn(r) {
 // «Додати переміщення»: якщо призначення = склад підрозділу, можна одразу видати особі
 const destWarehouse = computed(() => warehouses.value.find(w => w.id === doc.to_warehouse_id) || null)
 const isDestUnit = computed(() => destWarehouse.value?.type === 'unit')
-const destPersonOptions = computed(() => persons.value
-  .filter(p => p.unit_id === destWarehouse.value?.unit_id)
-  .map(p => ({ id: p.id, name: personLabel(p), number: p.callsign || p.ipn || '' })))
+const destPersonOptions = computed(() => personOptions(
+  persons.value.filter(p => p.unit_id === destWarehouse.value?.unit_id)))
 
 function selectWarehouse(id) { warehouseId.value = id; loadStock() }
 
@@ -334,14 +334,7 @@ async function savePoint(r, val) {
   }
 }
 
-function personLabel(p) {
-  const full = [p.last_name, p.first_name].filter(Boolean).join(' ')
-  return full || p.callsign || `#${p.id}`
-}
-const personName = (id) => {
-  const p = persons.value.find(x => x.id === id)
-  return p ? personLabel(p) : '—'
-}
+const personName = (id) => personLabel(persons.value.find(x => x.id === id))
 const assignmentOfInstance = (instId) => assignments.value.find(x => x.instance_id === instId) || null
 
 // ── Історія екземпляра ───────────────────────────────────────────────
