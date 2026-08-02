@@ -55,7 +55,13 @@ test('creating a unit shows an auto-created warehouse in the Склади tab', 
   await expect(page.locator('td.td-name', { hasText: `Склад ${name}` })).toBeVisible()
 })
 
-test('creating a group via the Групи tab', async ({ page }) => {
+test('creating a group via the Групи tab', async ({ page, request }) => {
+  const api = await loginApi(request)
+  const S = Date.now()
+  await api.post('/api/settings/persons', {
+    data: { last_name: `Комгр${S}`, first_name: 'Петро', callsign: `Тур${S}` } })
+  await api.dispose()
+
   await uiLogin(page)
   await page.goto(`${URL}/structure`)
 
@@ -74,8 +80,13 @@ test('creating a group via the Групи tab', async ({ page }) => {
   await page.locator('.modal .fi').first().fill(groupName)
   // select the unit (second .fi is the unit <select>)
   await page.locator('.modal select').first().selectOption({ label: unitName })
+  // командир — пошуковий пікер: шукаємо за позивним, підпис із ПІБ+позивним
+  await page.locator('.modal .ac-field input').fill(`Тур${S}`)
+  await page.locator('.ac-dropdown .ac-item', { hasText: `Комгр${S} Петро (Тур${S})` }).first().click()
   await page.locator('.btn-pri').click()
-  await expect(page.locator('td.td-name', { hasText: groupName })).toBeVisible()
+  const row = page.locator('tbody tr', { hasText: groupName }).first()
+  await expect(row).toBeVisible()
+  await expect(row).toContainText(`Комгр${S}`)
 })
 
 // Позивний видно в списку Особи окремою колонкою (у ПІБ він показувався лише

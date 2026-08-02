@@ -286,10 +286,12 @@
               <option v-for="u in units" :key="u.id" :value="u.id">{{ u.name }}</option>
             </select>
             <label class="fl">Командир</label>
-            <select class="fi" v-model="form.commander_id">
-              <option :value="null">— не вказано —</option>
-              <option v-for="p in personsSorted" :key="p.id" :value="p.id">{{ personLabel(p) }}</option>
-            </select>
+            <div class="ac-field">
+              <ItemAutocomplete :items="personOpts" placeholder="пошук особи (опц.)…"
+                :model-value="form.commander_id ? personName(form.commander_id) : ''"
+                @select="e => form.commander_id = e.id"
+                @update:model-value="v => { if (!v) form.commander_id = null }" />
+            </div>
           </template>
           <template v-else-if="tab === 'persons'">
             <label class="fl">Прізвище</label><input class="fi" v-model="form.last_name" />
@@ -323,7 +325,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
 import ItemAutocomplete from '../../components/ItemAutocomplete.vue'
-import { personFullName, personLabel, personOptions, sortedPersons } from '../../utils/person.js'
+import { personFullName, personLabel, personOptions } from '../../utils/person.js'
 import {
   getServices, createService, deleteService,
   getPersons, createPerson, updatePerson, deletePerson,
@@ -375,7 +377,6 @@ const unitName = (id) => units.value.find(u => u.id === id)?.name || '—'
 const warehouseName = (id) => warehouses.value.find(w => w.id === id)?.name || '—'
 const personName = (id) => personLabel(persons.value.find(x => x.id === id))
 const personOpts = computed(() => personOptions(persons.value))
-const personsSorted = computed(() => sortedPersons(persons.value))
 const groupName = (id) => groups.value.find(g => g.id === id)?.name || '—'
 // За що підписує запис журналу: склад / загальна фінслужба / служба (начальник).
 function mvoScopeLabel(m) {
