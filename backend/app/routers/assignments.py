@@ -179,9 +179,15 @@ def group_holdings(group_id: int, db: Session = Depends(get_db), _: User = Depen
     if not group:
         raise HTTPException(404, "Групу не знайдено")
     members = db.query(Person).filter(Person.group_id == group_id).all()
+    # Командир — завжди в списку, навіть якщо в його картці стоїть інша група.
+    if group.commander_id and not any(p.id == group.commander_id for p in members):
+        cmdr = db.get(Person, group.commander_id)
+        if cmdr:
+            members.append(cmdr)
     member_ids = [p.id for p in members]
     result = {"group_id": group_id, "name": group.name, "members": []}
     if not member_ids:
+        result["total_items"] = 0
         return result
     rows = (
         db.query(Assignment)

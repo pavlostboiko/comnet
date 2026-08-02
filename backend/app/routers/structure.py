@@ -90,6 +90,16 @@ def list_groups(db: Session = Depends(get_db), _: User = Depends(get_current_use
     return db.query(Group).order_by(Group.name).all()
 
 
+def _join_commander(db: Session, group: Group) -> None:
+    """Командир групи — і її член: інакше група з командиром лишалась порожньою
+    (`commander_id` на групі й `persons.group_id` — різні поля, ніде не звʼязані)."""
+    if not group.commander_id:
+        return
+    person = db.get(Person, group.commander_id)
+    if person and person.group_id != group.id:
+        person.group_id = group.id
+
+
 @router.post("/groups", response_model=GroupRead, status_code=status.HTTP_201_CREATED)
 def create_group(payload: GroupCreate, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     if not db.get(Unit, payload.unit_id):
@@ -98,6 +108,8 @@ def create_group(payload: GroupCreate, db: Session = Depends(get_db), _: User = 
         raise HTTPException(400, "Командира не знайдено")
     group = Group(**payload.model_dump())
     db.add(group)
+    db.flush()
+    _join_commander(db, group)
     db.commit()
     db.refresh(group)
     return group
@@ -110,6 +122,7 @@ def update_group(group_id: int, payload: GroupUpdate, db: Session = Depends(get_
         raise HTTPException(404, "Not found")
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(group, field, value)
+    _join_commander(db, group)
     db.commit()
     db.refresh(group)
     return group

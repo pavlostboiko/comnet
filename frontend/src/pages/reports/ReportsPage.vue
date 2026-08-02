@@ -53,7 +53,10 @@
             </select>
           </div>
           <div v-if="groupId && group">
-            <div class="g-sub">Всього позицій: <b>{{ group.total_items || 0 }}</b></div>
+            <div v-if="!group.members?.length" class="g-none">
+              У групі немає бійців — призначте групу особам у Довідники → Особи.
+            </div>
+            <div v-else class="g-sub">Всього позицій: <b>{{ group.total_items || 0 }}</b></div>
             <div v-for="m in group.members" :key="m.person_id" class="g-member">
               <div class="g-mhead">
                 {{ m.person_name }}
@@ -149,6 +152,7 @@ th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:1
 .chip { display:inline-block; padding:2px 8px; border-radius:3px; font-size:11px; font-weight:600; }
 .chip-gov { background:#dbeafe; color:#1e40af; } .chip-vol { background:#fef3c7; color:#854d0e; }
 .chip-cmd { background:#e0e7ff; color:#3730a3; margin-left:8px; }
+.g-none { padding:20px; color:var(--text-light); font-style:italic; font-size:13px; }
 .g-sub { padding:12px 20px 0; font-size:13px; color:var(--text-mid); }
 .g-member { padding:12px 20px; border-bottom:1px solid var(--border-light); }
 .g-mhead { font-weight:600; font-size:14px; margin-bottom:6px; display:flex; align-items:center; }
