@@ -42,6 +42,13 @@ test('storage point: create in Довідники, set on Залишки, filter
   await expect(page.locator('tbody tr', { hasText: `PT-${ts}` }).first().locator('.point-sel'))
     .toHaveValue(String((await api.get(`/api/structure/storage-points?warehouse_id=${svcWh.id}`).then(r => r.json()))[0].id))
 
+  // Картка екземпляра показує ту саму точку (там її теж можна змінити)
+  await page.locator('tbody tr', { hasText: `PT-${ts}` }).first()
+    .locator('.btn-card').click()
+  await expect(page.locator('.modal', { hasText: 'Картка:' }).locator('select'))
+    .toHaveValue(String((await api.get(`/api/structure/storage-points?warehouse_id=${svcWh.id}`).then(r => r.json()))[0].id))
+  await page.locator('.modal .btn-sec', { hasText: 'Скасувати' }).click()
+
   // Фільтр «Без точки» ховає рядок із точкою, лишає несерійний без неї
   await page.locator('.point-filter').selectOption('none')
   await expect(page.locator('tbody tr', { hasText: `PT-${ts}` })).toHaveCount(0)

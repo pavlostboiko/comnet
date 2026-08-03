@@ -2,8 +2,8 @@ const { test, expect } = require('@playwright/test')
 const { request: pwRequest } = require('@playwright/test')
 const { URL, API, uiLogin, getToken } = require('./helpers/login')
 
-// A serial row on Залишки has an editable «Примітка» that persists.
-test('serial instance note editable on Залишки and persists', async ({ page, request }) => {
+// Примітка екземпляра редагується в його «Картці» на Залишках і зберігається.
+test('serial instance note editable via the instance card on Залишки', async ({ page, request }) => {
   const token = await getToken(request)
   const api = await pwRequest.newContext({ baseURL: API, extraHTTPHeaders: { Authorization: `Bearer ${token}` } })
   const j = (p, b) => api.post(p, { data: b }).then(r => r.json())
@@ -20,13 +20,20 @@ test('serial instance note editable on Залишки and persists', async ({ pa
   await page.locator('.wh-btn', { hasText: svcWh.name }).click()
 
   const row = page.locator('tbody tr', { hasText: `SN-${ts}` }).first()
-  await row.locator('.note-inp').fill('загублено ремінь')
-  await row.locator('.note-inp').blur()
+  await row.locator('.btn-card').click()
+  const card = page.locator('.modal', { hasText: 'Картка:' })
+  await expect(card).toContainText(`SN-${ts}`)          // серійний видно в картці
+  await card.locator('textarea').fill('загублено ремінь')
+  await card.locator('.btn-pri', { hasText: 'Зберегти' }).click()
+  await expect(page.locator('.modal', { hasText: 'Картка:' })).toHaveCount(0)
+  await expect(row).toContainText('загублено ремінь')   // видно в колонці «Примітка»
 
   // persists after reload
   await page.goto(`${URL}/stock`)
   await page.locator('.wh-btn', { hasText: svcWh.name }).click()
-  await expect(page.locator('tbody tr', { hasText: `SN-${ts}` }).first().locator('.note-inp')).toHaveValue('загублено ремінь')
+  await page.locator('tbody tr', { hasText: `SN-${ts}` }).first()
+    .locator('.btn-card').click()
+  await expect(page.locator('.modal textarea')).toHaveValue('загублено ремінь')
 
   await api.delete(`/api/nomenclature/${nom.id}`).catch(() => {})
   await api.delete(`/api/settings/services/${svc.id}`).catch(() => {})
