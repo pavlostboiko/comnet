@@ -193,6 +193,7 @@ class InstanceRead(BaseModel):
 
 class InstanceCreate(BaseModel):
     serial_no: str
+    card_number: Optional[str] = None
     is_official: bool = True
     current_warehouse_id: Optional[int] = None
     note: Optional[str] = None

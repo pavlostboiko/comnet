@@ -21,7 +21,7 @@
           <!-- Пошук -->
           <div class="search-row">
             <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-            <input ref="stockSearchRef" v-model="stockSearch" placeholder="Пошук за назвою, серійним…" @keydown.esc="stockSearch=''" />
+            <input ref="stockSearchRef" v-model="stockSearch" placeholder="Пошук за назвою, серійним, № картки…" @keydown.esc="stockSearch=''" />
             <button v-if="stockSearch" class="search-clear" @click="stockSearch=''; stockSearchRef?.focus()">×</button>
           </div>
           <!-- Фільтри стану + облік/ндм -->
@@ -47,13 +47,14 @@
           <div class="table-wrap">
             <table>
               <thead><tr>
-                <th>Найменування</th><th class="col-serial">Серійний №</th><th class="col-off">Тип</th>
+                <th class="col-card">№ картки</th><th>Найменування</th><th class="col-serial">Серійний №</th><th class="col-off">Тип</th>
                 <th class="col-num">К-сть</th><th class="col-uom">Од.</th><th class="col-num">Вартість</th>
                 <th>На кому</th><th class="col-point">Точка</th><th class="col-note">Примітка</th><th class="col-issue"></th>
               </tr></thead>
               <tbody>
-                <tr v-if="!filteredRows.length"><td colspan="10" class="empty">Порожньо</td></tr>
+                <tr v-if="!filteredRows.length"><td colspan="11" class="empty">Порожньо</td></tr>
                 <tr v-for="r in filteredRows" :key="r.key">
+                  <td class="td-mono td-dim">{{ r.card_number || '—' }}</td>
                   <td class="td-name">{{ r.name }}</td>
                   <td class="td-mono td-dim">{{ r.serial_no || '—' }}</td>
                   <td><span class="chip" :class="r.is_official ? 'chip-gov' : 'chip-vol'">{{ r.is_official ? 'облік' : 'ндм' }}</span></td>
@@ -453,7 +454,7 @@ const stockRows = computed(() => {
       key: `s${s.instance_id}`, kind: 'serial', state: a ? 'issued' : 'stock',
       name: s.name, serial_no: s.serial_no, is_official: s.is_official, qty: 1,
       unit_of_measure: s.unit_of_measure, price: s.price,
-      holder: a ? personName(a.person_id) : null, note: s.note,
+      holder: a ? personName(a.person_id) : null, note: s.note, card_number: s.card_number,
       instance_id: s.instance_id, nomenclature_id: s.nomenclature_id, assignment: a,
       storage_point_id: s.storage_point_id || null, storage_point: s.storage_point || null,
     })
@@ -471,7 +472,8 @@ const filteredRows = computed(() => {
   else if (pointFilter.value !== 'all') rows = rows.filter(r => String(r.storage_point_id) === pointFilter.value)
   const q = stockSearch.value.trim().toLowerCase()
   if (q) rows = rows.filter(r =>
-    (r.name || '').toLowerCase().includes(q) || (r.serial_no || '').toLowerCase().includes(q))
+    (r.name || '').toLowerCase().includes(q) || (r.serial_no || '').toLowerCase().includes(q)
+    || (r.card_number || '').toLowerCase().includes(q))
   return rows
 })
 const countOf = (key) => key === 'all' ? stockRows.value.length : stockRows.value.filter(r => r.state === key).length
@@ -807,7 +809,7 @@ table { width:100%; border-collapse:collapse; table-layout:fixed; }
 th, td { padding:9px 14px; text-align:left; font-size:13px; border-bottom:1px solid var(--border-light); }
 th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; }
 .col-off { width:130px; } .col-num { width:110px; text-align:right; } .col-uom { width:70px; } .col-date { width:110px; } .col-issue { width:180px; text-align:right; white-space:nowrap; }
-.col-note { width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.col-card { width:120px; } .col-note { width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .col-point { width:140px; }
 .point-sel { width:100%; box-sizing:border-box; border:1px solid transparent; background:transparent; border-radius:var(--radius-sm); padding:4px 6px; font-family:inherit; font-size:13px; color:var(--text); }
 .point-sel:hover { border-color:var(--border-light); } .point-sel:focus { border-color:var(--border); background:var(--surface); outline:none; }
