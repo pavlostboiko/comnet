@@ -48,7 +48,7 @@
             <table>
               <thead><tr>
                 <th class="col-card" title="№ картки">№</th><th>Найменування</th><th class="col-serial">Серійний №</th><th class="col-off">Тип</th>
-                <th class="col-num">К-сть</th><th class="col-uom">Од.</th><th class="col-num">Вартість</th>
+                <th class="col-qty">К-сть</th><th class="col-uom">Од.</th><th class="col-price">Вартість</th>
                 <th>На кому</th><th class="col-point">Точка</th><th class="col-note">Примітка</th><th class="col-issue"></th>
               </tr></thead>
               <tbody>
@@ -58,9 +58,9 @@
                   <td class="td-name">{{ r.name }}</td>
                   <td class="td-mono td-dim">{{ r.serial_no || '—' }}</td>
                   <td><span class="chip" :class="r.is_official ? 'chip-gov' : 'chip-vol'">{{ r.is_official ? 'облік' : 'ндм' }}</span></td>
-                  <td class="td-num">{{ fmtQty(r.qty) }}</td>
-                  <td class="td-center">{{ r.unit_of_measure || '—' }}</td>
-                  <td class="td-num">{{ r.price != null ? Number(r.price).toFixed(2) : '—' }}</td>
+                  <td class="td-num col-qty">{{ fmtQty(r.qty) }}</td>
+                  <td class="td-center col-uom">{{ r.unit_of_measure || '—' }}</td>
+                  <td class="td-num col-price">{{ r.price != null ? Number(r.price).toFixed(2) : '—' }}</td>
                   <td class="td-dim">{{ r.holder || '—' }}</td>
                   <td class="col-point">
                     <select v-if="r.state === 'stock'" class="point-sel"
@@ -73,10 +73,10 @@
                   </td>
                   <td class="col-note td-dim" :title="r.note || ''">{{ r.note || '—' }}</td>
                   <td class="td-issue">
-                    <button v-if="r.kind === 'serial'" class="btn-card" @click="openCard(r)">Картка</button>
-                    <button class="btn-hist" @click="openHistory(r)">Історія</button>
-                    <button v-if="canReturn(r)" class="btn-return" @click="doReturn(r.assignment)">Повернути</button>
-                    <button v-else-if="canIssue(r)" class="btn-issue" @click="openIssue(r)">Видати</button>
+                    <button v-if="r.kind === 'serial'" class="ico btn-card" title="Картка" @click="openCard(r)">✎</button>
+                    <button class="ico btn-hist" title="Історія" @click="openHistory(r)">↺</button>
+                    <button v-if="canReturn(r)" class="ico btn-return" title="Повернути" @click="doReturn(r.assignment)">←</button>
+                    <button v-else-if="canIssue(r)" class="ico btn-issue" title="Видати" @click="openIssue(r)">→</button>
                   </td>
                 </tr>
               </tbody>
@@ -808,16 +808,21 @@ async function saveReceive() {
 table { width:100%; border-collapse:collapse; table-layout:fixed; }
 th, td { padding:9px 14px; text-align:left; font-size:13px; border-bottom:1px solid var(--border-light); }
 th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; }
-.col-off { width:130px; } .col-num { width:110px; text-align:right; } .col-uom { width:70px; } .col-date { width:110px; } .col-issue { width:180px; text-align:right; white-space:nowrap; }
+.col-off { width:110px; } .col-num { width:110px; text-align:right; } .col-date { width:110px; }
+.col-qty { width:68px; text-align:right; white-space:nowrap; } .col-uom { width:60px; white-space:nowrap; } .col-price { width:92px; text-align:right; }
+.col-issue { width:112px; text-align:right; white-space:nowrap; }
 .col-card { width:44px; padding-left:8px; padding-right:4px; font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .col-note { width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .col-point { width:140px; }
 .point-sel { width:100%; box-sizing:border-box; border:1px solid transparent; background:transparent; border-radius:var(--radius-sm); padding:4px 6px; font-family:inherit; font-size:13px; color:var(--text); }
 .point-sel:hover { border-color:var(--border-light); } .point-sel:focus { border-color:var(--border); background:var(--surface); outline:none; }
 .point-filter { border:1px solid var(--border); background:var(--surface); border-radius:var(--radius-sm); padding:4px 8px; font-family:inherit; font-size:12.5px; color:var(--text-mid); }
-.td-issue { text-align:center; }
-.btn-issue { background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); padding:3px 10px; font-size:12px; font-family:inherit; font-weight:500; cursor:pointer; }
-.btn-return { background:transparent; border:1px solid #d97706; color:#b45309; border-radius:var(--radius-sm); padding:3px 10px; font-size:12px; font-family:inherit; cursor:pointer; }
-.btn-hist, .btn-card { background:transparent; border:1px solid var(--border); color:var(--text-mid); border-radius:var(--radius-sm); padding:3px 10px; font-size:12px; font-family:inherit; cursor:pointer; margin-right:6px; }
+.td-issue { text-align:right; padding-left:4px; padding-right:8px; white-space:nowrap; }
+.btn-issue { background:var(--accent); color:#fff; border:1px solid var(--accent); border-radius:var(--radius-sm); font-family:inherit; font-weight:500; cursor:pointer; }
+.btn-return { background:transparent; border:1px solid #d97706; color:#b45309; border-radius:var(--radius-sm); font-family:inherit; cursor:pointer; }
+.btn-hist, .btn-card { background:transparent; border:1px solid var(--border); color:var(--text-mid); border-radius:var(--radius-sm); font-family:inherit; cursor:pointer; }
+/* Дії — іконки з підказкою: три підписи не вміщались і переносились на 2-й рядок. */
+.ico { width:26px; height:24px; padding:0; font-size:13px; line-height:1; margin-left:4px; }
+.ico:first-child { margin-left:0; }
 .td-name { font-weight:600; color:var(--text); }
 .td-dim { color:var(--text-light); }
 .td-center { text-align:center; }
