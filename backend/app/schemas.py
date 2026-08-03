@@ -103,6 +103,11 @@ class StoragePointUpdate(BaseModel):
     name: str
 
 
+class AssignmentPointSet(BaseModel):
+    """Точка для конкретної видачі несерійного; None — прибрати."""
+    storage_point_id: Optional[int] = None
+
+
 class StockPointSet(BaseModel):
     """Точка для НЕсерійного: одна на (картка, склад); None — прибрати."""
     nomenclature_id: int

@@ -237,6 +237,8 @@ class Assignment(Base):
     instance_id = Column(Integer, ForeignKey("instances.id", ondelete="SET NULL"), nullable=True)
     quantity = Column(Numeric(15, 4), nullable=False)
     is_official = Column(Boolean, nullable=False, default=True)
+    # Де воно фізично лежить, поки на руках (для серійного точка живе на екземплярі).
+    storage_point_id = Column(Integer, ForeignKey("storage_points.id", ondelete="SET NULL"), nullable=True)
     issued_date = Column(Date, nullable=False)
     returned_date = Column(Date, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
@@ -247,6 +249,7 @@ class Assignment(Base):
     person = relationship("Person", foreign_keys=[person_id])
     nomenclature = relationship("Nomenclature")
     instance = relationship("Instance")
+    storage_point = relationship("StoragePoint")
 
 
 class UnitSettings(Base):
