@@ -69,12 +69,9 @@
                     </select>
                     <span v-else class="td-dim">{{ r.storage_point || '—' }}</span>
                   </td>
-                  <td class="col-note">
-                    <input v-if="r.kind === 'serial'" class="note-inp" :value="r.note || ''"
-                      placeholder="—" @change="saveNote(r, $event.target.value)" />
-                    <span v-else class="td-dim">—</span>
-                  </td>
+                  <td class="col-note td-dim" :title="r.note || ''">{{ r.note || '—' }}</td>
                   <td class="td-issue">
+                    <button v-if="r.kind === 'serial'" class="btn-card" @click="openCard(r)">Картка</button>
                     <button class="btn-hist" @click="openHistory(r)">Історія</button>
                     <button v-if="canReturn(r)" class="btn-return" @click="doReturn(r.assignment)">Повернути</button>
                     <button v-else-if="canIssue(r)" class="btn-issue" @click="openIssue(r)">Видати</button>
@@ -227,6 +224,11 @@
     </div>
 
 
+    <!-- ═══ Картка екземпляра (примітка + точка) ═══ -->
+    <InstanceCardModal :open="cardOpen" :row="cardRow" :points="points" :busy="cardSaving"
+      :warehouse-name="warehouseName(warehouseId)"
+      @close="cardOpen = false" @save="saveCard" />
+
     <!-- ═══ Історія екземпляра ═══ -->
     <div class="overlay" :class="{ open: histOpen }" @click.self="histOpen = false">
       <div v-if="histOpen" class="modal wide">
@@ -259,6 +261,7 @@ import HistoryTimeline from '../../components/HistoryTimeline.vue'
 import ItemAutocomplete from '../../components/ItemAutocomplete.vue'
 import { personLabel, personOptions } from '../../utils/person.js'
 import NomenclatureModal from '../../components/NomenclatureModal.vue'
+import InstanceCardModal from '../../components/InstanceCardModal.vue'
 import { getAssignments, createAssignment, returnAssignment } from '../../api/assignments.js'
 import { useAuthStore } from '../../stores/auth.js'
 
@@ -305,14 +308,26 @@ const destPersonOptions = computed(() => personOptions(
 
 function selectWarehouse(id) { warehouseId.value = id; loadStock() }
 
-async function saveNote(r, val) {
-  const note = (val || '').trim() || null
+// Картка екземпляра: примітка + точка в одному місці (у таблиці вони тільки видно).
+const cardOpen = ref(false)
+const cardRow = ref({})
+const cardSaving = ref(false)
+function openCard(r) { cardRow.value = r; cardOpen.value = true }
+async function saveCard(payload) {
+  cardSaving.value = true
   try {
-    await updateInstance(r.nomenclature_id, r.instance_id, { note })
-    const s = serial.value.find(x => x.instance_id === r.instance_id)
-    if (s) s.note = note
+    await updateInstance(cardRow.value.nomenclature_id, cardRow.value.instance_id, payload)
+    const s = serial.value.find(x => x.instance_id === cardRow.value.instance_id)
+    if (s) {
+      s.note = payload.note
+      s.storage_point_id = payload.storage_point_id
+      s.storage_point = pointName(payload.storage_point_id)
+    }
+    cardOpen.value = false
   } catch (e) {
-    alert(e?.response?.data?.detail || 'Не вдалось зберегти примітку')
+    alert(e?.response?.data?.detail || 'Не вдалось зберегти картку')
+  } finally {
+    cardSaving.value = false
   }
 }
 
@@ -766,17 +781,15 @@ table { width:100%; border-collapse:collapse; table-layout:fixed; }
 th, td { padding:9px 14px; text-align:left; font-size:13px; border-bottom:1px solid var(--border-light); }
 th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; }
 .col-off { width:130px; } .col-num { width:110px; text-align:right; } .col-uom { width:70px; } .col-date { width:110px; } .col-issue { width:180px; text-align:right; white-space:nowrap; }
-.col-note { width:160px; }
+.col-note { width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .col-point { width:140px; }
 .point-sel { width:100%; box-sizing:border-box; border:1px solid transparent; background:transparent; border-radius:var(--radius-sm); padding:4px 6px; font-family:inherit; font-size:13px; color:var(--text); }
 .point-sel:hover { border-color:var(--border-light); } .point-sel:focus { border-color:var(--border); background:var(--surface); outline:none; }
 .point-filter { border:1px solid var(--border); background:var(--surface); border-radius:var(--radius-sm); padding:4px 8px; font-family:inherit; font-size:12.5px; color:var(--text-mid); }
-.note-inp { width:100%; box-sizing:border-box; border:1px solid transparent; background:transparent; border-radius:var(--radius-sm); padding:4px 6px; font-family:inherit; font-size:13px; color:var(--text); }
-.note-inp:hover { border-color:var(--border-light); } .note-inp:focus { border-color:var(--border); background:var(--surface); outline:none; }
 .td-issue { text-align:center; }
 .btn-issue { background:var(--accent); color:#fff; border:none; border-radius:var(--radius-sm); padding:3px 10px; font-size:12px; font-family:inherit; font-weight:500; cursor:pointer; }
 .btn-return { background:transparent; border:1px solid #d97706; color:#b45309; border-radius:var(--radius-sm); padding:3px 10px; font-size:12px; font-family:inherit; cursor:pointer; }
-.btn-hist { background:transparent; border:1px solid var(--border); color:var(--text-mid); border-radius:var(--radius-sm); padding:3px 10px; font-size:12px; font-family:inherit; cursor:pointer; margin-right:6px; }
+.btn-hist, .btn-card { background:transparent; border:1px solid var(--border); color:var(--text-mid); border-radius:var(--radius-sm); padding:3px 10px; font-size:12px; font-family:inherit; cursor:pointer; margin-right:6px; }
 .td-name { font-weight:600; color:var(--text); }
 .td-dim { color:var(--text-light); }
 .td-center { text-align:center; }
