@@ -62,10 +62,11 @@
                   <td class="td-num">{{ r.price != null ? Number(r.price).toFixed(2) : '—' }}</td>
                   <td class="td-dim">{{ r.holder || '—' }}</td>
                   <td class="col-point">
-                    <select v-if="r.state === 'stock' && points.length" class="point-sel"
-                      :value="r.storage_point_id || ''" @change="savePoint(r, $event.target.value)">
+                    <select v-if="r.state === 'stock'" class="point-sel"
+                      :value="r.storage_point_id || ''" @change="onPointChange(r, $event)">
                       <option value="">—</option>
                       <option v-for="p in points" :key="p.id" :value="p.id">{{ p.name }}</option>
+                      <option v-if="canAddPoint" value="__new__">+ нова точка…</option>
                     </select>
                     <span v-else class="td-dim">{{ r.storage_point || '—' }}</span>
                   </td>
@@ -226,6 +227,7 @@
 
     <!-- ═══ Картка екземпляра (примітка + точка) ═══ -->
     <InstanceCardModal :open="cardOpen" :row="cardRow" :points="points" :busy="cardSaving"
+      :create-point="canAddPoint ? createPointNamed : null"
       :warehouse-name="warehouseName(warehouseId)"
       @close="cardOpen = false" @save="saveCard" />
 
@@ -253,7 +255,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import TopBar from '../../components/TopBar.vue'
-import { getWarehouses, getUnits, getStoragePoints } from '../../api/structure.js'
+import { getWarehouses, getUnits, getStoragePoints, createStoragePoint } from '../../api/structure.js'
 import { getNomenclature, updateInstance } from '../../api/nomenclature.js'
 import { getBalances, getSerialAt, createDocument, receiveDocument, itemHistory, setStockPoint } from '../../api/custody.js'
 import { getPersons, getServices } from '../../api/settings.js'
@@ -328,6 +330,30 @@ async function saveCard(payload) {
     alert(e?.response?.data?.detail || 'Не вдалось зберегти картку')
   } finally {
     cardSaving.value = false
+  }
+}
+
+// Точки заводяться під конкретний склад, тож нову зручніше створити прямо тут
+// (у Довідниках для цього треба знати склад наперед). Створення — лише admin.
+const canAddPoint = computed(() => auth.user?.role === 'admin')
+
+async function createPointNamed(name) {
+  const { data } = await createStoragePoint({ name: name.trim(), warehouse_id: warehouseId.value })
+  points.value = [...points.value, data].sort((a, b) => a.name.localeCompare(b.name, 'uk'))
+  return data
+}
+
+async function onPointChange(r, ev) {
+  const val = ev.target.value
+  if (val !== '__new__') { savePoint(r, val); return }
+  ev.target.value = r.storage_point_id || ''        // повертаємо вибір, поки не створили
+  const name = prompt(`Нова точка на складі «${warehouseName(warehouseId.value)}»:`)
+  if (!name || !name.trim()) return
+  try {
+    const point = await createPointNamed(name)
+    await savePoint(r, String(point.id))
+  } catch (e) {
+    alert(e?.response?.data?.detail || 'Не вдалось створити точку')
   }
 }
 
