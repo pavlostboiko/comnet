@@ -15,12 +15,11 @@
         </div>
 
         <label class="fl">Точка зберігання</label>
-        <select class="fi" :value="pointId ?? ''" :disabled="row.state !== 'stock'" @change="onPointChange">
+        <select class="fi" :value="pointId ?? ''" @change="onPointChange">
           <option value="">— не вказано —</option>
           <option v-for="p in points" :key="p.id" :value="p.id">{{ p.name }}</option>
           <option v-if="createPoint" value="__new__">+ нова точка…</option>
         </select>
-        <p v-if="row.state !== 'stock'" class="hint">Майно на руках — точка ставиться, коли воно на складі.</p>
 
         <label class="fl">Примітка</label>
         <textarea class="fi ta" v-model="note" rows="3" placeholder="напр. загублено ремінь"></textarea>

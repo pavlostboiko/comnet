@@ -96,3 +96,43 @@ test('storage point can be created inline on a unit warehouse', async ({ page, r
   await api.delete(`/api/settings/services/${svc.id}`).catch(() => {})
   await api.dispose()
 })
+
+// Точку можна поставити й виданому майну — воно фізично десь лежить.
+test('storage point can be set on issued goods', async ({ page, request }) => {
+  const token = await getToken(request)
+  const api = await pwRequest.newContext({ baseURL: API, extraHTTPHeaders: { Authorization: `Bearer ${token}` } })
+  const j = (p, b) => api.post(p, { data: b }).then(r => r.json())
+  const ts = Date.now()
+  const svc = await j('/api/settings/services', { name: `IssPtSvc ${ts}` })
+  const unit = await j('/api/structure/units', { name: `IssPtРота ${ts}` })
+  const whs = await api.get('/api/structure/warehouses').then(r => r.json())
+  const svcWh = whs.find(w => w.service_id === svc.id)
+  const unitWh = whs.find(w => w.unit_id === unit.id)
+  const person = await j('/api/settings/persons', { last_name: `Боєць${ts}`, first_name: 'І', unit_id: unit.id })
+  const point = await j('/api/structure/storage-points', { name: `Намет ${ts}`, warehouse_id: unitWh.id })
+  const nom = await j('/api/nomenclature', { name: `Спальник ${ts}`, service_id: svc.id, unit_of_measure: 'шт' })
+  await j('/api/custody/movements', { date: '2026-07-01', type: 'receipt', nomenclature_id: nom.id, to_warehouse_id: svcWh.id, quantity: 8 })
+  await j('/api/custody/movements', { date: '2026-07-02', type: 'transfer', nomenclature_id: nom.id, from_warehouse_id: svcWh.id, to_warehouse_id: unitWh.id, quantity: 5 })
+  const asg = await j('/api/assignments', { warehouse_id: unitWh.id, person_id: person.id, nomenclature_id: nom.id, quantity: 2, issued_date: '2026-07-03' })
+
+  await uiLogin(page)
+  await page.goto(`${URL}/stock`)
+  await page.locator('.wh-btn', { hasText: unitWh.name }).click()
+  await page.locator('.f-chip', { hasText: 'Видане' }).click()
+
+  const row = page.locator('tbody tr', { hasText: `Спальник ${ts}` }).first()
+  await expect(row).toContainText(`Боєць${ts}`)                 // саме рядок видачі
+  await row.locator('.point-sel').selectOption(String(point.id))
+  await expect(row.locator('.point-sel')).toHaveValue(String(point.id))   // запит завершився
+
+  // Точка лягла на ВИДАЧУ, а не на залишок картки
+  const listed = await api.get(`/api/assignments?warehouse_id=${unitWh.id}`).then(r => r.json())
+  expect(listed.find(a => a.id === asg.id).storage_point).toBe(`Намет ${ts}`)
+  const bal = await api.get(`/api/custody/balances?warehouse_id=${unitWh.id}`).then(r => r.json())
+  expect(bal.find(b => b.nomenclature_id === nom.id).storage_point_id).toBeNull()
+
+  await api.delete(`/api/nomenclature/${nom.id}`).catch(() => {})
+  await api.delete(`/api/structure/units/${unit.id}`).catch(() => {})
+  await api.delete(`/api/settings/services/${svc.id}`).catch(() => {})
+  await api.dispose()
+})

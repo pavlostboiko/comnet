@@ -114,3 +114,68 @@ test('storage points: assign to serial + non-serial, reset on transfer, guards',
     await api.dispose()
   }
 })
+
+test('issued goods keep their own storage point', async ({ request }) => {
+  const api = await loginApi(request)
+  const cleanup = []
+  try {
+    const tag = `spi-${Date.now()}-${Math.floor(Math.random() * 9999)}`
+    const svc = await postJson(api, '/api/settings/services', { name: `SPISvc ${tag}` })
+    const unit = await postJson(api, '/api/structure/units', { name: `SPIРота ${tag}` })
+    cleanup.push(`/api/structure/units/${unit.id}`, `/api/settings/services/${svc.id}`)
+    const whs = await api.get('/api/structure/warehouses').then(r => r.json())
+    const svcWh = whs.find(w => w.service_id === svc.id)
+    const unitWh = whs.find(w => w.unit_id === unit.id)
+    const person = await postJson(api, '/api/settings/persons',
+      { last_name: `Боєць${tag}`, first_name: 'І', unit_id: unit.id })
+    const box = await postJson(api, '/api/structure/storage-points', { name: 'Намет', warehouse_id: unitWh.id })
+    const foreign = await postJson(api, '/api/structure/storage-points', { name: 'Чужий', warehouse_id: svcWh.id })
+
+    const nom = await postJson(api, '/api/nomenclature',
+      { name: `SPIНС ${tag}`, service_id: svc.id, is_serialized: false, unit_of_measure: 'шт' })
+    cleanup.push(`/api/nomenclature/${nom.id}`)
+    await postJson(api, '/api/custody/movements', { date: '2026-07-01', type: 'receipt',
+      nomenclature_id: nom.id, to_warehouse_id: svcWh.id, quantity: 10 })
+    await postJson(api, '/api/custody/movements', { date: '2026-07-02', type: 'transfer',
+      nomenclature_id: nom.id, from_warehouse_id: svcWh.id, to_warehouse_id: unitWh.id, quantity: 6 })
+    const asg = await postJson(api, '/api/assignments', { warehouse_id: unitWh.id,
+      person_id: person.id, nomenclature_id: nom.id, quantity: 2, issued_date: '2026-07-03' })
+
+    // Точка видачі — окрема від мітки залишку на складі
+    await postJson(api, '/api/custody/stock-point', { nomenclature_id: nom.id, warehouse_id: unitWh.id,
+      storage_point_id: null }).catch(() => {})
+    const set = await api.put(`/api/assignments/${asg.id}/point`, { data: { storage_point_id: box.id } })
+    expect(set.status()).toBe(200)
+    const listed = await api.get(`/api/assignments?warehouse_id=${unitWh.id}`).then(r => r.json())
+    const row = listed.find(a => a.id === asg.id)
+    expect(row.storage_point).toBe('Намет')
+    // мітка залишку картки НЕ зачеплена
+    const bal = await api.get(`/api/custody/balances?warehouse_id=${unitWh.id}`).then(r => r.json())
+    expect(bal.find(b => b.nomenclature_id === nom.id).storage_point_id).toBeNull()
+
+    // чужа точка — 400; null прибирає
+    const bad = await api.put(`/api/assignments/${asg.id}/point`, { data: { storage_point_id: foreign.id } })
+    expect(bad.status()).toBe(400)
+    await api.put(`/api/assignments/${asg.id}/point`, { data: { storage_point_id: null } })
+    const after = await api.get(`/api/assignments?warehouse_id=${unitWh.id}`).then(r => r.json())
+    expect(after.find(a => a.id === asg.id).storage_point_id).toBeNull()
+
+    // серійне: точку ставимо на екземплярі, навіть коли воно видане
+    const serNom = await postJson(api, '/api/nomenclature',
+      { name: `SPIСер ${tag}`, service_id: svc.id, is_serialized: true, unit_of_measure: 'шт' })
+    cleanup.push(`/api/nomenclature/${serNom.id}`)
+    const inst = await postJson(api, `/api/nomenclature/${serNom.id}/instances`, { serial_no: `SPI-${tag}` })
+    await postJson(api, '/api/custody/movements', { date: '2026-07-01', type: 'receipt',
+      nomenclature_id: serNom.id, instance_id: inst.id, to_warehouse_id: unitWh.id, quantity: 1 })
+    const serAsg = await postJson(api, '/api/assignments', { warehouse_id: unitWh.id, person_id: person.id,
+      nomenclature_id: serNom.id, instance_id: inst.id, quantity: 1, issued_date: '2026-07-03' })
+    const viaAsg = await api.put(`/api/assignments/${serAsg.id}/point`, { data: { storage_point_id: box.id } })
+    expect(viaAsg.status()).toBe(400)                       // для серійного — на екземплярі
+    await api.put(`/api/nomenclature/${serNom.id}/instances/${inst.id}`, { data: { storage_point_id: box.id } })
+    const serial = await api.get(`/api/custody/serial?warehouse_id=${unitWh.id}`).then(r => r.json())
+    expect(serial.find(s => s.serial_no === `SPI-${tag}`).storage_point).toBe('Намет')
+  } finally {
+    await bestEffortDelete(api, cleanup)
+    await api.dispose()
+  }
+})

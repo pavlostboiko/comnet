@@ -63,13 +63,12 @@
                   <td class="td-num col-price">{{ r.price != null ? Number(r.price).toFixed(2) : '—' }}</td>
                   <td class="td-dim">{{ r.holder || '—' }}</td>
                   <td class="col-point">
-                    <select v-if="r.state === 'stock'" class="point-sel"
+                    <select class="point-sel"
                       :value="r.storage_point_id || ''" @change="onPointChange(r, $event)">
                       <option value="">—</option>
                       <option v-for="p in points" :key="p.id" :value="p.id">{{ p.name }}</option>
                       <option v-if="canAddPoint" value="__new__">+ нова точка…</option>
                     </select>
-                    <span v-else class="td-dim">{{ r.storage_point || '—' }}</span>
                   </td>
                   <td class="col-note td-dim" :title="r.note || ''">{{ r.note || '—' }}</td>
                   <td class="td-issue">
@@ -265,7 +264,7 @@ import ItemAutocomplete from '../../components/ItemAutocomplete.vue'
 import { personLabel, personOptions } from '../../utils/person.js'
 import NomenclatureModal from '../../components/NomenclatureModal.vue'
 import InstanceCardModal from '../../components/InstanceCardModal.vue'
-import { getAssignments, createAssignment, returnAssignment } from '../../api/assignments.js'
+import { getAssignments, createAssignment, returnAssignment, setAssignmentPoint } from '../../api/assignments.js'
 import { useAuthStore } from '../../stores/auth.js'
 
 const auth = useAuthStore()
@@ -363,9 +362,15 @@ async function savePoint(r, val) {
   const id = val ? Number(val) : null
   try {
     if (r.kind === 'serial') {
+      // Екземпляр і після видачі числиться на складі — точка живе на ньому.
       await updateInstance(r.nomenclature_id, r.instance_id, { storage_point_id: id })
       const s = serial.value.find(x => x.instance_id === r.instance_id)
       if (s) { s.storage_point_id = id; s.storage_point = pointName(id) }
+    } else if (r.state === 'issued') {
+      // Несерійне на руках: точка в конкретної видачі, а не спільна мітка картки.
+      await setAssignmentPoint(r.assignment.id, id)
+      const a = assignments.value.find(x => x.id === r.assignment.id)
+      if (a) { a.storage_point_id = id; a.storage_point = pointName(id) }
     } else {
       await setStockPoint({ nomenclature_id: r.nomenclature_id, warehouse_id: warehouseId.value,
                             storage_point_id: id })
@@ -446,6 +451,7 @@ const stockRows = computed(() => {
       qty: Number(a.quantity), unit_of_measure: nom?.unit_of_measure,
       price: nom?.price, holder: personName(a.person_id),
       nomenclature_id: a.nomenclature_id, assignment: a,
+      storage_point_id: a.storage_point_id || null, storage_point: a.storage_point || null,
     })
   }
   for (const s of serial.value) {

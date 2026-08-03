@@ -15,10 +15,10 @@ from app.acl import check_assignment_create, is_admin, scope_assignments
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import (
-    Assignment, Group, Instance, Nomenclature, Person, User, Warehouse,
+    Assignment, Group, Instance, Nomenclature, Person, StoragePoint, User, Warehouse,
 )
 from app.routers.custody import balance_of
-from app.schemas import AssignmentCreate, AssignmentReturn
+from app.schemas import AssignmentCreate, AssignmentPointSet, AssignmentReturn
 
 router = APIRouter(prefix="/api/assignments", tags=["assignments"])
 
@@ -45,6 +45,7 @@ def _dict(a: Assignment) -> dict:
         "instance_id": a.instance_id,
         "quantity": str(a.quantity),
         "is_official": a.is_official,
+        "storage_point_id": a.storage_point_id,
         "issued_date": a.issued_date.isoformat() if a.issued_date else None,
         "returned_date": a.returned_date.isoformat() if a.returned_date else None,
         "is_active": a.returned_date is None,
@@ -75,8 +76,30 @@ def list_assignments(
         d["unit_of_measure"] = nom.unit_of_measure if nom else None
         d["serial_no"] = db.get(Instance, a.instance_id).serial_no if a.instance_id else None
         d["warehouse_name"] = wh.name if wh else None
+        d["storage_point"] = (db.get(StoragePoint, a.storage_point_id).name
+                              if a.storage_point_id else None)
         out.append(d)
     return out
+
+
+@router.put("/{aid}/point")
+def set_assignment_point(aid: int, payload: AssignmentPointSet, db: Session = Depends(get_db),
+                         user: User = Depends(get_current_user)):
+    """Де лежить видане несерійне. Серійному точка ставиться на екземплярі —
+    він і після видачі числиться на складі."""
+    a = db.get(Assignment, aid)
+    if not a:
+        raise HTTPException(404, "Видачу не знайдено")
+    check_assignment_create(user, a.warehouse_id)      # той самий доступ, що й на видачу
+    if a.instance_id:
+        raise HTTPException(400, "Для серійного точка ставиться на екземплярі")
+    if payload.storage_point_id is not None:
+        point = db.get(StoragePoint, payload.storage_point_id)
+        if not point or point.warehouse_id != a.warehouse_id:
+            raise HTTPException(400, "Точка не з цього складу")
+    a.storage_point_id = payload.storage_point_id
+    db.commit()
+    return {"storage_point_id": a.storage_point_id}
 
 
 def issue_row(db: Session, user: User, warehouse_id: int, person_id: int,
