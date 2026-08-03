@@ -14,9 +14,10 @@
         </div>
 
         <label class="fl">Точка зберігання</label>
-        <select class="fi" v-model="pointId" :disabled="row.state !== 'stock'">
-          <option :value="null">— не вказано —</option>
+        <select class="fi" :value="pointId ?? ''" :disabled="row.state !== 'stock'" @change="onPointChange">
+          <option value="">— не вказано —</option>
           <option v-for="p in points" :key="p.id" :value="p.id">{{ p.name }}</option>
+          <option v-if="createPoint" value="__new__">+ нова точка…</option>
         </select>
         <p v-if="row.state !== 'stock'" class="hint">Майно на руках — точка ставиться, коли воно на складі.</p>
 
@@ -41,6 +42,7 @@ const props = defineProps({
   points: { type: Array, default: () => [] },   // точки поточного складу
   warehouseName: String,
   busy: Boolean,
+  createPoint: { type: Function, default: null },   // null → створювати не можна (не admin)
 })
 const emit = defineEmits(['close', 'save'])
 
@@ -53,6 +55,21 @@ watch(() => [props.open, props.row], () => {
   note.value = props.row.note || ''
   pointId.value = props.row.storage_point_id || null
 }, { immediate: true, deep: true })
+
+// Точку можна завести на місці — інакше довелось би йти в Довідники й пам'ятати склад.
+async function onPointChange(ev) {
+  const val = ev.target.value
+  if (val !== '__new__') { pointId.value = val ? Number(val) : null; return }
+  ev.target.value = pointId.value ?? ''
+  const name = prompt(`Нова точка на складі «${props.warehouseName || ''}»:`)
+  if (!name || !name.trim()) return
+  try {
+    const point = await props.createPoint(name)
+    pointId.value = point.id
+  } catch (e) {
+    alert(e?.response?.data?.detail || 'Не вдалось створити точку')
+  }
+}
 
 // Зберігає батько (він володіє даними складу) — модалка лише віддає значення.
 function save() {

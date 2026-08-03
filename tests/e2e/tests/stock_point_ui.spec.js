@@ -59,3 +59,40 @@ test('storage point: create in Довідники, set on Залишки, filter
   await api.delete(`/api/settings/services/${svc.id}`).catch(() => {})
   await api.dispose()
 })
+
+// Точку можна завести прямо на «Залишках» — на складі підрозділу, де точок ще нема
+// (раніше пікер там не показувався взагалі, тож поле виглядало нередагованим).
+test('storage point can be created inline on a unit warehouse', async ({ page, request }) => {
+  const token = await getToken(request)
+  const api = await pwRequest.newContext({ baseURL: API, extraHTTPHeaders: { Authorization: `Bearer ${token}` } })
+  const j = (p, b) => api.post(p, { data: b }).then(r => r.json())
+  const ts = Date.now()
+  const svc = await j('/api/settings/services', { name: `InlSvc ${ts}` })
+  const unit = await j('/api/structure/units', { name: `InlРота ${ts}` })
+  const whs = await api.get('/api/structure/warehouses').then(r => r.json())
+  const svcWh = whs.find(w => w.service_id === svc.id)
+  const unitWh = whs.find(w => w.unit_id === unit.id)
+  const nom = await j('/api/nomenclature', { name: `Бушлат ${ts}`, service_id: svc.id, unit_of_measure: 'шт' })
+  await j('/api/custody/movements', { date: '2026-07-01', type: 'receipt', nomenclature_id: nom.id, to_warehouse_id: svcWh.id, quantity: 6 })
+  await j('/api/custody/movements', { date: '2026-07-02', type: 'transfer', nomenclature_id: nom.id, from_warehouse_id: svcWh.id, to_warehouse_id: unitWh.id, quantity: 4 })
+
+  page.on('dialog', d => d.accept(`Намет ${ts}`))   // prompt: назва нової точки
+  await uiLogin(page)
+  await page.goto(`${URL}/stock`)
+  await page.locator('.wh-btn', { hasText: unitWh.name }).click()
+
+  const row = page.locator('tbody tr', { hasText: `Бушлат ${ts}` }).first()
+  await row.locator('.point-sel').selectOption('__new__')
+  await expect(row.locator('.point-sel')).toHaveValue(/\d+/)          // нова точка обрана
+
+  // Точка справді створена для СКЛАДУ ПІДРОЗДІЛУ і проставлена картці
+  const points = await api.get(`/api/structure/storage-points?warehouse_id=${unitWh.id}`).then(r => r.json())
+  expect(points.map(p => p.name)).toContain(`Намет ${ts}`)
+  const bal = await api.get(`/api/custody/balances?warehouse_id=${unitWh.id}`).then(r => r.json())
+  expect(bal.find(b => b.nomenclature_id === nom.id).storage_point).toBe(`Намет ${ts}`)
+
+  await api.delete(`/api/nomenclature/${nom.id}`).catch(() => {})
+  await api.delete(`/api/structure/units/${unit.id}`).catch(() => {})
+  await api.delete(`/api/settings/services/${svc.id}`).catch(() => {})
+  await api.dispose()
+})
