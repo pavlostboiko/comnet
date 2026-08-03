@@ -582,6 +582,7 @@ def serial_at_warehouse(warehouse_id: int, db: Session = Depends(get_db), user: 
         out.append({
             "instance_id": it.id,
             "serial_no": it.serial_no,
+            "card_number": it.card_number,
             "nomenclature_id": it.nomenclature_id,
             "name": nom.name if nom else None,
             "is_official": it.is_official,

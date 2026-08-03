@@ -12,7 +12,7 @@ test('serial instance note editable via the instance card on Залишки', as
   const whs = await api.get('/api/structure/warehouses').then(r => r.json())
   const svcWh = whs.find(w => w.service_id === svc.id)
   const nom = await j('/api/nomenclature', { name: `Рація ${ts}`, service_id: svc.id, unit_of_measure: 'шт', is_serialized: true })
-  const inst = await j(`/api/nomenclature/${nom.id}/instances`, { serial_no: `SN-${ts}` })
+  const inst = await j(`/api/nomenclature/${nom.id}/instances`, { serial_no: `SN-${ts}`, card_number: `К-${ts}` })
   await j('/api/custody/movements', { date: '2026-07-01', type: 'receipt', nomenclature_id: nom.id, instance_id: inst.id, to_warehouse_id: svcWh.id })
 
   await uiLogin(page)
@@ -20,9 +20,12 @@ test('serial instance note editable via the instance card on Залишки', as
   await page.locator('.wh-btn', { hasText: svcWh.name }).click()
 
   const row = page.locator('tbody tr', { hasText: `SN-${ts}` }).first()
+  // № картки — перша колонка таблиці
+  await expect(row.locator('td').first()).toHaveText(`К-${ts}`)
   await row.locator('.btn-card').click()
   const card = page.locator('.modal', { hasText: 'Картка:' })
   await expect(card).toContainText(`SN-${ts}`)          // серійний видно в картці
+  await expect(card).toContainText(`К-${ts}`)           // і № картки
   await card.locator('textarea').fill('загублено ремінь')
   await card.locator('.btn-pri', { hasText: 'Зберегти' }).click()
   await expect(page.locator('.modal', { hasText: 'Картка:' })).toHaveCount(0)

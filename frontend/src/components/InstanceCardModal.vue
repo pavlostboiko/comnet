@@ -8,6 +8,7 @@
       <div class="modal-body">
         <div class="ro-grid">
           <div><span class="rl">Серійний №</span><span class="rv mono">{{ row.serial_no || '—' }}</span></div>
+          <div><span class="rl">№ картки</span><span class="rv mono">{{ row.card_number || '—' }}</span></div>
           <div><span class="rl">Тип</span><span class="rv">{{ row.is_official ? 'облік' : 'ндм' }}</span></div>
           <div><span class="rl">Склад</span><span class="rv">{{ warehouseName || '—' }}</span></div>
           <div><span class="rl">На кому</span><span class="rv">{{ row.holder || '— на складі' }}</span></div>
