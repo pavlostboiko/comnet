@@ -47,14 +47,14 @@
           <div class="table-wrap">
             <table>
               <thead><tr>
-                <th class="col-card">№ картки</th><th>Найменування</th><th class="col-serial">Серійний №</th><th class="col-off">Тип</th>
+                <th class="col-card" title="№ картки">№</th><th>Найменування</th><th class="col-serial">Серійний №</th><th class="col-off">Тип</th>
                 <th class="col-num">К-сть</th><th class="col-uom">Од.</th><th class="col-num">Вартість</th>
                 <th>На кому</th><th class="col-point">Точка</th><th class="col-note">Примітка</th><th class="col-issue"></th>
               </tr></thead>
               <tbody>
                 <tr v-if="!filteredRows.length"><td colspan="11" class="empty">Порожньо</td></tr>
                 <tr v-for="r in filteredRows" :key="r.key">
-                  <td class="td-mono td-dim">{{ r.card_number || '—' }}</td>
+                  <td class="td-mono td-dim col-card" :title="r.card_number || ''">{{ r.card_number || '—' }}</td>
                   <td class="td-name">{{ r.name }}</td>
                   <td class="td-mono td-dim">{{ r.serial_no || '—' }}</td>
                   <td><span class="chip" :class="r.is_official ? 'chip-gov' : 'chip-vol'">{{ r.is_official ? 'облік' : 'ндм' }}</span></td>
@@ -809,7 +809,7 @@ table { width:100%; border-collapse:collapse; table-layout:fixed; }
 th, td { padding:9px 14px; text-align:left; font-size:13px; border-bottom:1px solid var(--border-light); }
 th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; }
 .col-off { width:130px; } .col-num { width:110px; text-align:right; } .col-uom { width:70px; } .col-date { width:110px; } .col-issue { width:180px; text-align:right; white-space:nowrap; }
-.col-card { width:120px; } .col-note { width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.col-card { width:44px; padding-left:8px; padding-right:4px; font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .col-note { width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .col-point { width:140px; }
 .point-sel { width:100%; box-sizing:border-box; border:1px solid transparent; background:transparent; border-radius:var(--radius-sm); padding:4px 6px; font-family:inherit; font-size:13px; color:var(--text); }
 .point-sel:hover { border-color:var(--border-light); } .point-sel:focus { border-color:var(--border); background:var(--surface); outline:none; }
