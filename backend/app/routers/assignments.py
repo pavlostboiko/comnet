@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.acl import check_assignment_create, is_admin, scope_assignments
 from app.auth import get_current_user
 from app.database import get_db
+from app.point_events import log_point_change
 from app.models import (
     Assignment, Group, Instance, Nomenclature, Person, StoragePoint, User, Warehouse,
 )
@@ -97,7 +98,11 @@ def set_assignment_point(aid: int, payload: AssignmentPointSet, db: Session = De
         point = db.get(StoragePoint, payload.storage_point_id)
         if not point or point.warehouse_id != a.warehouse_id:
             raise HTTPException(400, "Точка не з цього складу")
+    was_point = a.storage_point_id
     a.storage_point_id = payload.storage_point_id
+    log_point_change(db, nomenclature_id=a.nomenclature_id, warehouse_id=a.warehouse_id,
+                     from_point_id=was_point, to_point_id=a.storage_point_id,
+                     assignment_id=a.id, quantity=a.quantity, user=user)
     db.commit()
     return {"storage_point_id": a.storage_point_id}
 

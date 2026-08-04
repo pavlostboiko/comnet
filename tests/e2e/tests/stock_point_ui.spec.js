@@ -120,8 +120,10 @@ test('storage point can be set on issued goods', async ({ page, request }) => {
   await page.locator('.wh-btn', { hasText: unitWh.name }).click()
   await page.locator('.f-chip', { hasText: 'Видане' }).click()
 
-  const row = page.locator('tbody tr', { hasText: `Спальник ${ts}` }).first()
-  await expect(row).toContainText(`Боєць${ts}`)                 // саме рядок видачі
+  // Рядок видачі, а не залишку: до застосування фільтра в таблиці є обидва.
+  const row = page.locator('tbody tr')
+    .filter({ hasText: `Спальник ${ts}` }).filter({ hasText: `Боєць${ts}` }).first()
+  await expect(row).toBeVisible()
   await row.locator('.point-sel').selectOption(String(point.id))
   await expect(row.locator('.point-sel')).toHaveValue(String(point.id))   // запит завершився
 

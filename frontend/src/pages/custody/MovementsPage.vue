@@ -71,6 +71,7 @@ const KINDS = [
   { key: 'writeoff', label: 'Списання' },
   { key: 'issued', label: 'Видано' },
   { key: 'returned', label: 'Повернуто' },
+  { key: 'point', label: 'Точка' },
 ]
 
 const events = ref([])
@@ -92,9 +93,11 @@ const countOf = (k) => events.value.filter(e => matches(e, k)).length
 
 function eventLabel(e) {
   return { receipt: 'надходження', transfer: 'переміщення', writeoff: 'списання',
-           issued: 'видано', returned: 'повернуто' }[eventKey(e)] || eventKey(e)
+           issued: 'видано', returned: 'повернуто', point: 'точка' }[eventKey(e)] || eventKey(e)
 }
 function whereLabel(e) {
+  // Подія точки: у from/to — назви точок, склад окремо.
+  if (e.kind === 'point') return `${e.warehouse || '—'}: ${e.from_warehouse || '—'} → ${e.to_warehouse || '—'}`
   if (e.kind === 'issued') return `${e.to_warehouse || '—'} → ${e.person || '—'}`
   if (e.kind === 'returned') return `${e.person || '—'} → ${e.to_warehouse || '—'}`
   return `${e.from_warehouse || 'ззовні'} → ${e.to_warehouse || 'списано'}`
@@ -155,6 +158,7 @@ th { background:var(--bg); color:var(--text-light); font-weight:600; font-size:1
 .chip { display:inline-block; padding:2px 8px; border-radius:3px; font-size:11px; font-weight:600; }
 .mv-receipt { background:#dcfce7; color:#166534; } .mv-transfer { background:#e0e7ff; color:#3730a3; } .mv-writeoff { background:#fee2e2; color:#991b1b; }
 .mv-issued { background:#fef3c7; color:#92400e; } .mv-returned { background:#f1f5f9; color:#475569; }
+.mv-point { background:#ede9fe; color:#5b21b6; }
 .t-foot { padding:10px 20px; font-size:12px; color:var(--text-light); border-top:1px solid var(--border-light); background:var(--bg); }
 .t-foot b { color:var(--text-mid); font-weight:600; }
 </style>
