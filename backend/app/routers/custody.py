@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.acl import (
     check_movement_create, check_nomenclature_cud, check_warehouse_read, is_admin,
-    scope_movements,
+    scope_assignments, scope_movements,
 )
 from app.auth import get_current_user
 from app.custody_placement import place_instance
@@ -565,6 +565,86 @@ def item_history(nomenclature_id: int, instance_id: Optional[int] = None,
                 reverse=True)
     return {"nomenclature_id": nom.id, "name": nom.name,
             "is_serialized": nom.is_serialized, "events": events}
+
+
+@router.get("/feed")
+def history_feed(warehouse_id: Optional[int] = None, date_from: Optional[str] = None,
+                 date_to: Optional[str] = None, limit: int = 500,
+                 db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Загальна історія по всіх картках: рухи склад↔склад + видачі/повернення,
+    хронологічно (новіші зверху) — те саме, що в картці майна, але по всій частині.
+
+    Скоуп ролі як усюди (`scope_movements`/`scope_assignments`). Видача дає до
+    двох подій (видано/повернуто), тож дати фільтруються по КОЖНІЙ події, а SQL
+    лише грубо звужує вибірку."""
+    d_from = date_cls.fromisoformat(date_from) if date_from else None
+    d_to = date_cls.fromisoformat(date_to) if date_to else None
+
+    mq = scope_movements(db.query(CustodyMovement), user)
+    aq = scope_assignments(db.query(Assignment), user)
+    if warehouse_id:
+        mq = mq.filter((CustodyMovement.from_warehouse_id == warehouse_id)
+                       | (CustodyMovement.to_warehouse_id == warehouse_id))
+        aq = aq.filter(Assignment.warehouse_id == warehouse_id)
+    if d_from:
+        mq = mq.filter(CustodyMovement.date >= d_from)
+        aq = aq.filter((Assignment.issued_date >= d_from) | (Assignment.returned_date >= d_from))
+    if d_to:
+        mq = mq.filter(CustodyMovement.date <= d_to)
+        aq = aq.filter((Assignment.issued_date <= d_to) | (Assignment.returned_date <= d_to))
+
+    movements = mq.all()
+    assignments = aq.all()
+
+    # Довідники разом, а не по рядку — інакше сотні запитів на сторінку.
+    noms = {n.id: n for n in db.query(Nomenclature).all()}
+    whs = {w.id: w.name for w in db.query(Warehouse).all()}
+    inst_ids = {m.instance_id for m in movements if m.instance_id} | \
+               {a.instance_id for a in assignments if a.instance_id}
+    serials = {i.id: i.serial_no for i in db.query(Instance).filter(Instance.id.in_(inst_ids))} \
+        if inst_ids else {}
+    person_ids = {a.person_id for a in assignments}
+    persons = {p.id: (" ".join(x for x in [p.last_name, p.first_name] if x) or p.callsign)
+               for p in db.query(Person).filter(Person.id.in_(person_ids))} if person_ids else {}
+
+    def in_range(d):
+        return not ((d_from and d < d_from) or (d_to and d > d_to))
+
+    events = []
+    for m in movements:
+        nom = noms.get(m.nomenclature_id)
+        events.append({
+            "date": m.date.isoformat() if m.date else None,
+            "kind": "movement", "type": m.type,
+            "nomenclature_id": m.nomenclature_id, "nomenclature_name": nom.name if nom else None,
+            "from_warehouse": whs.get(m.from_warehouse_id), "to_warehouse": whs.get(m.to_warehouse_id),
+            "person": None, "qty": str(m.quantity), "is_official": m.is_official,
+            "serial_no": serials.get(m.instance_id), "card_number": m.card_number,
+            "doc_number": m.doc_number, "document_id": m.document_id,
+            "source": "movement", "source_id": m.id, "created_at": m.created_at,
+        })
+    for a in assignments:
+        nom = noms.get(a.nomenclature_id)
+        base = {
+            "type": None, "nomenclature_id": a.nomenclature_id,
+            "nomenclature_name": nom.name if nom else None,
+            "from_warehouse": None, "to_warehouse": whs.get(a.warehouse_id),
+            "person": persons.get(a.person_id), "qty": str(a.quantity),
+            "is_official": a.is_official, "serial_no": serials.get(a.instance_id),
+            "card_number": None, "doc_number": None, "document_id": None,
+            "source": "assignment", "source_id": a.id, "created_at": a.created_at,
+        }
+        if a.issued_date and in_range(a.issued_date):
+            events.append({**base, "date": a.issued_date.isoformat(), "kind": "issued"})
+        if a.returned_date and in_range(a.returned_date):
+            events.append({**base, "date": a.returned_date.isoformat(), "kind": "returned"})
+
+    events.sort(key=lambda e: (e["date"] is None, e["date"] or "",
+                               doc_sort_key(e.get("doc_number")),
+                               e["created_at"], e["source_id"]),
+                reverse=True)
+    total = len(events)
+    return {"events": events[:limit], "total": total, "limit": limit}
 
 
 @router.get("/serial")
