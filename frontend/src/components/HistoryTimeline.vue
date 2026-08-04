@@ -26,14 +26,18 @@ const MOVE = { receipt: 'надходження', transfer: 'переміщен�
 function label(e) {
   if (e.kind === 'issued') return 'видано'
   if (e.kind === 'returned') return 'повернено'
+  if (e.kind === 'point') return 'точка'
   return MOVE[e.type] || e.type
 }
 function chipClass(e) {
   if (e.kind === 'issued') return 'c-issue'
   if (e.kind === 'returned') return 'c-return'
+  if (e.kind === 'point') return 'c-point'
   return `c-${e.type}`
 }
 function details(e) {
+  // Для події точки в from/to лежать назви точок, а склад — окремо.
+  if (e.kind === 'point') return `${e.warehouse || '—'}: ${e.from_warehouse || '—'} → ${e.to_warehouse || '—'}`
   if (e.kind === 'issued') return `на особу: ${e.person || '—'} (${e.warehouse || '—'})`
   if (e.kind === 'returned') return `від особи: ${e.person || '—'} → ${e.warehouse || '—'}`
   return `${e.from_warehouse || 'ззовні'} → ${e.to_warehouse || '—'}`
@@ -57,4 +61,5 @@ function fmtQty(v) {
 .c-receipt { background:#dcfce7; color:#166534; } .c-transfer { background:#e0e7ff; color:#3730a3; }
 .c-writeoff { background:#fee2e2; color:#991b1b; }
 .c-issue { background:#fef3c7; color:#854d0e; } .c-return { background:#dcfce7; color:#166534; }
+.c-point { background:#ede9fe; color:#5b21b6; }
 </style>

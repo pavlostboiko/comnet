@@ -16,15 +16,16 @@ from sqlalchemy.orm import Session
 
 from app.acl import (
     check_movement_create, check_nomenclature_cud, check_warehouse_read, is_admin,
-    scope_assignments, scope_movements,
+    scope_assignments, scope_movements, scope_point_events,
 )
 from app.auth import get_current_user
 from app.custody_placement import place_instance
 from app.custody_snapshot import doc_sort_key
 from app.database import get_db
+from app.point_events import log_point_change
 from app.models import (
     Assignment, CustodyMovement, Instance, Nomenclature, NomenclaturePoint, Person,
-    StoragePoint, User, Warehouse,
+    PointEvent, StoragePoint, User, Warehouse,
 )
 from app.schemas import CustodyMovementCreate, DocumentBatchCreate, StockPointSet
 
@@ -333,10 +334,13 @@ def set_stock_point(payload: StockPointSet, db: Session = Depends(get_db),
     row = db.query(NomenclaturePoint).filter(
         NomenclaturePoint.nomenclature_id == nom.id,
         NomenclaturePoint.warehouse_id == payload.warehouse_id).first()
+    was_point = row.storage_point_id if row else None
     if payload.storage_point_id is None:
         if row:
             db.delete(row)
-            db.commit()
+        log_point_change(db, nomenclature_id=nom.id, warehouse_id=payload.warehouse_id,
+                         from_point_id=was_point, to_point_id=None, user=user)
+        db.commit()
         return {"storage_point_id": None}
     point = db.get(StoragePoint, payload.storage_point_id)
     if not point or point.warehouse_id != payload.warehouse_id:
@@ -346,6 +350,8 @@ def set_stock_point(payload: StockPointSet, db: Session = Depends(get_db),
     else:
         db.add(NomenclaturePoint(nomenclature_id=nom.id, warehouse_id=payload.warehouse_id,
                                  storage_point_id=point.id))
+    log_point_change(db, nomenclature_id=nom.id, warehouse_id=payload.warehouse_id,
+                     from_point_id=was_point, to_point_id=point.id, user=user)
     db.commit()
     return {"storage_point_id": point.id}
 
@@ -554,6 +560,14 @@ def item_history(nomenclature_id: int, instance_id: Optional[int] = None,
                 "created_at": a.created_at,
             })
 
+    pq = db.query(PointEvent).filter(PointEvent.nomenclature_id == nom.id)
+    if instance_id:
+        pq = pq.filter(PointEvent.instance_id == instance_id)
+    for p in pq.all():
+        if only_warehouse is not None and p.warehouse_id != only_warehouse:
+            continue
+        events.append(_point_event_dict(p, nom, wh_name(p.warehouse_id), serial_of(p.instance_id)))
+
     # Порядок (новіші зверху): дата → номер накладної (пізніша зверху; важливо
     # для імпортованих рухів однієї дати) → час запису `created_at` (розрізняє
     # недокументовані події однієї дати, напр. переміщення vs видача в одній
@@ -565,6 +579,23 @@ def item_history(nomenclature_id: int, instance_id: Optional[int] = None,
                 reverse=True)
     return {"nomenclature_id": nom.id, "name": nom.name,
             "is_serialized": nom.is_serialized, "events": events}
+
+
+def _point_event_dict(p: PointEvent, nom, warehouse_name, serial_no) -> dict:
+    """Подія «переїхало в іншу точку» у форматі стрічки/історії картки."""
+    return {
+        "date": p.date.isoformat() if p.date else None,
+        "kind": "point", "type": None,
+        "nomenclature_id": p.nomenclature_id,
+        "nomenclature_name": nom.name if nom else None,
+        "from_warehouse": p.from_point_name, "to_warehouse": p.to_point_name,
+        "warehouse": warehouse_name, "person": None,
+        "qty": str(p.quantity) if p.quantity is not None else None,
+        "is_official": nom.is_official if nom else None,
+        "serial_no": serial_no, "card_number": None,
+        "doc_number": None, "document_id": None,
+        "source": "point_event", "source_id": p.id, "created_at": p.created_at,
+    }
 
 
 @router.get("/feed")
@@ -582,25 +613,31 @@ def history_feed(warehouse_id: Optional[int] = None, date_from: Optional[str] = 
 
     mq = scope_movements(db.query(CustodyMovement), user)
     aq = scope_assignments(db.query(Assignment), user)
+    pq = scope_point_events(db.query(PointEvent), user)
     if warehouse_id:
         mq = mq.filter((CustodyMovement.from_warehouse_id == warehouse_id)
                        | (CustodyMovement.to_warehouse_id == warehouse_id))
         aq = aq.filter(Assignment.warehouse_id == warehouse_id)
+        pq = pq.filter(PointEvent.warehouse_id == warehouse_id)
     if d_from:
         mq = mq.filter(CustodyMovement.date >= d_from)
         aq = aq.filter((Assignment.issued_date >= d_from) | (Assignment.returned_date >= d_from))
+        pq = pq.filter(PointEvent.date >= d_from)
     if d_to:
         mq = mq.filter(CustodyMovement.date <= d_to)
         aq = aq.filter((Assignment.issued_date <= d_to) | (Assignment.returned_date <= d_to))
+        pq = pq.filter(PointEvent.date <= d_to)
 
     movements = mq.all()
     assignments = aq.all()
+    point_events = pq.all()
 
     # Довідники разом, а не по рядку — інакше сотні запитів на сторінку.
     noms = {n.id: n for n in db.query(Nomenclature).all()}
     whs = {w.id: w.name for w in db.query(Warehouse).all()}
     inst_ids = {m.instance_id for m in movements if m.instance_id} | \
-               {a.instance_id for a in assignments if a.instance_id}
+               {a.instance_id for a in assignments if a.instance_id} | \
+               {p.instance_id for p in point_events if p.instance_id}
     serials = {i.id: i.serial_no for i in db.query(Instance).filter(Instance.id.in_(inst_ids))} \
         if inst_ids else {}
     person_ids = {a.person_id for a in assignments}
@@ -638,6 +675,10 @@ def history_feed(warehouse_id: Optional[int] = None, date_from: Optional[str] = 
             events.append({**base, "date": a.issued_date.isoformat(), "kind": "issued"})
         if a.returned_date and in_range(a.returned_date):
             events.append({**base, "date": a.returned_date.isoformat(), "kind": "returned"})
+
+    for p in point_events:
+        events.append(_point_event_dict(p, noms.get(p.nomenclature_id),
+                                        whs.get(p.warehouse_id), serials.get(p.instance_id)))
 
     events.sort(key=lambda e: (e["date"] is None, e["date"] or "",
                                doc_sort_key(e.get("doc_number")),

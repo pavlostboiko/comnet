@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.acl import check_nomenclature_cud, scope_nomenclature
 from app.auth import get_current_user
 from app.database import get_db
+from app.point_events import log_point_change
 from app.models import (
     Assignment, CustodyMovement, Instance, Nomenclature, Service, StoragePoint,
     User, Warehouse,
@@ -139,8 +140,13 @@ def update_instance(nid: int, iid: int, payload: InstanceUpdate, db: Session = D
         # де обліковується).
         if not point or point.warehouse_id != inst.current_warehouse_id:
             raise HTTPException(400, "Точка не з поточного складу екземпляра")
+    was_point = inst.storage_point_id
     for field, value in fields.items():
         setattr(inst, field, value)
+    if "storage_point_id" in fields and inst.current_warehouse_id:
+        log_point_change(db, nomenclature_id=nid, warehouse_id=inst.current_warehouse_id,
+                         from_point_id=was_point, to_point_id=inst.storage_point_id,
+                         instance_id=inst.id, quantity=1, user=user)
     db.commit()
     db.refresh(inst)
     return inst

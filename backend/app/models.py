@@ -88,6 +88,30 @@ class NomenclaturePoint(Base):
     storage_point = relationship("StoragePoint")
 
 
+class PointEvent(Base):
+    """v2: подія переміщення майна між точками зберігання всередині складу.
+
+    Доменна історія (не аудит): показується в загальній стрічці й у картці майна.
+    Заповнена одна прив'язка: instance (серійне), assignment (видане несерійне)
+    або лише nomenclature (мітка залишку картки). Назви точок дублюються знімком,
+    щоб подія лишалась читабельною після видалення точки з довідника."""
+    __tablename__ = "point_events"
+
+    id = Column(Integer, primary_key=True)
+    date = Column(Date, nullable=False)
+    nomenclature_id = Column(Integer, ForeignKey("nomenclature.id", ondelete="CASCADE"), nullable=False)
+    instance_id = Column(Integer, ForeignKey("instances.id", ondelete="CASCADE"), nullable=True)
+    assignment_id = Column(Integer, ForeignKey("assignments.id", ondelete="CASCADE"), nullable=True)
+    warehouse_id = Column(Integer, ForeignKey("warehouses.id", ondelete="CASCADE"), nullable=False)
+    from_point_id = Column(Integer, ForeignKey("storage_points.id", ondelete="SET NULL"), nullable=True)
+    to_point_id = Column(Integer, ForeignKey("storage_points.id", ondelete="SET NULL"), nullable=True)
+    from_point_name = Column(String, nullable=True)
+    to_point_name = Column(String, nullable=True)
+    quantity = Column(Numeric(15, 4), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+
 class Mvo(Base):
     """v2: журнал підписантів документів (історичний) — не лише МВО.
     Діючий = to_date IS NULL; максимум один діючий на склад/службу/систему."""

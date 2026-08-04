@@ -41,6 +41,17 @@ test('Переміщення shows issues next to warehouse movements', async ({
   await expect(page.locator('tbody tr', { hasText: `Ліхтар ${ts}` }).filter({ hasText: 'переміщення' })).toHaveCount(0)
   await expect(issued.first()).toBeVisible()
 
+  // Зміна точки — теж подія стрічки
+  const point = await j('/api/structure/storage-points', { name: `Бокс ${ts}`, warehouse_id: unitWh.id })
+  await api.put('/api/custody/stock-point', { data: {
+    nomenclature_id: nom.id, warehouse_id: unitWh.id, storage_point_id: point.id } })
+  await page.reload()
+  await page.locator('.wh-select').selectOption(String(unitWh.id))
+  await page.locator('.f-chip', { hasText: 'Точка' }).click()
+  const pointRow = page.locator('tbody tr', { hasText: `Ліхтар ${ts}` }).first()
+  await expect(pointRow).toContainText('точка')
+  await expect(pointRow).toContainText(`Бокс ${ts}`)
+
   await api.delete(`/api/nomenclature/${nom.id}`).catch(() => {})
   await api.delete(`/api/settings/persons/${person.id}`).catch(() => {})
   await api.delete(`/api/structure/units/${unit.id}`).catch(() => {})

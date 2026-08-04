@@ -54,6 +54,19 @@ def scope_assignments(q, user):
     return q.filter(False)
 
 
+def scope_point_events(q, user):
+    """Події точок: service — своя служба (через картку), mvo — свій склад."""
+    from app.models import PointEvent
+    if is_admin(user):
+        return q
+    if user.role == "service" and user.service_id:
+        return q.join(Nomenclature, PointEvent.nomenclature_id == Nomenclature.id) \
+                .filter(Nomenclature.service_id == user.service_id)
+    if user.role == "mvo" and user.warehouse_id:
+        return q.filter(PointEvent.warehouse_id == user.warehouse_id)
+    return q.filter(False)
+
+
 def filter_balance_lines(lines, user, warehouse_id):
     """lines: list of dicts with nomenclature service already resolvable.
     Returns the subset the user may see for this warehouse."""
