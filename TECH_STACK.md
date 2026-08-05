@@ -19,13 +19,13 @@
 | **psycopg2-binary** | 2.9.9 | PostgreSQL-драйвер |
 | **Alembic** | 1.13.1 | Версіонування схеми БД (міграції) |
 | **Pydantic / pydantic-settings** | 2.2.1 | Валідація схем + `.env`-конфіг |
-| **python-jose[cryptography]** | 3.3.0 | JWT-токени |
+| **python-jose[cryptography]** | 3.4.0 | JWT-токени |
 | **passlib + bcrypt** | 1.7.4 + 4.0.1 (pinned) | Хешування паролів |
-| **python-multipart** | 0.0.9 | Парсинг form-data (login) |
-| **python-dotenv** | 1.0.1 | Завантаження `.env` |
+| **python-multipart** | 0.0.31 | Парсинг form-data (login) |
+| **python-dotenv** | 1.2.2 | Завантаження `.env` |
 | **openpyxl** | 3.1.2 | Генерація XLSX (Додаток 25) |
 | **num2words** | 0.5.13 | Числа прописом українською |
-| **pytest** | 8.2.0 | Юніт-тести |
+| **pytest** | 9.0.3 | Юніт-тести |
 
 > **Pin:** `bcrypt==4.0.1` обов'язково — `passlib 1.7.4` несумісний з `bcrypt ≥ 5.x`.
 
@@ -51,7 +51,7 @@
 
 | Технологія | Версія | Призначення |
 |------------|--------|-------------|
-| **pytest** | 8.2.0 | Pure-logic тести (UA пропис, openpyxl shifts) — 31 тест |
+| **pytest** | 9.0.3 | Pure-logic тести (UA пропис, openpyxl shifts) — 31 тест |
 | **Playwright** | 1.44.0 | Інтеграційні API + UI smoke тести — 17 (Chromium headless) |
 | Playwright `request` context | — | API-only тести (без браузера) |
 
