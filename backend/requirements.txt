@@ -11,4 +11,4 @@ python-multipart==0.0.31
 pydantic-settings==2.2.1
 openpyxl==3.1.2
 num2words==0.5.13
-pytest==8.2.0
+pytest==9.0.3
