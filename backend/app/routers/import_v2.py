@@ -28,7 +28,7 @@ from app.models import (
 )
 from app.import_helpers import (
     _build_person_lookup, _clean, _normalize_serial, _parse_decimal, _parse_date,
-    _resolve_person,
+    _resolve_person, read_xlsx_upload,
 )
 from app.routers.assignments import _active_issued
 from app.routers.custody import balance_of
@@ -137,7 +137,7 @@ def import_persons_v2(
     ІПН у базі, якого нема у файлі → деактивувати (is_active=False). Рядок без
     ІПН пропускаємо. `search_name` = повний ПІБ (для матчингу МВО/рухів по J/K)."""
     try:
-        wb = load_workbook(BytesIO(file.file.read()), data_only=True)
+        wb = load_workbook(BytesIO(read_xlsx_upload(file)), data_only=True)
     except Exception as e:
         raise HTTPException(400, f"Не вдалось прочитати XLSX: {e}")
     ws = wb.active
@@ -212,7 +212,7 @@ def import_items_v2(
     user: User = Depends(require_admin),
 ):
     try:
-        wb = load_workbook(BytesIO(file.file.read()), data_only=True)
+        wb = load_workbook(BytesIO(read_xlsx_upload(file)), data_only=True)
     except Exception as e:
         raise HTTPException(400, f"Не вдалось прочитати XLSX: {e}")
     ws = wb.active
@@ -363,7 +363,7 @@ def import_movements_v2(
     хронологічно ПІЗНІШИЙ (дата → номер накладної → id), незалежно від порядку
     рядків у файлі."""
     try:
-        wb = load_workbook(BytesIO(file.file.read()), data_only=True)
+        wb = load_workbook(BytesIO(read_xlsx_upload(file)), data_only=True)
     except Exception as e:
         raise HTTPException(400, f"Не вдалось прочитати XLSX: {e}")
     ws = wb.active
@@ -629,7 +629,7 @@ def import_assignments_v2(
     Запускати ПІСЛЯ Items + Переміщень (майно має бути вже розміщене). К-сть = 1;
     дата = дата накладної руху, що розмістив майно. Матч особи по прізвищу."""
     try:
-        wb = load_workbook(BytesIO(file.file.read()), data_only=True)
+        wb = load_workbook(BytesIO(read_xlsx_upload(file)), data_only=True)
     except Exception as e:
         raise HTTPException(400, f"Не вдалось прочитати XLSX: {e}")
     ws = wb.active

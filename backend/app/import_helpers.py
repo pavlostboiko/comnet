@@ -88,3 +88,32 @@ def _normalize_serial(val) -> Optional[str]:
     if s.lower() in SERIAL_NONE_TOKENS:
         return None
     return s
+
+
+# ── Захист від навмисно «важких» файлів ──────────────────────────────────────
+
+MAX_UPLOAD_BYTES = 15 * 1024 * 1024          # сам файл
+MAX_UNCOMPRESSED_BYTES = 300 * 1024 * 1024   # розпакований вміст (zip-bomb)
+
+
+def read_xlsx_upload(file) -> bytes:
+    """Прочитати завантажений XLSX із двома лімітами.
+
+    XLSX — це zip, тож маленький файл може розпакуватись у гігабайти й покласти
+    бекенд ще до першого рядка. Перевіряємо і розмір файлу, і суму розмірів
+    записів усередині — до того, як віддати його openpyxl.
+    """
+    import zipfile
+    from io import BytesIO
+
+    data = file.file.read(MAX_UPLOAD_BYTES + 1)
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise ValueError(f"Файл більший за {MAX_UPLOAD_BYTES // (1024 * 1024)} МБ")
+    try:
+        with zipfile.ZipFile(BytesIO(data)) as zf:
+            total = sum(i.file_size for i in zf.infolist())
+    except zipfile.BadZipFile:
+        raise ValueError("Файл не схожий на XLSX")
+    if total > MAX_UNCOMPRESSED_BYTES:
+        raise ValueError("Вміст файлу надто великий (підозра на zip-бомбу)")
+    return data
