@@ -78,6 +78,23 @@ def doc_sort_key(doc_number: Optional[str]) -> Tuple[int, ...]:
     return tuple(int(g) for g in re.findall(r"\d+", doc_number))
 
 
+def history_sort_key(e: dict):
+    """Порядок подій історії майна (сортуємо з `reverse=True` — новіші зверху).
+
+    Того самого дня:
+    1) рухи впорядковані НОМЕРОМ накладної — в імпорті лише він дає хронологію
+       (`created_at` там ~однаковий і йде порядком рядків файлу, задача 10);
+    2) події особи/точки (видано, повернуто, зміна точки) стоять ПІСЛЯ рухів
+       того ж дня: майно спершу приїхало (папером), і вже потім його видали чи
+       переставили. Інакше документоване переміщення завжди вигравало в видачі
+       по `doc_sort_key` і вилазило над нею.
+    """
+    return (e["date"] is None, e["date"] or "",
+            0 if e.get("source") == "movement" else 1,
+            doc_sort_key(e.get("doc_number")),
+            e["created_at"], e["source_id"])
+
+
 # ── Auto-numbering ───────────────────────────────────────────────────────
 
 def _next_seq(existing: List[str], year: int) -> str:

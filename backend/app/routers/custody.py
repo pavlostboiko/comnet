@@ -20,7 +20,7 @@ from app.acl import (
 )
 from app.auth import get_current_user
 from app.custody_placement import place_instance
-from app.custody_snapshot import doc_sort_key
+from app.custody_snapshot import doc_sort_key, history_sort_key
 from app.database import get_db
 from app.point_events import log_point_change
 from app.models import (
@@ -568,15 +568,7 @@ def item_history(nomenclature_id: int, instance_id: Optional[int] = None,
             continue
         events.append(_point_event_dict(p, nom, wh_name(p.warehouse_id), serial_of(p.instance_id)))
 
-    # Порядок (новіші зверху): дата → номер накладної (пізніша зверху; важливо
-    # для імпортованих рухів однієї дати) → час запису `created_at` (розрізняє
-    # недокументовані події однієї дати, напр. переміщення vs видача в одній
-    # транзакції) → id. `created_at` — ПІСЛЯ doc_sort_key, бо в імпорті created_at
-    # ~однаковий і хронологію дає лише номер накладної (задача 10).
-    events.sort(key=lambda e: (e["date"] is None, e["date"] or "",
-                               doc_sort_key(e.get("doc_number")),
-                               e["created_at"], e["source_id"]),
-                reverse=True)
+    events.sort(key=history_sort_key, reverse=True)
     return {"nomenclature_id": nom.id, "name": nom.name,
             "is_serialized": nom.is_serialized, "events": events}
 
@@ -680,10 +672,7 @@ def history_feed(warehouse_id: Optional[int] = None, date_from: Optional[str] = 
         events.append(_point_event_dict(p, noms.get(p.nomenclature_id),
                                         whs.get(p.warehouse_id), serials.get(p.instance_id)))
 
-    events.sort(key=lambda e: (e["date"] is None, e["date"] or "",
-                               doc_sort_key(e.get("doc_number")),
-                               e["created_at"], e["source_id"]),
-                reverse=True)
+    events.sort(key=history_sort_key, reverse=True)
     total = len(events)
     return {"events": events[:limit], "total": total, "limit": limit}
 

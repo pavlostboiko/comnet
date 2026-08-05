@@ -111,3 +111,54 @@ test('history scoped to a single serial instance', async ({ request }) => {
     await api.dispose()
   }
 })
+
+test('same-date issue sorts above a DOCUMENTED transfer', async ({ request }) => {
+  // Регресія: рух із номером накладної вигравав у видачі по doc_sort_key і
+  // ставав над нею, хоча видача того ж дня сталася пізніше.
+  const api = await loginApi(request)
+  const cleanup = []
+  try {
+    const tag = `hdoc-${Date.now()}-${Math.floor(Math.random() * 9999)}`
+    const svc = await postJson(api, '/api/settings/services', { name: `HDSvc ${tag}` })
+    const unit = await postJson(api, '/api/structure/units', { name: `HDРота ${tag}` })
+    cleanup.push(`/api/structure/units/${unit.id}`, `/api/settings/services/${svc.id}`)
+    const whs = await api.get('/api/structure/warehouses').then(r => r.json())
+    const svcWh = whs.find(w => w.service_id === svc.id)
+    const unitWh = whs.find(w => w.unit_id === unit.id)
+    const person = await postJson(api, '/api/settings/persons',
+      { first_name: 'І', last_name: `Боєць${tag}`, unit_id: unit.id })
+    cleanup.push(`/api/settings/persons/${person.id}`)
+    const nom = await postJson(api, '/api/nomenclature',
+      { name: `Річ ${tag}`, service_id: svc.id, unit_of_measure: 'шт' })
+    cleanup.push(`/api/nomenclature/${nom.id}`)
+
+    await postJson(api, '/api/custody/movements', { date: '2026-07-01', type: 'receipt',
+      nomenclature_id: nom.id, to_warehouse_id: svcWh.id, quantity: 10 })
+    // Переміщення НАКЛАДНОЮ (є номер) + видача тією ж датою
+    await postJson(api, '/api/custody/document', {
+      date: '2026-07-05', from_warehouse_id: svcWh.id, to_warehouse_id: unitWh.id,
+      doc_number: '596/250/2/7',
+      items: [{ nomenclature_id: nom.id, quantity: 3 }],
+    })
+    await postJson(api, '/api/assignments', { warehouse_id: unitWh.id, person_id: person.id,
+      nomenclature_id: nom.id, quantity: 2, issued_date: '2026-07-05' })
+
+    const h = await api.get(`/api/custody/history?nomenclature_id=${nom.id}`).then(r => r.json())
+    const kinds = h.events.map(e => e.kind === 'movement' ? e.type : e.kind)
+    expect(kinds).toEqual(['issued', 'transfer', 'receipt'])
+
+    // Дві накладні того ж дня далі впорядковані номером (задача 10 не зламана)
+    await postJson(api, '/api/custody/document', {
+      date: '2026-07-05', from_warehouse_id: svcWh.id, to_warehouse_id: unitWh.id,
+      doc_number: '596/250/2/10',
+      items: [{ nomenclature_id: nom.id, quantity: 1 }],
+    })
+    const h2 = await api.get(`/api/custody/history?nomenclature_id=${nom.id}`).then(r => r.json())
+    const docs = h2.events.filter(e => e.kind === 'movement' && e.type === 'transfer').map(e => e.doc_number)
+    expect(docs).toEqual(['596/250/2/10', '596/250/2/7'])
+    expect(h2.events[0].kind).toBe('issued')     // видача все одно зверху
+  } finally {
+    await bestEffortDelete(api, cleanup)
+    await api.dispose()
+  }
+})
