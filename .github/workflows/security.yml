@@ -1,0 +1,89 @@
+name: Security
+
+# Сканери навмисно НЕ блокують мерж (`continue-on-error`) — спершу треба
+# побачити реальний обсяг знахідок на наявних залежностях. Коли розгребемо
+# перший список, прибрати continue-on-error по одному джобу.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1'        # щопонеділка: нові CVE зʼявляються без наших комітів
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  python-deps:
+    name: Python deps (pip-audit)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pip-audit
+      - name: Audit backend requirements
+        run: pip-audit -r backend/requirements.txt --strict --desc
+
+  frontend-deps:
+    name: Frontend deps (npm audit)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Audit production dependencies
+        working-directory: frontend
+        run: |
+          npm install --package-lock-only --no-audit --no-fund
+          npm audit --omit=dev --audit-level=moderate
+
+  python-sast:
+    name: Python code (bandit)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install bandit
+      # -ll: показувати від medium; тести не скануємо (там навмисні паролі).
+      - run: bandit -r backend/app backend/main.py -ll
+
+  secrets:
+    name: Secrets in code and history (gitleaks)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0         # уся історія: .env колись міг потрапити в коміт
+      - name: Run gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest \
+            detect --source=/repo --redact --verbose --no-banner
+
+  filesystem:
+    name: Deps, secrets, misconfig (trivy)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
