@@ -16,12 +16,13 @@ test('audit page lists records, filters and expands a diff', async ({ page, requ
   await page.goto(`${URL}/audit`)
   await expect(page.locator('.tile-title')).toContainText('Журнал змін')
 
-  // Filter to Служба + Створено (deterministic even with many audit rows)
+  // Фільтр Служба + Створено; шукаємо СВІЙ рядок за назвою — паралельні тести
+  // пишуть у той самий журнал, тож «перший рядок» нічого не гарантує.
   await page.locator('.filters select').first().selectOption({ label: 'Служба' })
   await page.locator('.filters select').nth(1).selectOption({ label: 'Створено' })
-  const row = page.locator('tbody tr.row', { hasText: 'Служба' }).first()
+  const row = page.locator('tbody tr.row')
+    .filter({ hasText: 'Служба' }).filter({ hasText: 'Створено' }).first()
   await expect(row).toBeVisible()
-  await expect(row).toContainText('Створено')
 
   // Expand → diff detail appears with the name field
   await row.click()

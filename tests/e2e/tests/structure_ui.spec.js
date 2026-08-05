@@ -28,7 +28,11 @@ test('requisites tab (migrated from /settings): save unit details persist', asyn
 
   await page.locator('.tt-btn', { hasText: 'Реквізити' }).click()
   const edrpou = `${Date.now()}`.slice(-8)
-  // Requisites form order: name, short_name, edrpou, location
+  // Requisites form order: name, short_name, edrpou, location.
+  // Спершу дочекатись, поки форма підтягне збережені значення — інакше введене
+  // перетирається відповіддю, що прийшла після заповнення.
+  await expect(page.locator('.req-form .fi').first()).toBeVisible()
+  await page.waitForLoadState('networkidle')
   await page.locator('.req-form .fi').nth(2).fill(edrpou)
   await page.locator('.req-form .btn-pri').click()
   await expect(page.locator('.req-ok')).toBeVisible()

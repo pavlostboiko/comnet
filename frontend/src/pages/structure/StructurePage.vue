@@ -559,7 +559,8 @@ async function save() {
           warehouse_id: kind === 'warehouse' ? form.warehouse_id : null,
           service_id: kind === 'service_chief' ? form.service_id : null,
           person_id: form.person_id,
-          position: form.position || null, rank: form.rank || null, from_date: form.from_date })
+          position: form.position || null, rank: form.rank || null,
+          from_date: form.from_date, to_date: form.to_date || null })   // «Діє по» губилось
       }
     }
     else if (tab.value === 'points') {

@@ -4,13 +4,15 @@
  */
 const { test, expect } = require('@playwright/test')
 const { loginApi } = require('./helpers/login')
-const { closeActiveFin } = require('./helpers/mvo')
+const { finWindow } = require('./helpers/mvo')
 
 test('signed document snapshots signatories from the МВО journal by date', async ({ request }) => {
   const api = await loginApi(request)
   try {
-    await closeActiveFin(api)   // ensure our fin is the active one at doc_date
-    const S = Date.now()
+    const S = Date.now() + Math.floor(Math.random() * 1e6)
+    // Власне вікно дат: фін-підписант цього тесту діє лише в ньому, тож інші
+    // тести з їхнім «діючим» фіном сюди не дотягуються.
+    const W = finWindow(S)
     const svc = await api.post('/api/settings/services', { data: { name: `Svc${S}` } }).then(r => r.json())
     const nom = await api.post('/api/nomenclature', { data: {
       name: `Річ${S}`, service_id: svc.id, is_serialized: false, unit_of_measure: 'шт' } }).then(r => r.json())
@@ -27,19 +29,19 @@ test('signed document snapshots signatories from the МВО journal by date', as
 
     // МВО journal: A→whA, B→whB, F→global fin, all active from before doc_date.
     // Посада/звання живуть на записі МВО (не на особі) → мають потрапити у snap.
-    await api.post('/api/structure/mvo', { data: { warehouse_id: whA.id, person_id: pA.id, position: `посада ${S}A`, from_date: '2026-01-01' } })
-    await api.post('/api/structure/mvo', { data: { warehouse_id: whB.id, person_id: pB.id, position: `посада ${S}B`, rank: `звання ${S}B`, from_date: '2026-01-01' } })
-    await api.post('/api/structure/mvo', { data: { kind: 'fin', person_id: pF.id, position: `посада ${S}F`, from_date: '2026-01-01' } })
+    await api.post('/api/structure/mvo', { data: { warehouse_id: whA.id, person_id: pA.id, position: `посада ${S}A`, from_date: W.from, to_date: W.to } })
+    await api.post('/api/structure/mvo', { data: { warehouse_id: whB.id, person_id: pB.id, position: `посада ${S}B`, rank: `звання ${S}B`, from_date: W.from, to_date: W.to } })
+    await api.post('/api/structure/mvo', { data: { kind: 'fin', person_id: pF.id, position: `посада ${S}F`, from_date: W.from, to_date: W.to } })
 
     // Stock at A, transfer A→B (undocumented)
     await api.post('/api/custody/movements', { data: {
-      type: 'receipt', to_warehouse_id: whA.id, nomenclature_id: nom.id, quantity: 5, date: '2026-07-01' } })
+      type: 'receipt', to_warehouse_id: whA.id, nomenclature_id: nom.id, quantity: 5, date: W.from } })
     const mv = await api.post('/api/custody/movements', { data: {
-      type: 'transfer', from_warehouse_id: whA.id, to_warehouse_id: whB.id, nomenclature_id: nom.id, quantity: 2, date: '2026-07-10' } }).then(r => r.json())
+      type: 'transfer', from_warehouse_id: whA.id, to_warehouse_id: whB.id, nomenclature_id: nom.id, quantity: 2, date: W.doc } }).then(r => r.json())
 
     // Document over the transfer, then sign (snapshots signatories from journal)
     const doc = await api.post('/api/custody/documents', { data: {
-      operation: 'transfer', form: 'накладна', doc_number: `NK-${S}`, doc_date: '2026-07-10', movement_ids: [mv.id] } }).then(r => r.json())
+      operation: 'transfer', form: 'накладна', doc_number: `NK-${S}`, doc_date: W.doc, movement_ids: [mv.id] } }).then(r => r.json())
     const signed = await api.post(`/api/custody/documents/${doc.id}/sign`).then(r => r.json())
 
     const snap = signed.extra_data

@@ -4,12 +4,12 @@
  */
 const { test, expect } = require('@playwright/test')
 const { URL, uiLogin, loginApi } = require('./helpers/login')
-const { closeActiveFin } = require('./helpers/mvo')
+const { finWindow } = require('./helpers/mvo')
 
 test('add a global fin МВО via Довідники → Підписанти', async ({ page, request }) => {
   const api = await loginApi(request)
-  const S = Date.now()
-  await closeActiveFin(api)   // global fin is a singleton — clear before creating
+  const S = Date.now() + Math.floor(Math.random() * 1e6)
+  const W = finWindow(S)      // закритий період — не змагаємось за «діючий» фін
   await api.post('/api/settings/persons', { data: { last_name: `ФінUI${S}` } })
   await api.dispose()
 
@@ -25,8 +25,11 @@ test('add a global fin МВО via Довідники → Підписанти', 
   // Особа — пошуковий дропдаун (ItemAutocomplete)
   await page.locator('.ac-field input').fill(`ФінUI${S}`)
   await page.locator('.ac-dropdown .ac-item', { hasText: `ФінUI${S}` }).first().click()
+  await page.locator('.modal input[type="date"]').first().fill(W.from)
+  await page.locator('.modal input[type="date"]').nth(1).fill(W.to)
   await page.locator('.btn-pri').click()
 
-  // Row appears as «Фінслужба (загальна)»
-  await expect(page.locator('tbody tr', { hasText: 'Фінслужба (загальна)' }).first()).toBeVisible()
+  // Рядок зʼявився саме наш (шукаємо по особі, а не «перший фін у списку»)
+  await expect(page.locator('tbody tr', { hasText: `ФінUI${S}` }).first())
+    .toContainText('Фінслужба (загальна)')
 })
