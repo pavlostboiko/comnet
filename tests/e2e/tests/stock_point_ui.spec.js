@@ -35,7 +35,11 @@ test('storage point: create in Довідники, set on Залишки, filter
   await page.goto(`${URL}/stock`)
   await page.locator('.wh-btn', { hasText: svcWh.name }).click()
   const row = page.locator('tbody tr', { hasText: `PT-${ts}` }).first()
-  await row.locator('.point-sel').selectOption({ label: `Бокс ${ts}` })
+  await Promise.all([
+    page.waitForResponse(r => r.url().includes(`/instances/${inst.id}`)
+      && r.request().method() === 'PUT' && r.status() === 200),
+    row.locator('.point-sel').selectOption({ label: `Бокс ${ts}` }),
+  ])
 
   await page.goto(`${URL}/stock`)
   await page.locator('.wh-btn', { hasText: svcWh.name }).click()
@@ -124,8 +128,13 @@ test('storage point can be set on issued goods', async ({ page, request }) => {
   const row = page.locator('tbody tr')
     .filter({ hasText: `Спальник ${ts}` }).filter({ hasText: `Боєць${ts}` }).first()
   await expect(row).toBeVisible()
-  await row.locator('.point-sel').selectOption(String(point.id))
-  await expect(row.locator('.point-sel')).toHaveValue(String(point.id))   // запит завершився
+  // Чекаємо саме на відповідь: `toHaveValue` після selectOption проходить одразу
+  // (DOM уже змінений) і нічого не синхронізує.
+  await Promise.all([
+    page.waitForResponse(r => r.url().includes(`/api/assignments/${asg.id}/point`)
+      && r.request().method() === 'PUT' && r.status() === 200),
+    row.locator('.point-sel').selectOption(String(point.id)),
+  ])
 
   // Точка лягла на ВИДАЧУ, а не на залишок картки
   const listed = await api.get(`/api/assignments?warehouse_id=${unitWh.id}`).then(r => r.json())
