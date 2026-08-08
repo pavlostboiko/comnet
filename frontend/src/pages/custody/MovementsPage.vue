@@ -41,7 +41,7 @@
                 <td><span class="chip" :class="`mv-${eventKey(e)}`">{{ eventLabel(e) }}</span></td>
                 <td class="td-dim">{{ whereLabel(e) }}</td>
                 <td>{{ e.nomenclature_name || '—' }}</td>
-                <td class="td-mono td-dim">{{ e.card_number || e.serial_no || '—' }}</td>
+                <td class="td-mono td-dim" :title="e.serial_no ? `серійний: ${e.serial_no}` : ''">{{ e.card_number || '—' }}</td>
                 <td class="td-mono td-dim">{{ e.doc_number || '—' }}</td>
                 <td class="td-num">{{ fmtQty(e.qty) }}</td>
               </tr>
