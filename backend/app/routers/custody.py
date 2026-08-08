@@ -515,6 +515,12 @@ def item_history(nomenclature_id: int, instance_id: Optional[int] = None,
         inst = db.get(Instance, iid)
         return inst.serial_no if inst else None
 
+    def card_of(iid):
+        if not iid:
+            return None
+        inst = db.get(Instance, iid)
+        return inst.card_number if inst else None
+
     def person_name(pid):
         p = db.get(Person, pid) if pid else None
         if not p:
@@ -566,14 +572,15 @@ def item_history(nomenclature_id: int, instance_id: Optional[int] = None,
     for p in pq.all():
         if only_warehouse is not None and p.warehouse_id != only_warehouse:
             continue
-        events.append(_point_event_dict(p, nom, wh_name(p.warehouse_id), serial_of(p.instance_id)))
+        events.append(_point_event_dict(p, nom, wh_name(p.warehouse_id), serial_of(p.instance_id),
+                                        card_of(p.instance_id)))
 
     events.sort(key=history_sort_key, reverse=True)
     return {"nomenclature_id": nom.id, "name": nom.name,
             "is_serialized": nom.is_serialized, "events": events}
 
 
-def _point_event_dict(p: PointEvent, nom, warehouse_name, serial_no) -> dict:
+def _point_event_dict(p: PointEvent, nom, warehouse_name, serial_no, card_number=None) -> dict:
     """Подія «переїхало в іншу точку» у форматі стрічки/історії картки."""
     return {
         "date": p.date.isoformat() if p.date else None,
@@ -584,7 +591,7 @@ def _point_event_dict(p: PointEvent, nom, warehouse_name, serial_no) -> dict:
         "warehouse": warehouse_name, "person": None,
         "qty": str(p.quantity) if p.quantity is not None else None,
         "is_official": nom.is_official if nom else None,
-        "serial_no": serial_no, "card_number": None,
+        "serial_no": serial_no, "card_number": card_number,
         "doc_number": None, "document_id": None,
         "source": "point_event", "source_id": p.id, "created_at": p.created_at,
     }
@@ -630,8 +637,11 @@ def history_feed(warehouse_id: Optional[int] = None, date_from: Optional[str] = 
     inst_ids = {m.instance_id for m in movements if m.instance_id} | \
                {a.instance_id for a in assignments if a.instance_id} | \
                {p.instance_id for p in point_events if p.instance_id}
-    serials = {i.id: i.serial_no for i in db.query(Instance).filter(Instance.id.in_(inst_ids))} \
-        if inst_ids else {}
+    inst_rows = db.query(Instance).filter(Instance.id.in_(inst_ids)).all() if inst_ids else []
+    serials = {i.id: i.serial_no for i in inst_rows}
+    # № картки — те, за чим майно шукають у паперах; у колонці «Картка» має бути
+    # саме він, а не серійний (їх легко сплутати).
+    cards = {i.id: i.card_number for i in inst_rows}
     person_ids = {a.person_id for a in assignments}
     persons = {p.id: (" ".join(x for x in [p.last_name, p.first_name] if x) or p.callsign)
                for p in db.query(Person).filter(Person.id.in_(person_ids))} if person_ids else {}
@@ -660,7 +670,8 @@ def history_feed(warehouse_id: Optional[int] = None, date_from: Optional[str] = 
             "from_warehouse": None, "to_warehouse": whs.get(a.warehouse_id),
             "person": persons.get(a.person_id), "qty": str(a.quantity),
             "is_official": a.is_official, "serial_no": serials.get(a.instance_id),
-            "card_number": None, "doc_number": None, "document_id": None,
+            "card_number": cards.get(a.instance_id),
+            "doc_number": None, "document_id": None,
             "source": "assignment", "source_id": a.id, "created_at": a.created_at,
         }
         if a.issued_date and in_range(a.issued_date):
@@ -670,7 +681,8 @@ def history_feed(warehouse_id: Optional[int] = None, date_from: Optional[str] = 
 
     for p in point_events:
         events.append(_point_event_dict(p, noms.get(p.nomenclature_id),
-                                        whs.get(p.warehouse_id), serials.get(p.instance_id)))
+                                        whs.get(p.warehouse_id), serials.get(p.instance_id),
+                                        cards.get(p.instance_id)))
 
     events.sort(key=history_sort_key, reverse=True)
     total = len(events)

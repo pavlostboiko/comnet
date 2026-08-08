@@ -39,6 +39,7 @@ test('feed merges movements and assignments, filters by warehouse and dates', as
     expect(mine.map(e => e.kind === 'movement' ? e.type : e.kind))
       .toEqual(['returned', 'issued', 'transfer', 'receipt'])
     expect(mine[0].person).toContain(`Боєць${tag}`)
+    expect(mine.find(e => e.kind === 'issued').card_number ?? null).toBeNull()   // несерійне — картки нема
     expect(mine.find(e => e.type === 'transfer').from_warehouse).toBe(svcWh.name)
     expect(mine.find(e => e.kind === 'issued').nomenclature_name).toBe(`FeedРіч ${tag}`)
 
@@ -83,7 +84,8 @@ test('point changes appear in the feed and in the item history', async ({ reques
     const serNom = await postJson(api, '/api/nomenclature',
       { name: `PFСер ${tag}`, service_id: svc.id, is_serialized: true, unit_of_measure: 'шт' })
     cleanup.push(`/api/nomenclature/${serNom.id}`)
-    const inst = await postJson(api, `/api/nomenclature/${serNom.id}/instances`, { serial_no: `PF-${tag}` })
+    const inst = await postJson(api, `/api/nomenclature/${serNom.id}/instances`,
+      { serial_no: `PF-${tag}`, card_number: `КАРТ-${tag}` })
     await postJson(api, '/api/custody/movements', { date: '2026-05-01', type: 'receipt',
       nomenclature_id: serNom.id, instance_id: inst.id, to_warehouse_id: unitWh.id, quantity: 1 })
     await api.put(`/api/nomenclature/${serNom.id}/instances/${inst.id}`, { data: { storage_point_id: box.id } })
@@ -95,6 +97,7 @@ test('point changes appear in the feed and in the item history', async ({ reques
     expect(pts[0].from_warehouse).toBe(`Бокс ${tag}`)        // новіша зверху
     expect(pts[0].to_warehouse).toBe(`Намет ${tag}`)
     expect(pts[0].serial_no).toBe(`PF-${tag}`)
+    expect(pts[0].card_number).toBe(`КАРТ-${tag}`)      // № картки, а не серійний
     expect(pts[1].from_warehouse).toBeNull()
 
     // Повторна установка тієї самої точки події не плодить
@@ -126,6 +129,39 @@ test('point changes appear in the feed and in the item history', async ({ reques
     const nsPts = feed2.events.filter(e => e.kind === 'point' && e.nomenclature_id === nom.id)
     expect(nsPts.map(e => e.to_warehouse).sort()).toEqual([`Бокс ${tag}`, `Намет ${tag}`].sort())
     expect(nsPts.find(e => e.to_warehouse === `Намет ${tag}`).qty).toBe('2.0000')   // к-сть видачі
+  } finally {
+    await bestEffortDelete(api, cleanup)
+    await api.dispose()
+  }
+})
+
+test('feed shows the card number of an issued serial item, not its serial', async ({ request }) => {
+  const api = await loginApi(request)
+  const cleanup = []
+  try {
+    const tag = `card-${Date.now()}-${Math.floor(Math.random() * 9999)}`
+    const svc = await postJson(api, '/api/settings/services', { name: `CardSvc ${tag}` })
+    const unit = await postJson(api, '/api/structure/units', { name: `CardРота ${tag}` })
+    cleanup.push(`/api/structure/units/${unit.id}`, `/api/settings/services/${svc.id}`)
+    const whs = await api.get('/api/structure/warehouses').then(r => r.json())
+    const unitWh = whs.find(w => w.unit_id === unit.id)
+    const person = await postJson(api, '/api/settings/persons',
+      { last_name: `Боєць${tag}`, first_name: 'І', unit_id: unit.id })
+    const nom = await postJson(api, '/api/nomenclature',
+      { name: `CardРіч ${tag}`, service_id: svc.id, is_serialized: true, unit_of_measure: 'шт' })
+    cleanup.push(`/api/nomenclature/${nom.id}`)
+    const inst = await postJson(api, `/api/nomenclature/${nom.id}/instances`,
+      { serial_no: `SN-${tag}`, card_number: `1234-${tag}` })
+    await postJson(api, '/api/custody/movements', { date: '2026-06-01', type: 'receipt',
+      nomenclature_id: nom.id, instance_id: inst.id, to_warehouse_id: unitWh.id, quantity: 1,
+      card_number: `1234-${tag}` })
+    await postJson(api, '/api/assignments', { warehouse_id: unitWh.id, person_id: person.id,
+      nomenclature_id: nom.id, instance_id: inst.id, quantity: 1, issued_date: '2026-06-02' })
+
+    const feed = await api.get(`/api/custody/feed?warehouse_id=${unitWh.id}`).then(r => r.json())
+    const issued = feed.events.find(e => e.kind === 'issued' && e.nomenclature_id === nom.id)
+    expect(issued.card_number).toBe(`1234-${tag}`)     // не серійний
+    expect(issued.serial_no).toBe(`SN-${tag}`)         // серійний окремо, для підказки
   } finally {
     await bestEffortDelete(api, cleanup)
     await api.dispose()
