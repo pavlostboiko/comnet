@@ -21,10 +21,11 @@ from sqlalchemy.orm import Session
 from app.auth import require_admin
 from app.database import get_db
 from app.custody_placement import place_instance
+from app.point_events import log_point_change
 from app.custody_snapshot import derive_service_id, doc_sort_key, snap_nakladna
 from app.models import (
     Assignment, CustodyDocument, CustodyMovement, Instance, Mvo, Nomenclature,
-    Person, Service, Unit, User, Warehouse,
+    NomenclaturePoint, Person, Service, StoragePoint, Unit, User, Warehouse,
 )
 from app.import_helpers import (
     _build_person_lookup, _clean, _normalize_serial, _parse_decimal, _parse_date,
@@ -55,6 +56,7 @@ COLS = {
     "Кіл-сть": "qty", "Кількість": "qty",
     "Код номер": "code", "Код": "code",
     "Де": "location", "Де знаходиться": "location",
+    "Точка": "point", "Точка зберігання": "point",
     "Дата видачі": "issued_at",
 }
 
@@ -648,8 +650,15 @@ def import_assignments_v2(
     wh_of_unit = {
         w.unit_id: w for w in db.query(Warehouse).filter(Warehouse.type == "unit").all()
     }
+    wh_by_service_id = {
+        w.service_id: w for w in db.query(Warehouse).filter(Warehouse.type == "service").all()
+    }
+    # Точки складів — find-or-create в межах складу, назви порівнюємо без регістру.
+    points_cache = {(p.warehouse_id, (p.name or "").strip().lower()): p
+                    for p in db.query(StoragePoint).all()}
 
-    counts = {"rows": 0, "assignments": 0, "persons_unit_set": 0, "skipped": 0}
+    counts = {"rows": 0, "assignments": 0, "persons_unit_set": 0,
+              "points_set": 0, "points_created": 0, "skipped": 0}
     errors = []
 
     def col(row, key):
@@ -686,22 +695,71 @@ def import_assignments_v2(
         m = q.order_by(CustodyMovement.date.desc(), CustodyMovement.id.desc()).first()
         return m.date if m else date_cls.today()
 
+    def resolve_point(wh, point_name):
+        """Точка складу за назвою: find-or-create (склади/підрозділи імпорт теж створює)."""
+        key = (wh.id, point_name.lower())
+        point = points_cache.get(key)
+        if not point:
+            point = StoragePoint(name=point_name, warehouse_id=wh.id)
+            db.add(point)
+            db.flush()
+            points_cache[key] = point
+            counts["points_created"] += 1
+        return point
+
+    def apply_point(nom, wh, inst, assignment, point_name):
+        """Куди лягає точка: серійне — на екземпляр; видане несерійне — на видачу;
+        несерійне на складі — мітка (картка, склад). Зміна пишеться в журнал подій."""
+        point = resolve_point(wh, point_name)
+        if inst is not None:
+            if inst.storage_point_id == point.id:
+                return
+            log_point_change(db, nomenclature_id=nom.id, warehouse_id=wh.id,
+                             from_point_id=inst.storage_point_id, to_point_id=point.id,
+                             instance_id=inst.id, quantity=Decimal(1), user=user)
+            inst.storage_point_id = point.id
+        elif assignment is not None:
+            log_point_change(db, nomenclature_id=nom.id, warehouse_id=wh.id,
+                             from_point_id=None, to_point_id=point.id,
+                             assignment_id=assignment.id, quantity=assignment.quantity, user=user)
+            assignment.storage_point_id = point.id
+        else:
+            mark = db.query(NomenclaturePoint).filter(
+                NomenclaturePoint.nomenclature_id == nom.id,
+                NomenclaturePoint.warehouse_id == wh.id).first()
+            was = mark.storage_point_id if mark else None
+            if was == point.id:
+                return
+            if mark:
+                mark.storage_point_id = point.id
+            else:
+                db.add(NomenclaturePoint(nomenclature_id=nom.id, warehouse_id=wh.id,
+                                         storage_point_id=point.id))
+            log_point_change(db, nomenclature_id=nom.id, warehouse_id=wh.id,
+                             from_point_id=was, to_point_id=point.id, user=user)
+        counts["points_set"] += 1
+
     for row in ws.iter_rows(min_row=header_row + 1):
         name = _clean(col(row, "name"))
         if not name:
             continue
         loc = col(row, "location")
+        loc_s = _clean(loc)
         unit, surname = parse_de(loc)
-        if unit is None:
-            # склад/порожньо — пропускаємо тихо; текст із нерозпізнаним підрозділом — у звіт
-            s = _clean(loc)
-            if s and not is_service_warehouse_location(s):
+        at_service_wh = bool(loc_s) and is_service_warehouse_location(loc_s)
+        point_name = _clean(col(row, "point"))
+
+        if unit is None and not at_service_wh:
+            # нерозпізнаний підрозділ: без складу нема куди ставити ні видачу, ні точку
+            if loc_s:
                 counts["rows"] += 1
                 counts["skipped"] += 1
-                errors.append(f"«{name}»: не розпізнано підрозділ у «Де»: «{s}»")
+                errors.append(f"«{name}»: не розпізнано підрозділ у «Де»: «{loc_s}»")
             continue
-        if surname is None:
-            continue  # лише підрозділ — не видано особі
+        issuing = surname is not None            # «Де» містить прізвище → видача
+        if not issuing and not point_name:
+            continue                              # рядок не про видачу і без точки
+
         counts["rows"] += 1
         try:
             svc_name = _clean(col(row, "service"))
@@ -715,32 +773,15 @@ def import_assignments_v2(
                 counts["skipped"] += 1
                 errors.append(f"«{name}»: номенклатуру не знайдено")
                 continue
-            wh = wh_of_unit.get(unit.id)
+            wh = wh_of_unit.get(unit.id) if unit else wh_by_service_id.get(service.id)
             if not wh:
+                where = f"підрозділу «{unit.name}»" if unit else f"служби «{service.name}»"
                 counts["skipped"] += 1
-                errors.append(f"«{name}»: у підрозділу «{unit.name}» немає складу")
+                errors.append(f"«{name}»: у {where} немає складу")
                 continue
-            # Шукаємо серед ІСНУЮЧИХ осіб (люди імпортуються окремо, не створюємо
-            # тут): спершу вже в цьому підрозділі, інакше — серед тих, у кого
-            # підрозділ ще не заданий (їм проставимо цей підрозділ).
-            sl = surname.lower()
-            in_unit = [p for p in persons if (p.last_name or "").strip().lower() == sl and p.unit_id == unit.id]
-            free = [p for p in persons if (p.last_name or "").strip().lower() == sl and p.unit_id is None]
-            candidates = in_unit or free
-            if len(candidates) > 1:
-                counts["skipped"] += 1
-                errors.append(f"«{name}»: неоднозначне прізвище «{surname}» "
-                              f"({'у ' + unit.name if in_unit else 'без підрозділу'})")
-                continue
-            if not candidates:
-                counts["skipped"] += 1
-                errors.append(f"«{name}»: особу «{surname}» не знайдено — імпортуйте людей")
-                continue
-            person = candidates[0]
-            if person.unit_id is None:      # оновлюємо підрозділ, якщо не заданий
-                person.unit_id = unit.id
-                counts["persons_unit_set"] += 1
 
+            # Серійне: екземпляр за № картки, і він має лежати саме на цьому складі.
+            inst = None
             if nom.is_serialized:
                 card = _clean(col(row, "card_number"))
                 inst = (db.query(Instance).filter(Instance.card_number == card,
@@ -751,28 +792,60 @@ def import_assignments_v2(
                     continue
                 if inst.current_warehouse_id != wh.id:
                     counts["skipped"] += 1
-                    errors.append(f"«{name}» ({inst.serial_no}): не на складі підрозділу «{unit.name}»")
+                    errors.append(f"«{name}» ({inst.serial_no}): не на складі «{wh.name}»")
                     continue
-                if db.query(Assignment).filter(Assignment.instance_id == inst.id,
-                                               Assignment.returned_date.is_(None)).first():
-                    counts["skipped"] += 1
-                    errors.append(f"«{name}» ({inst.serial_no}): вже видано")
-                    continue
-                db.add(Assignment(
-                    warehouse_id=wh.id, person_id=person.id, nomenclature_id=nom.id,
-                    instance_id=inst.id, quantity=Decimal(1), is_official=inst.is_official,
-                    issued_date=latest_move_date(inst_id=inst.id), created_by=user.id))
-            else:
-                free = balance_of(db, wh.id, nom.id, nom.is_official) - _active_issued(db, wh.id, nom.id, nom.is_official)
-                if free < 1:
-                    counts["skipped"] += 1
-                    errors.append(f"«{name}»: недостатньо на складі «{unit.name}» (вільно {free})")
-                    continue
-                db.add(Assignment(
-                    warehouse_id=wh.id, person_id=person.id, nomenclature_id=nom.id,
-                    instance_id=None, quantity=Decimal(1), is_official=nom.is_official,
-                    issued_date=latest_move_date(nom_id=nom.id, wh_id=wh.id), created_by=user.id))
-            counts["assignments"] += 1
+
+            assignment = None
+            if issuing:
+                # Шукаємо серед ІСНУЮЧИХ осіб (люди імпортуються окремо, не створюємо
+                # тут): спершу вже в цьому підрозділі, інакше — серед тих, у кого
+                # підрозділ ще не заданий (їм проставимо цей підрозділ).
+                sl = surname.lower()
+                in_unit = [p for p in persons if (p.last_name or "").strip().lower() == sl and p.unit_id == unit.id]
+                free_persons = [p for p in persons if (p.last_name or "").strip().lower() == sl and p.unit_id is None]
+                candidates = in_unit or free_persons
+                person = None
+                if len(candidates) > 1:
+                    errors.append(f"«{name}»: неоднозначне прізвище «{surname}» "
+                                  f"({'у ' + unit.name if in_unit else 'без підрозділу'})")
+                elif not candidates:
+                    errors.append(f"«{name}»: особу «{surname}» не знайдено — імпортуйте людей")
+                else:
+                    person = candidates[0]
+
+                if person is not None:
+                    if person.unit_id is None:      # оновлюємо підрозділ, якщо не заданий
+                        person.unit_id = unit.id
+                        counts["persons_unit_set"] += 1
+                    if inst is not None:
+                        if db.query(Assignment).filter(Assignment.instance_id == inst.id,
+                                                       Assignment.returned_date.is_(None)).first():
+                            errors.append(f"«{name}» ({inst.serial_no}): вже видано")
+                        else:
+                            assignment = Assignment(
+                                warehouse_id=wh.id, person_id=person.id, nomenclature_id=nom.id,
+                                instance_id=inst.id, quantity=Decimal(1), is_official=inst.is_official,
+                                issued_date=latest_move_date(inst_id=inst.id), created_by=user.id)
+                    else:
+                        avail = (balance_of(db, wh.id, nom.id, nom.is_official)
+                                 - _active_issued(db, wh.id, nom.id, nom.is_official))
+                        if avail < 1:
+                            errors.append(f"«{name}»: недостатньо на складі «{wh.name}» (вільно {avail})")
+                        else:
+                            assignment = Assignment(
+                                warehouse_id=wh.id, person_id=person.id, nomenclature_id=nom.id,
+                                instance_id=None, quantity=Decimal(1), is_official=nom.is_official,
+                                issued_date=latest_move_date(nom_id=nom.id, wh_id=wh.id),
+                                created_by=user.id)
+                if assignment is not None:
+                    db.add(assignment)
+                    db.flush()                      # id потрібен журналу точок
+                    counts["assignments"] += 1
+                else:
+                    counts["skipped"] += 1          # видача не вийшла — точку все одно ставимо
+
+            if point_name:
+                apply_point(nom, wh, inst, assignment, point_name)
         except Exception as e:
             counts["skipped"] += 1
             errors.append(f"«{name}»: {e}")
